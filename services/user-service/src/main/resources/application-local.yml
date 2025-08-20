@@ -2,10 +2,10 @@
 spring:
   config:
     # Config Server의 주소를 localhost로 변경
-    import: configserver:http://localhost:8888
+    import: configserver:http://192.168.0.38:8888
 
 eureka:
   client:
     service-url:
       # Eureka Server의 주소를 localhost로 변경
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: http://192.168.0.38:8761/eureka/

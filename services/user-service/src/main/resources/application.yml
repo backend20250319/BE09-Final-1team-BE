@@ -4,6 +4,5 @@ spring:
   config:
     import: optional:configserver:http://config-server:8888
   cloud:
-    config:
-      # ⭐️ Config 서버 연결 재시도 설정을 여기에 추가합니다.
-      fail-fast: true
+    bootstrap:
+      enabled: false

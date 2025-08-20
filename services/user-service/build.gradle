@@ -33,7 +33,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.cloud:spring-cloud-starter-bootstrap'
+//    implementation 'org.springframework.cloud:spring-cloud-starter-bootstrap'
     // https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-mail
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.cloud:spring-cloud-starter-config'

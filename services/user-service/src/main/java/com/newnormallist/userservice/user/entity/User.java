@@ -1,5 +1,7 @@
 package com.newnormallist.userservice.user.entity;
 
+import com.newnormallist.userservice.common.ErrorCode;
+import com.newnormallist.userservice.common.exception.UserException;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -10,8 +12,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Getter
 @NoArgsConstructor
@@ -82,18 +84,7 @@ public class User {
 
     public void updateProfile(@NotNull(message = "뉴스레터 수신 동의 여부는 필수입니다.") Boolean letterOk, Set<String> hobbies) {
         this.letterOk = letterOk;
-
-        if (hobbies != null) {
-            this.hobbies = hobbies.stream()
-                    .map(hobby -> {
-                        try {
-                            return NewsCategory.valueOf(hobby.toUpperCase());
-                        } catch (IllegalArgumentException e) {
-                            throw new IllegalArgumentException("유효하지 않은 관심사 카테고리입니다: " + hobby);
-                        }
-                    })
-                    .collect(java.util.stream.Collectors.toSet());
-        }
+        this.hobbies = convertHobbiesToEnumSet(hobbies);
     }
 
     public void changeStatus(UserStatus userStatus) {
@@ -106,5 +97,30 @@ public class User {
         this.provider = provider;
         this.providerId = providerId;
         return this;
+    }
+
+    public void updateAdditionalInfo(
+            @NotNull(message = "출생연도는 필수입니다.") Integer birthYear,
+            @NotNull(message = "성별은 필수입니다.") String gender, List<String> hobbies) {
+        this.birthYear = birthYear;
+        this.gender = gender;
+        this.hobbies = convertHobbiesToEnumSet(hobbies);
+    }
+
+    private Set<NewsCategory> convertHobbiesToEnumSet(Collection<String> hobbies) {
+        if (hobbies == null || hobbies.isEmpty()) {
+            return new HashSet<>(); // 비어있는 Set 반환
+        }
+        return hobbies.stream()
+                .map(hobby -> {
+                    try {
+                        // 문자열을 대문자로 바꿔서 NewsCategory Enum으로 변환
+                        return NewsCategory.valueOf(hobby.toUpperCase());
+                    } catch (IllegalArgumentException e) {
+                        // 유효하지 않은 카테고리면 예외 발생
+                        throw new UserException(ErrorCode.INVALID_CATEGORY);
+                    }
+                })
+                .collect(Collectors.toSet());
     }
 }

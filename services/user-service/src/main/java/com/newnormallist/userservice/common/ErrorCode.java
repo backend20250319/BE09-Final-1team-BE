@@ -13,6 +13,7 @@ public enum ErrorCode {
     INVALID_PASSWORD(HttpStatus.BAD_REQUEST, "U003", "비밀번호가 올바르지 않습니다."),
     CURRENT_PASSWORD_REQUIRED(HttpStatus.BAD_REQUEST, "U004", "현재 비밀번호를 입력해주세요."),
     CURRENT_PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "U005", "현재 비밀번호가 일치하지 않습니다."),
+    INVALID_CATEGORY(HttpStatus.BAD_REQUEST, "U006", "유효하지 않은 카테고리입니다."),
 
     // Auth 관련 에러
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "A001", "유효하지 않은 토큰입니다."),

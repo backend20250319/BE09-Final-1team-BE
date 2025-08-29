@@ -137,4 +137,46 @@ public class AuthService {
         // 5. 사용된 토큰은 삭제
         passwordResetTokenRepostitory.delete(resetToken);
     }
+    /**
+     * 추가 정보 입력 로직 (소셜 로그인 후)
+     */
+    @Transactional
+    public LoginResponseDto provideAdditionalInfo(String tempToken, AdditionalInfoRequestDto requestDto) {
+        //1. Bearer 접두어 제거
+        if (tempToken != null && tempToken.startsWith("Bearer ")) {
+            tempToken = tempToken.substring(7);
+        }
+        // 2. 임시 토큰 유효성 검증 및 사용자 ID 추출
+        if (!jwtTokenProvider.validateToken(tempToken)) {
+            throw new UserException(ErrorCode.INVALID_TOKEN);
+        }
+        Long userId = jwtTokenProvider.getUserIdFromJWT(tempToken);
+        // 3. 사용자 정보 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
+        // 4. 사용자 정보 업데이트
+        user.updateAdditionalInfo(
+                requestDto.getBirthYear(),
+                requestDto.getGender(),
+                requestDto.getHobbies() // hobbies를 처리하는 로직은 User 엔티티에 맞게 구현
+        );
+        userRepository.save(user);
+
+        // 5. 최종 access, refresh 토큰 발급
+        String accessToken = jwtTokenProvider.createAccessToken(user.getEmail(), user.getRole().name(), user.getId());
+        String refreshTokenValue = jwtTokenProvider.createRefreshToken(user.getEmail(), user.getRole().name(), user.getId(), user.getEmail());
+
+        refreshTokenRepository.findByUserId(user.getId())
+                .ifPresentOrElse(
+                        refreshToken -> refreshToken.updateTokenValue(refreshTokenValue),
+                        () -> refreshTokenRepository.save(new RefreshToken(user, refreshTokenValue))
+                );
+        LoginResponseDto.UserInfoDto userInfo = new LoginResponseDto.UserInfoDto(
+                user.getId(),
+                user.getEmail(),
+                user.getName(),
+                user.getRole()
+        );
+        return new LoginResponseDto(accessToken, refreshTokenValue, userInfo);
+    }
 }

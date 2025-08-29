@@ -15,6 +15,7 @@ public class MyPageResponse {
     private final Boolean letterOk;
     private final Set<NewsCategory> hobbies;
     private final LocalDateTime createdAt;
+    private final String provider;
 
     @Builder
     public MyPageResponse(User user) {
@@ -23,6 +24,7 @@ public class MyPageResponse {
         this.letterOk = user.getLetterOk();
         this.hobbies = user.getHobbies();
         this.createdAt = user.getCreatedAt();
+        this.provider = user.getProvider();
     }
 
 }

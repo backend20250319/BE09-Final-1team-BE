@@ -16,7 +16,7 @@ import java.util.List;
 
 @Tag(name = "Related News", description = "연관 뉴스")
 @RestController
-@RequestMapping("/api/related")
+@RequestMapping("/api/news/related")
 @RequiredArgsConstructor
 @Slf4j
 @CrossOrigin(origins = "*")

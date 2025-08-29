@@ -87,7 +87,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             !path.contains("/mypage") &&
             !path.contains("/report") &&
             !path.contains("/scrap") &&
-            !path.contains("/collection");
+            !path.contains("/collection") &&
+            !path.contains("/feed");
 
     return path.startsWith("/api/users/signup")
             || path.startsWith("/api/auth/")

@@ -20,17 +20,8 @@ management:
 # 4. 로깅 레벨 설정
 logging:
   level:
-
     com.newnormallist.newsservice: DEBUG
     org.springframework.security: WARN
-
-# 5. 서비스 간 통신을 위한 URL 설정
-services:
-  user-service:
-    url: http://localhost:8081
-  news-service:
-    url: http://localhost:8082
-
     com.newnormallist.crawlerservice: INFO
     org.springframework.web: INFO
     org.hibernate: OFF
@@ -42,3 +33,23 @@ services:
     org.seleniumhq.selenium: OFF
     root: WARN
 
+# 5. Swagger/OpenAPI 설정
+springdoc:
+  api-docs:
+    enabled: true
+    path: /crawler-api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui
+    display-request-duration: true
+    operations-sorter: method
+    tags-sorter: alpha
+  packages-to-scan: com.newnormallist.crawlerservice.controller
+  paths-to-match: /api/**
+
+# 6. 서비스 간 통신을 위한 URL 설정
+services:
+  user-service:
+    url: http://localhost:8081
+  news-service:
+    url: http://localhost:8082

@@ -36,9 +36,9 @@ springdoc:
     display-request-duration: true
     operations-sorter: method # 메서드명 순 정렬(get/post/…)
     tags-sorter: alpha # 태그 알파벳 정렬
-  # 스캔 범위 제한(선택) — 뉴스 서비스 컨트롤러만 문서화
-  packages-to-scan: com.newnormallist.newsservice.news.controller
-  paths-to-match: /api/news/**
+  # 통합 SwaggerConfig 사용으로 스캔 범위 제한 제거
+  packages-to-scan: com.newnormallist.newsservice
+  paths-to-match: /api/**
 
 # 7. 추천 시스템 설정
 reco:

@@ -3,6 +3,10 @@ package com.newnormallist.crawlerservice.controller;
 import com.newnormallist.crawlerservice.service.DeploymentOptimizedCrawlerService;
 import com.newnormallist.crawlerservice.service.FileServerDatabaseService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +33,7 @@ import org.springframework.http.HttpStatus;
  * - GET /api/crawler/config: 크롤러 설정 조회
  * - GET /api/crawler/health: 헬스체크
  */
+@Tag(name = "Crawler", description = "뉴스 크롤링 및 데이터 수집 API")
 @Slf4j
 @RestController
 @RequestMapping("/api/crawler")
@@ -38,9 +43,11 @@ public class CrawlerController {
     private final DeploymentOptimizedCrawlerService deploymentOptimizedCrawlerService;
     private final FileServerDatabaseService fileServerDatabaseService;
 
-    /**
-     * 배포 환경 최적화된 크롤링 시작 (메인 엔드포인트)
-     */
+    @Operation(summary = "크롤링 시작", description = "배포 환경에 최적화된 뉴스 크롤링을 시작합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "크롤링 시작 성공"),
+            @ApiResponse(responseCode = "500", description = "크롤링 시작 실패")
+    })
     @PostMapping("/start")
     public ResponseEntity<Map<String, Object>> startCrawling() {
         try {
@@ -74,9 +81,11 @@ public class CrawlerController {
         }
     }
 
-    /**
-     * 파일서버에 있는 뉴스를 DB에 저장 (크롤링 없이)
-     */
+    @Operation(summary = "파일서버 데이터 저장", description = "파일서버에 있는 뉴스 데이터를 DB에 저장합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "저장 시작 성공"),
+            @ApiResponse(responseCode = "500", description = "저장 시작 실패")
+    })
     @PostMapping("/save-fileserver")
     public ResponseEntity<Map<String, Object>> saveFileserverData() {
         try {
@@ -110,9 +119,8 @@ public class CrawlerController {
         }
     }
 
-    /**
-     * 크롤링 상태 확인
-     */
+    @Operation(summary = "크롤링 상태 확인", description = "현재 크롤러 서비스의 상태를 확인합니다.")
+    @ApiResponse(responseCode = "200", description = "상태 조회 성공")
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> getCrawlingStatus() {
         Map<String, Object> response = new HashMap<>();
@@ -127,9 +135,8 @@ public class CrawlerController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 크롤링 설정 조회
-     */
+    @Operation(summary = "크롤러 설정 조회", description = "크롤러의 현재 설정값들을 조회합니다.")
+    @ApiResponse(responseCode = "200", description = "설정 조회 성공")
     @GetMapping("/config")
     public ResponseEntity<Map<String, Object>> getCrawlerConfig() {
         Map<String, Object> response = new HashMap<>();
@@ -149,9 +156,8 @@ public class CrawlerController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 헬스 체크
-     */
+    @Operation(summary = "헬스 체크", description = "크롤러 서비스의 헬스 상태를 확인합니다.")
+    @ApiResponse(responseCode = "200", description = "헬스 체크 성공")
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> healthCheck() {
         Map<String, Object> response = new HashMap<>();

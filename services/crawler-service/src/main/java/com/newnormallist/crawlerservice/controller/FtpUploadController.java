@@ -1,6 +1,13 @@
 package com.newnormallist.crawlerservice.controller;
 
+import com.newnormallist.crawlerservice.config.FtpConfig;
 import com.newnormallist.crawlerservice.util.FtpUploader;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,31 +28,35 @@ import org.springframework.web.multipart.MultipartFile;
  * - 디렉터리 자동 생성
  * - 파일 덮어쓰기 지원
  */
+@Tag(name = "FTP Upload", description = "FTP 파일 업로드 API")
 @Slf4j
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/ftp")
 public class FtpUploadController {
 
-    /**
-     * CSV 파일 업로드 API (JSON 방식)
-     * 
-     * @param request 업로드 요청 (경로, 파일명, 내용)
-     * @return 업로드 결과
-     */
+    private final FtpConfig ftpConfig;
+
+    @Operation(summary = "CSV 파일 업로드", description = "JSON 형태로 CSV 파일을 FTP 서버에 업로드합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "업로드 성공"),
+            @ApiResponse(responseCode = "500", description = "업로드 실패")
+    })
     @PostMapping("/upload")
-    public ResponseEntity<String> uploadCsv(@RequestBody CsvUploadRequest request) {
+    public ResponseEntity<String> uploadCsv(
+            @Parameter(description = "업로드 요청 (경로, 파일명, 내용)") @RequestBody CsvUploadRequest request) {
         try {
-            // FTP 경로 구성: /1 + 상대경로
-            String ftpPath = "/1/" + request.getPath();
+            // FTP 경로 구성: basePath + 상대경로
+            String ftpPath = ftpConfig.getBasePath() + "/" + request.getPath();
             
             boolean result = FtpUploader.uploadCsvFile(
-                "dev.macacolabs.site",    // FTP 서버 IP
-                21,                       // 포트
-                "newsone",               // 사용자
-                "newsone",               // 비밀번호
-                ftpPath,                 // FTP 경로
-                request.getFilename(),   // 파일명
-                request.getContent()     // CSV 내용
+                ftpConfig.getServer(),    // FTP 서버 (설정파일에서)
+                ftpConfig.getPort(),      // 포트 (설정파일에서)
+                ftpConfig.getUsername(),  // 사용자 (설정파일에서)
+                ftpConfig.getPassword(),  // 비밀번호 (설정파일에서)
+                ftpPath,                  // FTP 경로
+                request.getFilename(),    // 파일명
+                request.getContent()      // CSV 내용
             );
 
             if (result) {
@@ -62,29 +73,27 @@ public class FtpUploadController {
         }
     }
 
-    /**
-     * 일반 파일 업로드 API (MultipartFile 방식) - 테스트용
-     * 
-     * @param file 업로드할 파일
-     * @param path FTP 상대 경로 (예: "pm/2025-08-19_pm/list")
-     * @return 업로드 결과
-     */
+    @Operation(summary = "파일 업로드 (테스트용)", description = "MultipartFile 형태로 파일을 FTP 서버에 업로드합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "파일 업로드 성공"),
+            @ApiResponse(responseCode = "500", description = "파일 업로드 실패")
+    })
     @PostMapping("/upload-file")
     public ResponseEntity<String> uploadFile(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("path") String path) {
+            @Parameter(description = "업로드할 파일") @RequestParam("file") MultipartFile file,
+            @Parameter(description = "FTP 상대 경로", example = "pm/2025-08-19_pm/list") @RequestParam("path") String path) {
         
         try {
-            // FTP 경로 구성: /1 + 상대경로
-            String ftpPath = "/1/" + path;
+            // FTP 경로 구성: basePath + 상대경로
+            String ftpPath = ftpConfig.getBasePath() + "/" + path;
             
             boolean result = FtpUploader.uploadFile(
-                "dev.macacolabs.site",    // FTP 서버 IP
-                21,                       // 포트
-                "newsone",               // 사용자
-                "newsone",               // 비밀번호
-                ftpPath,                 // FTP 경로
-                file                     // 파일
+                ftpConfig.getServer(),    // FTP 서버 (설정파일에서)
+                ftpConfig.getPort(),      // 포트 (설정파일에서)
+                ftpConfig.getUsername(),  // 사용자 (설정파일에서)
+                ftpConfig.getPassword(),  // 비밀번호 (설정파일에서)
+                ftpPath,                  // FTP 경로
+                file                      // 파일
             );
 
             if (result) {

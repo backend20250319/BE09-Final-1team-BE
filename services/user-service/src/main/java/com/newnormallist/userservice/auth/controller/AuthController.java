@@ -12,10 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Auth", description = "인증/인가 및 토큰 관리 API")
 @RestController
@@ -117,5 +114,20 @@ public class AuthController {
     public ResponseEntity<ApiResult<String>> resetPassword(@Valid @RequestBody PasswordResetRequest request) {
         authService.resetPassword(request);
         return ResponseEntity.ok(ApiResult.success("비밀번호가 성공적으로 재설정되었습니다."));
+    }
+    /**
+     * 소셜 로그인 추가 정보 입력 API
+     */
+    @Operation(
+            summary = "소셜 로그인 추가 정보 입력",
+            description = "소셜 로그인 신규 가입자가 추가 정보를 제출하고 최종 토큰을 발급받습니다.",
+            operationId = "provideAdditionalInfo"
+    )
+    @PostMapping("/additional-info")
+    public ResponseEntity<ApiResult<LoginResponseDto>> provideAdditionalInfo(
+            @RequestHeader("Authorization") String authorizationHeader,
+            @Valid @RequestBody AdditionalInfoRequestDto requestDto) {
+        LoginResponseDto loginResponse = authService.provideAdditionalInfo(authorizationHeader, requestDto);
+        return ResponseEntity.ok(ApiResult.success(loginResponse));
     }
 }

@@ -1,5 +1,8 @@
 package com.newnormallist.userservice.auth.service;
 
+import com.newnormallist.userservice.auth.dto.GoogleUserInfo;
+import com.newnormallist.userservice.auth.dto.KakaoUserInfo;
+import com.newnormallist.userservice.auth.dto.OAuth2UserInfo;
 import com.newnormallist.userservice.user.entity.User;
 import com.newnormallist.userservice.user.entity.UserRole;
 import com.newnormallist.userservice.user.repository.UserRepository;
@@ -27,58 +30,41 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
     @Transactional
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
         // 1. 기본 OAuth2UserService 객체 생성
-        OAuth2UserService<OAuth2UserRequest, OAuth2User> oAuth2UserService = new DefaultOAuth2UserService();
-
-        // 2. userRequest를 통해 카카오에서 사용자 정보 로드
-        OAuth2User oAuth2User = oAuth2UserService.loadUser(userRequest);
-
-        // 3. 클라이언트 등록 ID와 사용자 이름 속성(id)을 가져옴
+        OAuth2UserService<OAuth2UserRequest, OAuth2User> delegate = new DefaultOAuth2UserService();
+        // 2. userRequest를 통해 카카오/구글에서 사용자 정보 로드 준비
+        OAuth2User oAuth2User = delegate.loadUser(userRequest);
         String registrationId = userRequest.getClientRegistration().getRegistrationId();
-        String userNameAttributeName = userRequest.getClientRegistration()
-                .getProviderDetails().getUserInfoEndpoint().getUserNameAttributeName();
-
-        // 4. 카카오 정보 파싱을 위한 DTO 객체 생성 (우선은 Map 형태로 받음)
-        Map<String, Object> attributes = oAuth2User.getAttributes();
-        // 카카오 응답에서 필요한 정보 추출
-        Map<String, Object> kakaoAccount = (Map<String, Object>) attributes.get("kakao_account");
-        Map<String, Object> profile = (Map<String, Object>) kakaoAccount.get("profile");
-
-        String email = (String) kakaoAccount.get("email");
-        String nickname = (String) profile.get("nickname");
-        String providerId = attributes.get("id").toString();
-
-        // 5. 이메일을 기준으로 우리 DB에서 사용자 조회
-        User user = saveOrUpdate(email, nickname, providerId);
-
-        // 6. Spring Security가 사용할 OAuth2User 반환
+        // 3. 카카오/구글에 따라 적절한 UserInfo 객체 생성
+        OAuth2UserInfo userInfo;
+        if (registrationId.equals("google")) {
+            userInfo = new GoogleUserInfo(oAuth2User.getAttributes());
+        } else if (registrationId.equals("kakao")) {
+            userInfo = new KakaoUserInfo(oAuth2User.getAttributes());
+        } else {
+            throw new OAuth2AuthenticationException("지원하지 않는 OAuth2 공급자입니다: " + registrationId);
+        }
+        // 4. User 엔티티로 저장 또는 업데이트
+        User user = saveOrUpdate(userInfo);
+        // 5. DefaultOAuth2User 객체 반환
         return new DefaultOAuth2User(
                 Collections.singleton(new SimpleGrantedAuthority(user.getRole().name())),
-                attributes,
-                userNameAttributeName
-        );
-    }
-
-    private User saveOrUpdate(String email, String nickname, String providerId) {
-        // 이메일로 사용자 조회
-        Optional<User> userOptional = userRepository.findByEmail(email);
-        User user;
-        if (userOptional.isPresent()) {
-            // 이미 가입된 회원이면 정보 업데이트 (이름 등)
-            user = userOptional.get();
-            user.updateSocialInfo(nickname, "kakao", providerId);
-        } else {
-            // 가입된 회원이 아니면 새로 생성
-            String randomPassword = passwordEncoder.encode(UUID.randomUUID().toString());
-            user = User.builder()
-                    .email(email)
-                    .name(nickname)
-                    .password(randomPassword) // 랜덤 비밀번호 설정
-                    .provider("kakao")
-                    .providerId(providerId)
-                    .role(UserRole.USER) // 기본 권한 설정
-                    .build();
-            userRepository.save(user);
+                oAuth2User.getAttributes(),
+                userRequest.getClientRegistration().getProviderDetails().getUserInfoEndpoint().getUserNameAttributeName()
+            );
         }
-        return user;
+
+        private User saveOrUpdate(OAuth2UserInfo userInfo) {
+            User user = userRepository.findByEmail(userInfo.getEmail())
+                    .map(entity -> entity.updateSocialInfo(userInfo.getName(), userInfo.getProvider(), userInfo.getProviderId()))
+                    .orElseGet(() -> User.builder()
+                            .email(userInfo.getEmail())
+                            .name(userInfo.getName())
+                            .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                            .role(UserRole.USER)
+                            .provider(userInfo.getProvider())
+                            .providerId(userInfo.getProviderId())
+                            .build());
+
+            return userRepository.save(user);
+        }
     }
-}

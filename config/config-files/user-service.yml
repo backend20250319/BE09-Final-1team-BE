@@ -55,6 +55,11 @@ spring:
             scope:
               - profile_nickname
               - account_email
+          google:
+            redirect-uri: "http://localhost:8000/api/auth/login/oauth2/code/google"
+            scope:
+              - email
+              - profile
         provider:
           kakao:
             # 카카오 서버의 엔드포인트 주소들

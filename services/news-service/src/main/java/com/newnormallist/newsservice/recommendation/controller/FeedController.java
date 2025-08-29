@@ -34,7 +34,7 @@ public class FeedController {
         Long userId = Long.parseLong(userIdStr);
         return ApiResponse.success(recommendationService.getFeed(userId, page, size));
     }
-    
+
     /**
      * 관리자용: 특정 사용자의 피드 조회 (개발/테스트/관리 목적)
      */

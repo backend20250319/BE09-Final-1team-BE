@@ -40,10 +40,7 @@ public class LegacyNewsController {
         return systemController.databaseTest();
     }
 
-    @GetMapping("/categories")
-    public ResponseEntity<?> getCategories() {
-        return categoryController.getCategories();
-    }
+
 
     @GetMapping("/category/{categoryName}/articles")
     public ResponseEntity<?> getNewsByCategoryArticles(@PathVariable String categoryName, Pageable pageable) {

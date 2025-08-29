@@ -90,10 +90,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             !path.contains("/collection") &&
             !path.contains("/feed");
 
+    // /api/search/ 경로는 검색 기능으로 공개 접근 허용
+    boolean isPublicSearchPath = path.startsWith("/api/search");
+
     return path.startsWith("/api/users/signup")
             || path.startsWith("/api/auth/")
             || path.startsWith("/api/users/categories")
             || isPublicNewsPath
+            || isPublicSearchPath
             || path.startsWith("/swagger-ui")
             || path.contains("api-docs");
   }

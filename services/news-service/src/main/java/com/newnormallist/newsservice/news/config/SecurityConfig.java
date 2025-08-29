@@ -70,6 +70,10 @@ public class SecurityConfig {
                         
                         // 3-5. 카테고리 관련 API는 누구나 접근 가능하도록 허용합니다.
                         .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll() // 카테고리 API는 모든 사용자에게 접근 허용
+                        
+                        // 3-6. 검색 관련 API는 누구나 접근 가능하도록 허용합니다.
+                        .requestMatchers(HttpMethod.GET, "/api/search/**").permitAll() // 검색 API는 모든 사용자에게 접근 허용
+                        
                         .anyRequest().authenticated()
                 )
 

@@ -51,7 +51,9 @@ public class SecurityConfig {
                                 "/error",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
-                                "/news-api-docs/**"
+                                "/api-docs/**",
+                                "/news-api-docs/**",
+                                "/news-swagger-ui.html"  // 새로운 Swagger UI 경로 추가
                         ).permitAll()
 
                         // 3-2. 특정 리소스 (컬렉션, 마이페이지 뉴스) 관련 경로는 반드시 인증이 필요

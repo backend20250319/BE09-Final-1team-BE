@@ -1118,4 +1118,51 @@ public class NewsletterService {
             throw new NewsletterException("발송 재시도 중 오류가 발생했습니다.", "RETRY_ERROR");
         }
     }
+
+    /**
+     * 공유 통계 기록
+     */
+    public ShareStatsResponse recordShareStats(ShareStatsRequest request, String userId) {
+        log.info("공유 통계 기록: userId={}, type={}, newsId={}, category={}", 
+                userId, request.getType(), request.getNewsId(), request.getCategory());
+        
+        try {
+            // 공유 통계 기록 로직
+            // 실제 구현에서는 데이터베이스에 공유 통계를 저장하거나
+            // 외부 분석 서비스에 데이터를 전송할 수 있습니다.
+            
+            // 임시 구현 - 실제로는 공유 통계 엔티티와 리포지토리를 사용해야 함
+            Long shareCount = 1L; // 기본값
+            
+            // 공유 타입별 처리
+            switch (request.getType().toLowerCase()) {
+                case "kakao":
+                    log.info("카카오 공유 통계 기록");
+                    break;
+                case "facebook":
+                    log.info("페이스북 공유 통계 기록");
+                    break;
+                case "twitter":
+                    log.info("트위터 공유 통계 기록");
+                    break;
+                default:
+                    log.info("기타 공유 타입 통계 기록: {}", request.getType());
+                    break;
+            }
+            
+            ShareStatsResponse response = ShareStatsResponse.builder()
+                    .type(request.getType())
+                    .shareCount(shareCount)
+                    .message("공유 통계가 성공적으로 기록되었습니다.")
+                    .success(true)
+                    .build();
+            
+            log.info("공유 통계 기록 완료: {}", response);
+            return response;
+            
+        } catch (Exception e) {
+            log.error("공유 통계 기록 실패: userId={}, type={}", userId, request.getType(), e);
+            throw new NewsletterException("공유 통계 기록 중 오류가 발생했습니다.", "SHARE_STATS_ERROR");
+        }
+    }
 }

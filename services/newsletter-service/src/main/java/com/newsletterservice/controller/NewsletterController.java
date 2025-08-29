@@ -590,6 +590,33 @@ public class NewsletterController {
         }
     }
 
+    /**
+     * 공유 통계 기록
+     */
+    @PostMapping("/share")
+    public ResponseEntity<ApiResponse<ShareStatsResponse>> recordShareStats(
+            @RequestBody ShareStatsRequest request,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            String userId = extractUserIdFromToken(httpRequest);
+            log.info("공유 통계 기록 요청 - userId: {}, type: {}, newsId: {}, category: {}", 
+                    userId, request.getType(), request.getNewsId(), request.getCategory());
+            
+            ShareStatsResponse response = newsletterService.recordShareStats(request, userId);
+            
+            return ResponseEntity.ok(ApiResponse.success(response, "공유 통계가 기록되었습니다."));
+        } catch (NewsletterException e) {
+            log.warn("공유 통계 기록 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error(e.getErrorCode(), e.getMessage()));
+        } catch (Exception e) {
+            log.error("공유 통계 기록 중 오류 발생", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("SHARE_STATS_ERROR", "공유 통계 기록 중 오류가 발생했습니다."));
+        }
+    }
+
     // ========================================
     // Private Helper Methods
     // ========================================

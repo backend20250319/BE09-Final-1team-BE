@@ -20,8 +20,10 @@ management:
 # 4. 로깅 레벨 설정
 logging:
   level:
-    com.newnormallist.tooltipservice: INFO
-    org.springframework.cache: INFO
+    com.newnormallist.tooltipservice: DEBUG # DEBUG로 변경하여 상세 로그 확인
+    com.newnormallist.tooltipservice.service: DEBUG # 서비스 레이어 디버깅
+    org.springframework.cache: DEBUG
+    root: INFO
 
 # 5. Swagger/OpenAPI 설정
 springdoc:
@@ -41,6 +43,7 @@ springdoc:
 spring:
   cache:
     type: redis
+    cache-names: processedContent,termDetails,difficultWords # 어려운 단어 캐시 추가
     redis:
       time-to-live: 24h
       cache-null-values: false

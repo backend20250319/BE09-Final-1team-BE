@@ -38,14 +38,14 @@ public class AnalysisController {
     @PostMapping("/process")
     public ResponseEntity<ProcessContentResponse> processNewsContent(
             @Parameter(description = "뉴스 ID와 원본 내용", required = true) @RequestBody ProcessContentRequest request) {
-        String processedContent;
         try {
-            processedContent = newsAnalysisService.getAnalyzedContent(request.newsId(), request.originalContent());
+            ProcessContentResponse response = newsAnalysisService.processContent(request);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("뉴스 ID {} 분석 중 에러 발생. 원본 내용을 반환합니다.", request.newsId(), e);
-            processedContent = request.originalContent();
+            ProcessContentResponse fallbackResponse = new ProcessContentResponse(request.originalContent());
+            return ResponseEntity.ok(fallbackResponse);
         }
-        return ResponseEntity.ok(new ProcessContentResponse(processedContent));
     }
 
 
@@ -66,5 +66,20 @@ public class AnalysisController {
         } catch (NoSuchElementException e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    /**
+     * 어려운 단어 캐시 갱신 API (관리자용)
+     */
+    @PostMapping("/admin/refresh-cache")
+    @Operation(summary = "어려운 단어 캐시 갱신", 
+               description = "Redis에 캐시된 어려운 단어 목록을 강제로 갱신합니다. DB에 새로운 단어가 추가되었을 때 사용하세요.")
+    @ApiResponses(value = {
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "캐시 갱신 성공"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    public ResponseEntity<String> refreshCache() {
+        newsAnalysisService.refreshDifficultWordsCache();
+        return ResponseEntity.ok("어려운 단어 캐시가 성공적으로 갱신되었습니다.");
     }
 }

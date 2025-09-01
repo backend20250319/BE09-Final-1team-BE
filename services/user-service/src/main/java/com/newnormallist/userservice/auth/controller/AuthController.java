@@ -32,8 +32,6 @@ public class AuthController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "로그인 성공"),
             @ApiResponse(responseCode = "400", description = "잘못된 요청(형식/필수값 누락)"),
-            @ApiResponse(responseCode = "401", description = "인증 실패(자격 증명 불일치)"),
-            @ApiResponse(responseCode = "429", description = "로그인 시도 횟수 초과(선택)")
     })
     @PostMapping("/login")
     public ResponseEntity<ApiResult<LoginResponseDto>> login(@RequestBody LoginRequestDto loginRequestDto) {
@@ -52,7 +50,6 @@ public class AuthController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "재발급 성공"),
             @ApiResponse(responseCode = "400", description = "잘못된 요청(토큰 형식/필수값 누락)"),
-            @ApiResponse(responseCode = "401", description = "인증 실패(Refresh Token 무효/만료)")
     })
     @PostMapping("/refresh")
     public ResponseEntity<ApiResult<AccessTokenResponseDto>> refreshToken(@RequestBody RefreshTokenRequestDto requestDto) {

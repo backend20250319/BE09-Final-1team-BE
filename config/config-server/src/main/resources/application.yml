@@ -11,7 +11,7 @@ spring:
       server:
         git:
           uri: https://github.com/backend20250319/BE09-Final-1team-BE.git
-          default-label: feature/chaehee
+          default-label: develop
           search-paths: config/config-files
           clone-on-start: true
           timeout: 60

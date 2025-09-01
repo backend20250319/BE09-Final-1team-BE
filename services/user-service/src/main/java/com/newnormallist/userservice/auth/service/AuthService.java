@@ -2,6 +2,7 @@ package com.newnormallist.userservice.auth.service;
 
 import com.newnormallist.userservice.auth.dto.*;
 import com.newnormallist.userservice.auth.entity.RefreshToken;
+import com.newnormallist.userservice.auth.event.OnPasswordResetRequestEvent;
 import com.newnormallist.userservice.auth.jwt.JwtTokenProvider;
 import com.newnormallist.userservice.auth.repository.RefreshTokenRepository;
 import com.newnormallist.userservice.auth.token.PasswordResetToken;
@@ -11,6 +12,7 @@ import com.newnormallist.userservice.user.entity.User;
 import com.newnormallist.userservice.common.exception.UserException;
 import com.newnormallist.userservice.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,8 +27,9 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-    private final EmailService emailService;
     private final PasswordResetTokenRepostitory passwordResetTokenRepostitory;
+    private final ApplicationEventPublisher eventPublisher;
+
     /**
      * 로그인 로직
      * */
@@ -110,8 +113,8 @@ public class AuthService {
         PasswordResetToken resetToken = new PasswordResetToken(token, user, expiryDate);
         passwordResetTokenRepostitory.save(resetToken);
 
-        // 6. 사용자 이메일로 재설정 링크 발송
-        emailService.sendPasswordResetEmail(user.getEmail(), token);
+        // 6. 트랜잭션 완료 후 이메일 발송 이벤트 발행
+        eventPublisher.publishEvent(new OnPasswordResetRequestEvent(user.getEmail(), token));
     }
     /**
      * 비밀번호 재설정 로직
@@ -158,13 +161,13 @@ public class AuthService {
         user.updateAdditionalInfo(
                 requestDto.getBirthYear(),
                 requestDto.getGender(),
-                requestDto.getHobbies() // hobbies를 처리하는 로직은 User 엔티티에 맞게 구현
+                requestDto.getHobbies()// hobbies를 처리하는 로직은 User 엔티티에 맞게 구현
         );
         userRepository.save(user);
 
         // 5. 최종 access, refresh 토큰 발급
         String accessToken = jwtTokenProvider.createAccessToken(user.getEmail(), user.getRole().name(), user.getId());
-        String refreshTokenValue = jwtTokenProvider.createRefreshToken(user.getEmail(), user.getRole().name(), user.getId(), user.getEmail());
+        String refreshTokenValue = jwtTokenProvider.createRefreshToken(user.getEmail(), user.getRole().name(), user.getId(), requestDto.getDeviceId());
 
         refreshTokenRepository.findByUserId(user.getId())
                 .ifPresentOrElse(

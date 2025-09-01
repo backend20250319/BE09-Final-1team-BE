@@ -28,7 +28,8 @@ public enum ErrorCode {
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "C002", "서버 내부 오류가 발생했습니다."),
     PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "C003", "비밀번호가 일치하지 않습니다."),
     INVALID_STATUS(HttpStatus.CONFLICT, "C004", "유효하지 않은 상태입니다."),
-    OPERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "C005", "작업을 수행할 수 없습니다."),;
+    OPERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "C005", "작업을 수행할 수 없습니다."),
+    NEWS_NOT_FOUND(HttpStatus.NOT_FOUND, "C006", "뉴스 정보를 찾을 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

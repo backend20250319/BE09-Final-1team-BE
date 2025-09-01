@@ -37,6 +37,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.cloud:spring-cloud-starter-config'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    // https://mvnrepository.com/artifact/org.springframework.retry/spring-retry
+    implementation 'org.springframework.retry:spring-retry:2.0.10'
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'com.mysql:mysql-connector-j'
     annotationProcessor 'org.projectlombok:lombok'

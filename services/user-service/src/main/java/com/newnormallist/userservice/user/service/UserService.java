@@ -15,9 +15,12 @@ import com.newnormallist.userservice.user.repository.NewsRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,11 +31,11 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class UserService {
 
     private final UserRepository userRepository;
@@ -64,6 +67,7 @@ public class UserService {
         userRepository.save(user);
         log.info("사용자 회원가입 완료 - 이메일: {}", signupRequest.getEmail());
     }
+    // 이메일 중복 검사 통합 메서드
     private void validateEmailDuplication(String email) {
         if (userRepository.existsByEmail(email)) {
             throw new UserException(ErrorCode.EMAIL_ALREADY_EXISTS);
@@ -78,8 +82,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public MyPageResponse getMyPage(Long userId) {
         // 1. 사용자 조회
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
+        User user = findByUserId(userId);
         // 2. 조회된 사용자 정보를 DTO로 변환
         return new MyPageResponse(user);
     }
@@ -91,31 +94,39 @@ public class UserService {
     @Transactional
     public void updateMyPage(Long userId, UserUpdateRequest request) {
         // 1. 사용자 조회
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
+        User user = findByUserId(userId);
         // 2. 비밀번호 변경 로직
-        // newPassword 필드가 비어있지 않은 경우에만 실행
-        if (request.getNewPassword() != null && !request.getNewPassword().isBlank()) {
-            // 2-1. 현재 비밀번호 확인
-            if (request.getCurrentPassword() == null || request.getCurrentPassword().isBlank()) {
-                throw new UserException(ErrorCode.CURRENT_PASSWORD_REQUIRED);
-            }
-            // 2-2. 현재 비밀번호가 올바른지 검증
-            if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
-                throw new UserException(ErrorCode.CURRENT_PASSWORD_MISMATCH);
-            }
-            // 2-3. 새 비밀번호와 확인 비밀번호 일치 여부 확인
-            if (!request.getNewPassword().equals(request.getConfirmPassword())) {
-                throw new UserException(ErrorCode.PASSWORD_MISMATCH);
-            }
-            // 2-4. 비밀번호 암호화 및 업데이트
-            String encodedPassword = passwordEncoder.encode(request.getNewPassword());
-            user.updatePassword(encodedPassword);
-        }
+        updatePasswordIfRequested(user, request);
         // 3. 뉴스레터 수신 여부 및 관심사 업데이트
         user.updateProfile(request.getLetterOk(), request.getHobbies());
         log.info("사용자 마이페이지 정보 수정 완료 - 사용자 ID: {}", userId);
     }
+
+    /**
+     * 요청에 새로운 비밀번호가 포함된 경우, 유효성 검사 후 비밀번호를 업데이트하는 헬퍼 메소드
+     * */
+    private void updatePasswordIfRequested(User user, UserUpdateRequest request) {
+        // 1. 요청에 새로운 비밀번호가 없으면 즉시 종료
+        if (request.getNewPassword() == null || request.getNewPassword().isBlank()) {
+            return;
+        }
+        // 2. 현재 비밀번호가 누락되었는지 확인
+        if (request.getCurrentPassword() == null || request.getCurrentPassword().isBlank()) {
+            throw new UserException(ErrorCode.CURRENT_PASSWORD_REQUIRED);
+        }
+        //3. 현재 비밀번호 일치 여부 확인
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new UserException(ErrorCode.CURRENT_PASSWORD_MISMATCH);
+        }
+        // 4. 새로운 비밀번호와 비밀번호 확인 일치 여부 확인
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new UserException(ErrorCode.PASSWORD_MISMATCH);
+        }
+        // 5. 새로운 비밀번호로 업데이트
+        String encodedNewPassword = passwordEncoder.encode(request.getNewPassword());
+        user.updatePassword(encodedNewPassword);
+    }
+
     /**
      * 회원 탈퇴 로직
      * @param userId 현재 인증된 사용자 ID
@@ -123,8 +134,7 @@ public class UserService {
     @Transactional
     public void deleteUser(Long userId) {
         // 1. 사용자 조회
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
+        User user = findByUserId(userId);
 
         // 2. 리프레시 토큰 삭제
         refreshTokenRepository.deleteByUserId(userId);
@@ -190,8 +200,7 @@ public class UserService {
             return;
         }
         // 실패한 경우
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
+        User user = findByUserId(userId);
         if (user.getStatus() != UserStatus.DELETED) {
             throw new UserException(ErrorCode.INVALID_STATUS);
         }
@@ -209,58 +218,12 @@ public class UserService {
         log.info("관리자에 의한 배치 하드 삭제 완료 - 삭제된 사용자 수: {}, before = {}", deletedCount, before);
         return deletedCount;
     }
+
     /**
-     * 뉴스 읽음 기록 추가 로직
-     * @param userId 사용자 ID
-     * @param newsId 읽은 뉴스 ID
+     * 사용자 조회 공통 메서드
      * */
-    @Transactional
-    public void addReadHistory(Long userId, Long newsId) {
-        // 이미 읽은 기록이 있는지 확인
-        synchronized (this) { // 동기화 블록으로 중복 방지
-            Optional<UserReadHistory> existingHistory = userReadHistoryRepository.findByUser_IdAndNewsId(userId, newsId);
-
-            if (existingHistory.isPresent()) {
-                // 기존 기록이 있으면 updated_at만 갱신
-                existingHistory.get().updateReadTime();
-                userReadHistoryRepository.save(existingHistory.get());
-                log.info("뉴스 읽음 기록 갱신 완료 - 사용자 ID: {}, 뉴스 ID: {}", userId, newsId);
-                return;
-            }
-            // 기록을 저장하기 위해 User 엔티티 조회
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
-
-            // 직접 DB에서 카테고리 조회 (enum으로 직접 가져옴)
-            NewsCategory categoryName = newsRepository.findCategoryById(newsId)
-                    .orElse(null); // 카테고리가 없어도 null로 저장
-
-            // 직접 DB에서 제목 조회
-            Optional<String> newsTitle = newsRepository.findTitleById(newsId);
-
-            // 읽은 기록 엔티티 생성
-            UserReadHistory history = UserReadHistory.builder()
-                    .user(user)
-                    .newsId(newsId)
-                    .newsTitle(newsTitle.orElse("제목 없음"))
-                    .categoryName(categoryName)
-                    .build();
-            // 읽은 기록 저장
-            userReadHistoryRepository.save(history);
-            log.info("뉴스 읽음 기록 추가 완료 - 사용자 ID: {}, 뉴스 ID: {}, 카테고리: {}", userId, newsId, categoryName);
-        }
-    }
-
-    /**
-     * 사용자가 읽은 뉴스 기록 조회 로직 (updated_at 포함)
-     * @param userId 사용자 ID
-     * @param pageable 페이징 정보
-     * @return Page<ReadHistoryResponse> 읽은 뉴스 기록 목록 (updated_at 포함)
-     */
-    @Transactional(readOnly = true)
-    public Page<ReadHistoryResponse> getReadHistory(Long userId, Pageable pageable) {
-        // updated_at 기준 내림차순으로 정렬된 기록 조회 후 DTO로 변환
-        return userReadHistoryRepository.findByUserIdOrderByUpdatedAtDesc(userId, pageable)
-                .map(ReadHistoryResponse::new);
+    private User findByUserId(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
     }
 }

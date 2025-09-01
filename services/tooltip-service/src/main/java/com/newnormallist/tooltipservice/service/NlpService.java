@@ -3,19 +3,26 @@ package com.newnormallist.tooltipservice.service;
 import kr.co.shineware.nlp.komoran.constant.DEFAULT_MODEL;
 import kr.co.shineware.nlp.komoran.core.Komoran;
 import kr.co.shineware.nlp.komoran.model.Token;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import com.newnormallist.tooltipservice.repository.VocabularyTermRepository;
+import com.newnormallist.tooltipservice.entity.VocabularyTerm;
 
 import java.util.List;
 import java.util.Set;
+import java.util.NoSuchElementException;
 
 @Service
 @Slf4j
 public class NlpService {
 
+    private final VocabularyTermRepository vocabularyTermRepository;
+
     private final Komoran komoran;
 
-    public NlpService() {
+    public NlpService(VocabularyTermRepository vocabularyTermRepository) {
+        this.vocabularyTermRepository = vocabularyTermRepository;
         // Komoran 객체를 생성합니다. 모델은 경량화된 LIGHT 모델을 사용합니다.
         // 더 높은 정확도가 필요하면 DEFAULT_MODEL.FULL을 사용할 수 있습니다.
         this.komoran = new Komoran(DEFAULT_MODEL.LIGHT);
@@ -86,7 +93,15 @@ public class NlpService {
                 // 툴팁 기능을 위한 span 태그를 추가합니다.
                 log.info("✅ 마크업 적용: '{}'", term);
                 String originalWord = originalContent.substring(beginIndex, endIndex);
-                markedUpContent.append("<span class=\"inline\" data-term=\"").append(term).append("\">").append(originalWord).append("</span>");
+                String definitionsJson = getWordDefinitionsJson(term);
+                
+                markedUpContent.append("<span class=\"tooltip-word\" data-term=\"")
+                        .append(escapeHtml(term))
+                        .append("\" data-definitions=\"")
+                        .append(definitionsJson)
+                        .append("\">")
+                        .append(originalWord)
+                        .append("</span>");
             } else {
                 // 그렇지 않으면 원본 텍스트를 그대로 추가합니다.
                 String originalWord = originalContent.substring(beginIndex, endIndex);
@@ -152,5 +167,94 @@ public class NlpService {
         
         // 패턴이 아니면 정확 일치만 인정
         return extractedTerm.equals(dbTerm);
+    }
+    
+    /**
+     * 단어의 모든 정의를 JSON 형태로 가져옵니다.
+     * @param term 조회할 단어
+     * @return JSON 형태의 정의 문자열 (없으면 빈 문자열)
+     */
+    private String getWordDefinitionsJson(String term) {
+        try {
+            // DB에서 직접 조회 (캐시는 AnalysisCacheService에서 처리)
+            VocabularyTerm vocabularyTerm = vocabularyTermRepository.findByTerm(term)
+                    .or(() -> vocabularyTermRepository.findByTermStartingWith(term))
+                    .orElse(null);
+            
+            if (vocabularyTerm != null && !vocabularyTerm.getDefinitions().isEmpty()) {
+                // displayOrder 순서대로 정렬하여 JSON 형태로 반환
+                String jsonDefinitions = vocabularyTerm.getDefinitions().stream()
+                        .sorted((def1, def2) -> {
+                            Integer order1 = def1.getDisplayOrder() != null ? def1.getDisplayOrder() : Integer.MAX_VALUE;
+                            Integer order2 = def2.getDisplayOrder() != null ? def2.getDisplayOrder() : Integer.MAX_VALUE;
+                            return order1.compareTo(order2);
+                        })
+                        .map(def -> String.format("{\"def\":\"%s\",\"order\":%d}", 
+                                escapeJson(def.getDefinition()), 
+                                def.getDisplayOrder() != null ? def.getDisplayOrder() : 999))
+                        .collect(java.util.stream.Collectors.joining(","));
+                
+                return "[" + jsonDefinitions + "]";
+            }
+        } catch (Exception e) {
+            log.warn("단어 '{}' 정의 조회 중 오류: {}", term, e.getMessage());
+        }
+        return ""; // 정의가 없으면 빈 문자열
+    }
+    
+    /**
+     * 단어의 첫 번째 정의만 가져옵니다 (하위 호환성용).
+     * @param term 조회할 단어
+     * @return 단어의 첫 번째 정의 (없으면 빈 문자열)
+     */
+    private String getWordDefinition(String term) {
+        try {
+            VocabularyTerm vocabularyTerm = vocabularyTermRepository.findByTerm(term)
+                    .or(() -> vocabularyTermRepository.findByTermStartingWith(term))
+                    .orElse(null);
+            
+            if (vocabularyTerm != null && !vocabularyTerm.getDefinitions().isEmpty()) {
+                return vocabularyTerm.getDefinitions().stream()
+                        .sorted((def1, def2) -> {
+                            Integer order1 = def1.getDisplayOrder() != null ? def1.getDisplayOrder() : Integer.MAX_VALUE;
+                            Integer order2 = def2.getDisplayOrder() != null ? def2.getDisplayOrder() : Integer.MAX_VALUE;
+                            return order1.compareTo(order2);
+                        })
+                        .findFirst()
+                        .map(def -> def.getDefinition())
+                        .orElse("");
+            }
+        } catch (Exception e) {
+            log.warn("단어 '{}' 정의 조회 중 오류: {}", term, e.getMessage());
+        }
+        return "";
+    }
+    
+    /**
+     * HTML 특수문자를 이스케이프 처리합니다.
+     * @param text 이스케이프할 텍스트
+     * @return 이스케이프된 텍스트
+     */
+    private String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;")
+                   .replace("'", "&#x27;");
+    }
+    
+    /**
+     * JSON 문자열에서 특수문자를 이스케이프 처리합니다.
+     * @param text 이스케이프할 텍스트
+     * @return 이스케이프된 텍스트
+     */
+    private String escapeJson(String text) {
+        if (text == null) return "";
+        return text.replace("\\", "\\\\")
+                   .replace("\"", "\\\"")
+                   .replace("\n", "\\n")
+                   .replace("\r", "\\r")
+                   .replace("\t", "\\t");
     }
 }

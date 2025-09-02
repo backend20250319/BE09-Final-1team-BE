@@ -1,17 +1,29 @@
 package com.newnormallist.newsservice.summarizer.dto;
 
+import com.newnormallist.newsservice.summarizer.entity.NewsSummaryEntity;
 import lombok.*;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class SummaryResponse {
-    private Long newsId;
-    private String resolvedType;
-    private Integer lines;      // 정보용(정책값). DB에는 저장 안 함
-    private String summary;
-    private boolean cached;     // 캐시 히트 여부(Flask 판단)
-    private String createAt;
+import java.time.Instant;
 
+@Builder
+public record SummaryResponse(
+        Long id,
+        Long newsId,
+        String type,
+        int lines,
+        String summary,
+        boolean cached,
+        Instant createdAt
+) {
+    public static SummaryResponse fromEntity(NewsSummaryEntity e, boolean cached) {
+        return SummaryResponse.builder()
+                .id(e.getId())
+                .newsId(e.getNewsId())
+                .type(e.getSummaryType())
+                .lines(e.getLines())
+                .summary(e.getSummaryText())
+                .cached(cached)
+                .createdAt(e.getCreatedAt())
+                .build();
+    }
 }

@@ -21,7 +21,8 @@ public enum ErrorCode {
     REFRESH_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "A003", "리프레시 토큰을 찾을 수 없습니다."),
     INVALID_RESET_TOKEN(HttpStatus.UNAUTHORIZED, "A004", "유효하지 않은 비밀번호 재설정 토큰입니다."),
     EXPIRED_RESET_TOKEN(HttpStatus.UNAUTHORIZED, "A005", "토큰이 만료되었습니다."),
-
+    PASSWORD_CONTAINS_NAME(HttpStatus.BAD_REQUEST, "A006", "비밀번호에 이름이 포함되어 있습니다."),
+    PASSWORD_CONTAINS_EMAIL(HttpStatus.BAD_REQUEST, "A007", "비밀번호에 이메일이 포함되어 있습니다."),
 
     // 공통 에러
     INVALID_INPUT_VALUE(HttpStatus.BAD_REQUEST, "C001", "잘못된 입력값입니다."),

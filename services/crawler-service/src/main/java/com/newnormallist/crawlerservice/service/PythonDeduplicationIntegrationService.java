@@ -50,7 +50,7 @@ public class PythonDeduplicationIntegrationService {
             }
             
             String[] categories = {"POLITICS", "ECONOMY", "SOCIETY", "LIFE", "INTERNATIONAL", 
-                                 "IT_SCIENCE", "VEHICLE", "TRAVEL_FOOD", "ART"};
+                                    "IT_SCIENCE", "VEHICLE", "TRAVEL_FOOD", "ART"};
             
             Map<String, DeduplicationResponse> results = new HashMap<>();
             

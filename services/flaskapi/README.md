@@ -87,79 +87,53 @@ Content‑Type: application/json
 
 ## 9. venv 가상 서버 설치 및 패키지 설치 명령어 (.env 설정)
 
-### Bash (macOS / Linux / Git Bash on Windows)
-
-:: 0. Python 실행 가능 여부 확인
-python3 --version
-
-:: 1. 가상환경 생성
+Bash (macOS / Linux / Git Bash on Windows)
+# 1) 가상환경 생성
 python3 -m venv .venv
 
-:: 2. 가상환경 활성화
+# 2) 가상환경 활성화
 source .venv/bin/activate
 
-:: 3. requirements.txt 설치
+# 3) 의존성 설치
 pip install -r requirements.txt
 
-:: 4. 패키지 추가 설치 (예시)
-pip install flask requests
+# 4) 실행
+python3 main.py     # (또는) FLASK_APP=main.py flask run --debug
 
-:: 5. 현재 설치된 패키지 목록 저장
-pip freeze > requirements.txt
-
-:: 6. 가상환경 비활성화
+# 5) 가상환경 비활성화
 deactivate
 
-### CMD(명령 프롬프트, Windows)
-
-:: 0. Python 실행 가능 여부 확인
-python --version
-:: 또는
-py --version
-
-:: 1. 가상환경 생성
+CMD (명령 프롬프트, Windows)
+:: 1) 가상환경 생성
 py -m venv .venv
 
-:: 2. 가상환경 활성화
-.venv\Scripts\activate.bat
+:: 2) 가상환경 활성화
+.\.venv\Scripts\activate.bat
 
-:: 3. requirements.txt 설치
+:: 3) 의존성 설치
 pip install -r requirements.txt
 
-:: 4. 패키지 추가 설치 (예시)
-pip install flask requests
+:: 4) 실행
+python main.py     :: (또는) set FLASK_APP=main.py & flask run --debug
 
-:: 5. 현재 설치된 패키지 목록 저장
-pip freeze > requirements.txt
-
-:: 6. 가상환경 비활성화
+:: 5) 가상환경 비활성화
 deactivate
 
-### PowerShell (Windows, 관리자 권장)
-
-:: 0. Python 실행 가능 여부 확인
-python --version
-:: 또는
-py --version
-:: 여기서 버전이 안 뜬다면 PATH 설정 필요
-
-:: 1. 가상환경 생성 (python 명령이 안 되면 py 사용)
+PowerShell (Windows)
+# 1) 가상환경 생성
 py -m venv .venv
 
-:: 2. PowerShell 실행 정책 변경 (세션 한정)
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+# 2) (필요 시) 실행 정책 완화(현재 세션만)
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
 
-:: 3. 가상환경 활성화
-.venv\Scripts\Activate.ps1
+# 3) 가상환경 활성화
+.\.venv\Scripts\Activate.ps1
 
-:: 4. requirements.txt 설치
+# 4) 의존성 설치
 pip install -r requirements.txt
 
-:: 5. 패키지 추가 설치 (예시: Flask, Requests)
-pip install flask requests
+# 5) 실행
+python .\main.py   # (또는) $env:FLASK_APP="main.py"; flask run --debug
 
-:: 6. 현재 설치된 패키지 목록 저장
-pip freeze > requirements.txt
-
-:: 7. 가상환경 비활성화
+# 6) 가상환경 비활성화
 deactivate

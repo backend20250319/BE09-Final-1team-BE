@@ -1,8 +1,8 @@
-package com.newnormallist.newsservice.news.config;
+package com.newnormallist.newsservice.config;
 
-import com.newnormallist.newsservice.news.config.auth.HeaderAuthenticationFilter;
-import com.newnormallist.newsservice.news.config.auth.RestAccessDeniedHandler;
-import com.newnormallist.newsservice.news.config.auth.RestAuthenticationEntryPoint;
+import com.newnormallist.newsservice.config.security.HeaderAuthenticationFilter;
+import com.newnormallist.newsservice.config.security.RestAccessDeniedHandler;
+import com.newnormallist.newsservice.config.security.RestAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -53,6 +53,17 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/news-api-docs/**"
                         ).permitAll()
+                        .requestMatchers(
+                                "/api/news/summary",        // 본문(텍스트) 요약
+                                "/api/news/summary/**",
+                                "/api/news/*/summary"       // ID 요약: /api/news/{id}/summary
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/news/summary",
+                                "/api/news/summary/**",
+                                "/api/news/*/summary"
+                        ).permitAll()
+                        .requestMatchers("/api/summarizer/**").permitAll()
 
                         // 3-2. 특정 리소스 (컬렉션, 마이페이지 뉴스) 관련 경로는 반드시 인증이 필요
                         // "/api/collections/**": 모든 컬렉션 관련 API
@@ -71,5 +82,6 @@ public class SecurityConfig {
                 // 4. 커스텀 필터 추가
                 .addFilterBefore(headerAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
+
     }
 }

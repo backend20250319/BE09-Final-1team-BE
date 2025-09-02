@@ -1,4 +1,4 @@
-package com.newnormallist.newsservice.news.config.auth;
+package com.newnormallist.newsservice.config.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -9,6 +9,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -17,6 +18,16 @@ import java.util.Collections;
 @Component
 @Slf4j
 public class HeaderAuthenticationFilter extends OncePerRequestFilter {
+
+
+    private static final AntPathMatcher PATH = new AntPathMatcher();
+    private static final String[] SKIP = {
+            "/api/news/summary",
+            "/api/news/summary/**",
+            "/api/news/*/summary",
+            "/swagger-ui/**", "/v3/api-docs/**",
+            "/actuator/**", "/health", "/error"
+    };
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)

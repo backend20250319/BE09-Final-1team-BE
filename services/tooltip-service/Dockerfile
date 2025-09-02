@@ -4,19 +4,18 @@
 FROM openjdk:17-jdk-slim AS builder
 WORKDIR /app
 
-# 💡 개선점: 종속성 파일 먼저 복사하여 캐싱 활용
+# 종속성 파일 먼저 복사하여 Docker 빌드 캐시 활용
 COPY build.gradle settings.gradle ./
 COPY gradlew ./gradlew
 COPY gradle ./gradle
 
-# 💡 개선점: 소스 코드 복사 전 종속성 먼저 다운로드
-# 이렇게 하면 소스 코드만 변경 시 이 단계는 캐시를 사용합니다.
+# 소스 코드 복사 전 종속성 먼저 다운로드 (빌드 속도 향상)
 RUN ./gradlew dependencies
 
-# 소스 코드 복사
+# 나머지 소스 코드 복사
 COPY src ./src
 
-# 프로젝트 빌드
+# Gradle을 사용하여 프로젝트를 빌드 (jar 파일 생성)
 RUN ./gradlew bootJar
 
 # =================
@@ -28,8 +27,9 @@ WORKDIR /app
 # 빌드 단계(builder)에서 생성된 jar 파일만 복사
 COPY --from=builder /app/build/libs/*.jar ./app.jar
 
-# 컨테이너 실행
+# 컨테이너 실행 시 이 명령어가 실행됨
 ENTRYPOINT ["java", "-jar", "app.jar"]
 
-# 서비스 포트 명시
-EXPOSE 8761
+# ⭐️ 중요: 각 서비스의 실제 포트로 변경해주세요! ⭐️
+# 예: gateway-service는 8000, user-service는 8081 등
+EXPOSE 8086

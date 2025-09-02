@@ -138,4 +138,14 @@ public class JwtTokenProvider {
                 .signWith(secretKey)
                 .compact();
     }
+    /**
+     * 각 토큰의 유효 시간을 가져오는 public getter 메소드
+     * */
+    public long getAccessTokenValidityInMilliseconds() {
+        return accessTokenExpiration;
+    }
+
+    public long getRefreshTokenValidityInMilliseconds() {
+        return refreshTokenExpiration;
+    }
 }

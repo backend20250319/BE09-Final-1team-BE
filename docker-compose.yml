@@ -231,6 +231,51 @@ services:
       start_period: 120s # SBERT 모델 로딩 시간 고려
       retries: 3
 
+# 9. newsletter-service
+  newsletter-service:
+    build: ./services/newsletter-service
+    container_name: newsletter-service
+    ports:
+      - "8085:8085"
+    networks:
+      - msa-network
+    depends_on:
+      - discovery-service
+    environment:
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
+      # DB 연결 설정
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      # SMTP
+      - SPRING_MAIL_HOST=${SPRING_MAIL_HOST}
+      - SPRING_MAIL_PORT=${SPRING_MAIL_PORT}
+      - SPRING_MAIL_USERNAME=${SPRING_MAIL_USERNAME}
+      - SPRING_MAIL_PASSWORD=${SPRING_MAIL_PASSWORD}
+      # JWT
+      - jwt.secret=${JWT_SECRET}
+      - jwt.expiration=${JWT_EXPIRATION}
+
+# 10. tooltip-service
+  tooltip-service:
+    build: ./services/tooltip-service
+    container_name: tooltip-service
+    ports:
+      - "8086:8086"
+    networks:
+      - msa-network
+    depends_on:
+      - discovery-service
+    environment:
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
+      # DB 연결 설정
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      # JWT
+      - jwt.secret=${JWT_SECRET}
+      - jwt.expiration=${JWT_EXPIRATION}
+
 # 서비스들이 사용할 공용 네트워크 정의
 networks:
   msa-network:

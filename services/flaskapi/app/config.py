@@ -16,7 +16,7 @@ class BaseConfig:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 class DevConfig(BaseConfig):
     # instance/summary.db 절대경로로 고정

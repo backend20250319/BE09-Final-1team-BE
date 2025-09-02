@@ -4,6 +4,8 @@ import com.newnormallist.userservice.common.exception.UserException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -22,12 +24,24 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class})
-    public ResponseEntity<ApiResult<String>> handleValidationException(Exception e) {
+    public ResponseEntity<ApiResult<String>> handleValidationException(BindException e) {
         log.error("Validation Exception: {}", e.getMessage());
+
+        // 1. BindingResult에서 첫 번째 오류 메시지를 추출
+        BindingResult bindingResult = e.getBindingResult();
+
+        // 2. 여러 에러 중 첫 번째 에러 메시지를 가져옴
+        String errorMessage = "유효성 검증에 실패했습니다."; // 기본 메시지
+        if (bindingResult.hasErrors()) {
+            FieldError fieldError = bindingResult.getFieldError(); // 첫 번째 오류 가져오기
+            if (fieldError != null) {
+                errorMessage = fieldError.getDefaultMessage(); // DTO에 정의된 validation 오류 메시지
+            }
+        }
         return ResponseEntity
                 .status(ErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
                 .body(ApiResult.error(ErrorCode.INVALID_INPUT_VALUE.getCode(),
-                        ErrorCode.INVALID_INPUT_VALUE.getMessage()));
+                        errorMessage));
     }
 
     @ExceptionHandler(Exception.class)

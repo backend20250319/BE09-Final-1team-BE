@@ -52,9 +52,11 @@ public class UserService {
     public void signup(SignupRequest signupRequest) {
         // 1. 이메일 중복 검사
         validateEmailDuplication(signupRequest.getEmail());
-        // 2. 비밀번호 암호화
+        // 2. 비밀번호에 개인정보 포함 여부 검사
+        validatePasswordSecurity(signupRequest.getPassword(), signupRequest.getEmail(), signupRequest.getName());
+        // 3. 비밀번호 암호화
         String encodedPassword = passwordEncoder.encode(signupRequest.getPassword());
-        // 3. User 엔티티 생성
+        // 4. User 엔티티 생성
         User user = User.builder()
                 .email(signupRequest.getEmail())
                 .password(encodedPassword)
@@ -63,7 +65,7 @@ public class UserService {
                 .gender(signupRequest.getGender())
                 .hobbies(signupRequest.getHobbies() != null ? signupRequest.getHobbies() : new HashSet<>())
                 .build();
-        // 4. 사용자 저장
+        // 5. 사용자 저장
         userRepository.save(user);
         log.info("사용자 회원가입 완료 - 이메일: {}", signupRequest.getEmail());
     }
@@ -96,28 +98,39 @@ public class UserService {
         // 1. 사용자 조회
         User user = findByUserId(userId);
         // 2. 비밀번호 변경 로직
-        // newPassword 필드가 비어있지 않은 경우에만 실행
-        if (request.getNewPassword() != null && !request.getNewPassword().isBlank()) {
-            // 2-1. 현재 비밀번호 확인
-            if (request.getCurrentPassword() == null || request.getCurrentPassword().isBlank()) {
-                throw new UserException(ErrorCode.CURRENT_PASSWORD_REQUIRED);
-            }
-            // 2-2. 현재 비밀번호가 올바른지 검증
-            if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
-                throw new UserException(ErrorCode.CURRENT_PASSWORD_MISMATCH);
-            }
-            // 2-3. 새 비밀번호와 확인 비밀번호 일치 여부 확인
-            if (!request.getNewPassword().equals(request.getConfirmPassword())) {
-                throw new UserException(ErrorCode.PASSWORD_MISMATCH);
-            }
-            // 2-4. 비밀번호 암호화 및 업데이트
-            String encodedPassword = passwordEncoder.encode(request.getNewPassword());
-            user.updatePassword(encodedPassword);
-        }
+        updatePasswordIfRequested(user, request);
         // 3. 뉴스레터 수신 여부 및 관심사 업데이트
         user.updateProfile(request.getLetterOk(), request.getHobbies());
         log.info("사용자 마이페이지 정보 수정 완료 - 사용자 ID: {}", userId);
     }
+
+    /**
+     * 요청에 새로운 비밀번호가 포함된 경우, 유효성 검사 후 비밀번호를 업데이트하는 헬퍼 메소드
+     * */
+    private void updatePasswordIfRequested(User user, UserUpdateRequest request) {
+        // 1. 요청에 새로운 비밀번호가 없으면 즉시 종료
+        if (request.getNewPassword() == null || request.getNewPassword().isBlank()) {
+            return;
+        }
+        // 2. 현재 비밀번호가 누락되었는지 확인
+        if (request.getCurrentPassword() == null || request.getCurrentPassword().isBlank()) {
+            throw new UserException(ErrorCode.CURRENT_PASSWORD_REQUIRED);
+        }
+        //3. 현재 비밀번호 일치 여부 확인
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new UserException(ErrorCode.CURRENT_PASSWORD_MISMATCH);
+        }
+        // 3-1. 새로운 비밀번호에 개인정보 포함 여부 검사
+        validatePasswordSecurity(request.getNewPassword(), user.getEmail(), user.getName());
+        // 4. 새로운 비밀번호와 비밀번호 확인 일치 여부 확인
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new UserException(ErrorCode.PASSWORD_MISMATCH);
+        }
+        // 5. 새로운 비밀번호로 업데이트
+        String encodedNewPassword = passwordEncoder.encode(request.getNewPassword());
+        user.updatePassword(encodedNewPassword);
+    }
+
     /**
      * 회원 탈퇴 로직
      * @param userId 현재 인증된 사용자 ID
@@ -217,4 +230,20 @@ public class UserService {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
     }
+
+    /**
+     * 비밀번호에 개인정보가 들어가 있는지 검사하는 메서드
+     * */
+    private void validatePasswordSecurity(String password, String email, String name) {
+        String lowerPassword = password.toLowerCase();
+        String emailId = email.split("@")[0];
+
+        if (lowerPassword.contains(name)) {
+            throw new UserException(ErrorCode.PASSWORD_CONTAINS_NAME);
+        }
+        if (lowerPassword.contains(emailId)) {
+            throw new UserException(ErrorCode.PASSWORD_CONTAINS_EMAIL);
+        }
+    }
+
 }

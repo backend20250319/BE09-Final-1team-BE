@@ -16,6 +16,9 @@ pandas==2.2.2
 # 한국어 NLP 의존성
 JPype1==1.5.0  # KoNLPy 의존성
 
+# HTML 파싱
+beautifulsoup4==4.12.2
+
 # 유틸리티
 python-multipart==0.0.6
 httpx==0.25.2

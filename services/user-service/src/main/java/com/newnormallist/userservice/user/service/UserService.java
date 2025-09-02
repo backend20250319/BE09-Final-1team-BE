@@ -52,9 +52,11 @@ public class UserService {
     public void signup(SignupRequest signupRequest) {
         // 1. 이메일 중복 검사
         validateEmailDuplication(signupRequest.getEmail());
-        // 2. 비밀번호 암호화
+        // 2. 비밀번호에 개인정보 포함 여부 검사
+        validatePasswordSecurity(signupRequest.getPassword(), signupRequest.getEmail(), signupRequest.getName());
+        // 3. 비밀번호 암호화
         String encodedPassword = passwordEncoder.encode(signupRequest.getPassword());
-        // 3. User 엔티티 생성
+        // 4. User 엔티티 생성
         User user = User.builder()
                 .email(signupRequest.getEmail())
                 .password(encodedPassword)
@@ -63,7 +65,7 @@ public class UserService {
                 .gender(signupRequest.getGender())
                 .hobbies(signupRequest.getHobbies() != null ? signupRequest.getHobbies() : new HashSet<>())
                 .build();
-        // 4. 사용자 저장
+        // 5. 사용자 저장
         userRepository.save(user);
         log.info("사용자 회원가입 완료 - 이메일: {}", signupRequest.getEmail());
     }
@@ -118,6 +120,8 @@ public class UserService {
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
             throw new UserException(ErrorCode.CURRENT_PASSWORD_MISMATCH);
         }
+        // 3-1. 새로운 비밀번호에 개인정보 포함 여부 검사
+        validatePasswordSecurity(request.getNewPassword(), user.getEmail(), user.getName());
         // 4. 새로운 비밀번호와 비밀번호 확인 일치 여부 확인
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new UserException(ErrorCode.PASSWORD_MISMATCH);
@@ -226,4 +230,20 @@ public class UserService {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
     }
+
+    /**
+     * 비밀번호에 개인정보가 들어가 있는지 검사하는 메서드
+     * */
+    private void validatePasswordSecurity(String password, String email, String name) {
+        String lowerPassword = password.toLowerCase();
+        String emailId = email.split("@")[0];
+
+        if (lowerPassword.contains(name)) {
+            throw new UserException(ErrorCode.PASSWORD_CONTAINS_NAME);
+        }
+        if (lowerPassword.contains(emailId)) {
+            throw new UserException(ErrorCode.PASSWORD_CONTAINS_EMAIL);
+        }
+    }
+
 }

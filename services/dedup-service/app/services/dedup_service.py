@@ -14,6 +14,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer, util
 import torch
 import re
+from bs4 import BeautifulSoup
 from konlpy.tag import Okt
 
 from app.config import settings
@@ -124,7 +125,7 @@ class DeduplicationService:
     
     async def run_deduplication(self, category: str, file_timestamp: str = None) -> DeduplicationResponse:
         """
-        중복제거 메인 로직 - 파이썬 원본과 100% 동일
+        중복제거 메인 로직
         """
         start_time = time.time()
         self.stats['total_requests'] += 1
@@ -284,10 +285,21 @@ class DeduplicationService:
     async def _preprocess_content(self, text: str) -> str:
         """
         본문 전처리 - 파이썬 preprocessing_content.py의 preprocess_content와 100% 동일
+        HTML 태그 제거 기능 추가
         """
         # 파이썬: if not isinstance(text, str): return ''
         if not isinstance(text, str) or not text:
             return ""
+        
+        # HTML 파싱으로 텍스트만 추출 (더 정확하고 안전함)
+        try:
+            soup = BeautifulSoup(text, 'html.parser')
+            text = soup.get_text(separator=' ', strip=True)
+        except Exception as e:
+            logger.warning(f"HTML 파싱 실패, 정규식으로 fallback: {e}")
+            # Fallback: 기존 정규식 방식
+            text = re.sub(r'<[^>]+>', ' ', text)
+            text = re.sub(r'&[a-zA-Z0-9#]+;', ' ', text)
         
         # 파이썬: text = re.sub(r'[^\w\s]', ' ', text)
         text = re.sub(r'[^\w\s]', ' ', text)
@@ -456,7 +468,7 @@ class DeduplicationService:
         news_list: List[NewsDetail]
     ) -> Dict[str, Any]:
         """
-        본문 기반 대표 기사 선정 - 파이썬 content_filter.py의 filter_and_pick_representative_by_content와 100% 동일
+        본문 기반 대표 기사 선정 
         """
         if len(group) == 1:
             return {

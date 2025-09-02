@@ -121,23 +121,26 @@ public class AuthService {
      */
     @Transactional
     public void resetPassword(PasswordResetRequest request) {
-        // 1. 비밀번호 확인
+        // 1. 기본 입력값 검증 (가장 빠른 실패)
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new UserException(ErrorCode.PASSWORD_MISMATCH);
         }
-        // 2. DB에서 토큰 조회
+        // 2. 토큰 조회 및 유효성 검증
         PasswordResetToken resetToken = passwordResetTokenRepostitory.findByToken(request.getToken())
                 .orElseThrow(() -> new UserException(ErrorCode.INVALID_RESET_TOKEN));
-        // 3. 토큰이 만료되었는지 확인
+        // 3. 토큰 만료 확인
         if (resetToken.isExpired()) {
-            passwordResetTokenRepostitory.delete(resetToken);  // 토큰 만료 시 DB에서 삭제
+            passwordResetTokenRepostitory.delete(resetToken);
             throw new UserException(ErrorCode.EXPIRED_RESET_TOKEN);
         }
-        // 4. 토큰에 연결된 사용자 정보로 비밀번호 변경
+        // 4. 사용자 정보 조회
         User user = resetToken.getUser();
+        // 5. 비밀번호 보안 검증 (사용자 정보가 필요한 검증)
+        validatePasswordSecurity(request.getNewPassword(), user.getEmail(), user.getName());
+        // 6. 비밀번호 업데이트
         user.updatePassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
-        // 5. 사용된 토큰은 삭제
+        // 7. 사용된 토큰 삭제
         passwordResetTokenRepostitory.delete(resetToken);
     }
     /**
@@ -181,5 +184,19 @@ public class AuthService {
                 user.getRole()
         );
         return new LoginResponseDto(accessToken, refreshTokenValue, userInfo);
+    }
+    /**
+     * 비밀번호에 개인정보가 들어가 있는지 검사하는 메서드
+     * */
+    private void validatePasswordSecurity(String password, String email, String name) {
+        String lowerPassword = password.toLowerCase();
+        String emailId = email.split("@")[0];
+
+        if (lowerPassword.contains(name)) {
+            throw new UserException(ErrorCode.PASSWORD_CONTAINS_NAME);
+        }
+        if (lowerPassword.contains(emailId)) {
+            throw new UserException(ErrorCode.PASSWORD_CONTAINS_EMAIL);
+        }
     }
 }

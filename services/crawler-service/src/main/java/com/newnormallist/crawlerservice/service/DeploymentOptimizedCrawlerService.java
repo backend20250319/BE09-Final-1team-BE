@@ -260,7 +260,7 @@ public class DeploymentOptimizedCrawlerService {
             // 네이버 뉴스 본문 추출 (정확한 선택자)
             Element contentElement = doc.selectFirst("#dic_area");
             if (contentElement != null) {
-                String content = contentElement.text().trim();
+                String content = contentElement.html(); // html 형태로 가져오기
                 
                 // 본문이 너무 짧으면 제외
                 if (content.length() < 120) {

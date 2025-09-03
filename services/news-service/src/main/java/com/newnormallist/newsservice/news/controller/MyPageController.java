@@ -5,7 +5,6 @@ import com.newnormallist.newsservice.news.exception.UnauthenticatedUserException
 import com.newnormallist.newsservice.news.service.MyPageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,12 +21,14 @@ public class MyPageController {
     public ResponseEntity<Page<NewsListResponse>> getMyScraps(
             @AuthenticationPrincipal String userIdString,
             @RequestParam(required = false) String category,
+            @RequestParam(required = false, name = "q") String query,
+            @RequestParam(required = false, defaultValue = "false") boolean uncollectedOnly,
             Pageable pageable) {
         Long userId = getUserIdOrThrow(userIdString);
 
-        Pageable fixedPageable = PageRequest.of(pageable.getPageNumber(), 10, pageable.getSort());
-
-        Page<NewsListResponse> scraps = myPageService.getScrappedNews(userId, category, fixedPageable);
+        // [FIX] 페이지 크기를 10으로 고정하던 코드를 삭제하고,
+        // 프론트엔드에서 요청한 Pageable 객체를 그대로 서비스에 전달하여 페이지네이션 문제를 해결합니다.
+        Page<NewsListResponse> scraps = myPageService.getScrappedNews(userId, category, query, uncollectedOnly, pageable);
         return ResponseEntity.ok(scraps);
     }
 

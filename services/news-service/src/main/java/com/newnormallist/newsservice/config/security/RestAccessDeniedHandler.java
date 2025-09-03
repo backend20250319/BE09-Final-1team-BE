@@ -1,4 +1,4 @@
-package com.newnormallist.newsservice.news.config.auth;
+package com.newnormallist.newsservice.config.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.ServletException;

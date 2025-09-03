@@ -10,6 +10,7 @@ import com.newnormallist.newsservice.recommendation.repository.*;
 import com.newnormallist.newsservice.recommendation.util.PrefVectorHelper;
 import com.newnormallist.newsservice.recommendation.util.MathUtils;
 import com.newnormallist.newsservice.recommendation.config.RecommendationProperties;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -27,8 +28,10 @@ import java.util.stream.Collectors;
     최종식 Score(c)=Norm(wD·D + wP·P + wR·R + wS·S)로 9개 값 계산
     UserPrefVector 9행으로 만들어 반환 
 */
+
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class VectorBuilderImpl implements VectorBuilder {
 
     private final DemoBaseProvider demoBaseProvider;
@@ -137,10 +140,16 @@ public class VectorBuilderImpl implements VectorBuilder {
             List<NewsScraper> scraps = newsScrapRepository.findRecentScrapsByUserId(userId, thirtyDaysAgo);
             return calculateScrapWeights(scraps);
         } catch (Exception e) {
-            // 날짜 파싱 오류 시 Native Query 사용
-            String sinceStr = thirtyDaysAgo.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-            List<Object[]> scrapData = newsScrapRepository.findRecentScrapsByUserIdNative(userId, sinceStr);
-            return calculateScrapWeightsFromNative(scrapData);
+            try {
+                // 날짜 파싱 오류 시 Native Query 사용
+                String sinceStr = thirtyDaysAgo.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                List<Object[]> scrapData = newsScrapRepository.findRecentScrapsByUserIdNative(userId, sinceStr);
+                return calculateScrapWeightsFromNative(scrapData);
+            } catch (Exception e2) {
+                // 스크랩 저장소가 없거나 모든 방법이 실패한 경우 빈 맵 반환
+                log.debug("사용자 {}의 스크랩 데이터가 없습니다. 빈 스크랩 벡터를 사용합니다.", userId);
+                return new HashMap<>();
+            }
         }
     }
     

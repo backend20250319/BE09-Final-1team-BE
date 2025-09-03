@@ -8,7 +8,7 @@ import java.util.Optional;
 public interface NewsSummaryRepository extends JpaRepository<NewsSummaryEntity, Long> {
 
     // 캐시 조회: 키는 newsId + summaryType (스키마 유니크와 동일)
-    Optional<NewsSummaryEntity> findByNewsIdAndSummaryType(long newsId, String summaryType);
+    Optional<NewsSummaryEntity> findTopByNewsIdAndSummaryTypeAndLinesOrderByIdDesc(Long newsId, String summaryType, Integer lines);
 
     // 존재 여부만 빠르게 확인하고 싶을 때(선택)
     boolean existsByNewsIdAndSummaryType(long newsId, String summaryType);

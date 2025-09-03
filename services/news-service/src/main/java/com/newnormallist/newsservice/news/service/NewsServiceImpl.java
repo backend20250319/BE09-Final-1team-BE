@@ -39,10 +39,10 @@ public class NewsServiceImpl implements NewsService {
 
     @Autowired
     private NewsCrawlRepository newsCrawlRepository;
-    
+
     @Autowired
     private NewsRepository newsRepository;
-    
+
     @Autowired
     private TooltipServiceClient tooltipServiceClient;
 
@@ -109,7 +109,7 @@ public class NewsServiceImpl implements NewsService {
                     .map(this::convertToNewsResponse);
         }
     }
-    
+
     @Override
     public NewsResponse getNewsById(Long newsId) {
         News news = newsRepository.findById(newsId)
@@ -165,7 +165,7 @@ public class NewsServiceImpl implements NewsService {
                 .build();
                 // ----- 툴팁 기능을 위한 코드 끝 -----
     }
-    
+
     @Override
     public List<NewsResponse> getPersonalizedNews(Long userId) {
         // TODO: 사용자 선호도 기반 개인화 로직 구현
@@ -176,7 +176,7 @@ public class NewsServiceImpl implements NewsService {
                 .map(this::convertToNewsResponse)
                 .collect(Collectors.toList());
     }
-    
+
     @Override
     public List<NewsResponse> getTrendingNews() {
         // 신뢰도가 높은 뉴스 10개 반환
@@ -186,7 +186,7 @@ public class NewsServiceImpl implements NewsService {
                 .map(this::convertToNewsResponse)
                 .collect(Collectors.toList());
     }
-    
+
     @Override
     public void incrementViewCount(Long newsId) {
         // TODO: 조회수 증가 로직 구현
@@ -199,7 +199,7 @@ public class NewsServiceImpl implements NewsService {
         return newsRepository.findTrendingNews(pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public Page<NewsListResponse> getRecommendedNews(Long userId, Pageable pageable) {
         // TODO: 사용자 기반 추천 로직 구현
@@ -207,26 +207,26 @@ public class NewsServiceImpl implements NewsService {
         return newsRepository.findByTrustedTrue(pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public Page<NewsListResponse> getNewsByCategory(Category category, Pageable pageable) {
         return newsRepository.findByCategory(category, pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public Page<NewsListResponse> searchNews(String query, Pageable pageable) {
         return newsRepository.searchByKeyword(query, pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
-    public Page<NewsListResponse> searchNewsWithFilters(String query, String sortBy, String sortOrder, 
-                                                       String category, String press, String startDate, 
-                                                       String endDate, Pageable pageable) {
+    public Page<NewsListResponse> searchNewsWithFilters(String query, String sortBy, String sortOrder,
+            String category, String press, String startDate,
+            String endDate, Pageable pageable) {
         // 기본 검색 결과 가져오기
         Page<News> newsPage = newsRepository.searchByKeyword(query, pageable);
-        
+
         // 필터링 적용
         List<News> filteredNews = newsPage.getContent().stream()
                 .filter(news -> {
@@ -241,14 +241,14 @@ public class NewsServiceImpl implements NewsService {
                             return false;
                         }
                     }
-                    
+
                     // 언론사 필터
                     if (press != null && !press.isEmpty()) {
                         if (!news.getPress().toLowerCase().contains(press.toLowerCase())) {
                             return false;
                         }
                     }
-                    
+
                     // 날짜 필터
                     if (startDate != null && !startDate.isEmpty()) {
                         LocalDateTime start = parsePublishedAt(startDate);
@@ -256,22 +256,22 @@ public class NewsServiceImpl implements NewsService {
                             return false;
                         }
                     }
-                    
+
                     if (endDate != null && !endDate.isEmpty()) {
                         LocalDateTime end = parsePublishedAt(endDate);
                         if (news.getCreatedAt().isAfter(end)) {
                             return false;
                         }
                     }
-                    
+
                     return true;
                 })
                 .collect(Collectors.toList());
-        
+
         // 정렬 적용
         if (sortBy != null && !sortBy.isEmpty()) {
             String order = (sortOrder != null && sortOrder.equalsIgnoreCase("desc")) ? "desc" : "asc";
-            
+
             switch (sortBy.toLowerCase()) {
                 case "date":
                 case "publishedat":
@@ -309,35 +309,35 @@ public class NewsServiceImpl implements NewsService {
                     filteredNews.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
             }
         }
-        
+
         // 페이징 적용
         int pageSize = pageable.getPageSize();
         int pageNumber = pageable.getPageNumber();
         int start = pageNumber * pageSize;
         int end = Math.min(start + pageSize, filteredNews.size());
-        
+
         List<News> pagedNews = filteredNews.subList(start, end);
         List<NewsListResponse> responseList = pagedNews.stream()
                 .map(this::convertToNewsListResponse)
                 .collect(Collectors.toList());
-        
+
         // Page 객체 생성
         return new org.springframework.data.domain.PageImpl<>(
                 responseList, pageable, filteredNews.size());
     }
-    
+
     @Override
     public Page<NewsListResponse> getPopularNews(Pageable pageable) {
         return newsRepository.findPopularNews(pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public Page<NewsListResponse> getLatestNews(Pageable pageable) {
         return newsRepository.findLatestNews(pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public List<CategoryDto> getAllCategories() {
         return List.of(Category.values())
@@ -345,14 +345,14 @@ public class NewsServiceImpl implements NewsService {
                 .map(this::convertToCategoryDto)
                 .collect(Collectors.toList());
     }
-    
+
     // 새로 추가된 메서드들의 구현
     @Override
     public Page<NewsListResponse> getNewsByPress(String press, Pageable pageable) {
         return newsRepository.findByPress(press, pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public List<NewsListResponse> getNewsByDateRange(LocalDateTime startDate, LocalDateTime endDate) {
         // LocalDateTime을 String으로 변환하여 전달
@@ -363,23 +363,23 @@ public class NewsServiceImpl implements NewsService {
                 .map(this::convertToNewsListResponse)
                 .collect(Collectors.toList());
     }
-    
+
     @Override
     public Long getNewsCount() {
         return newsRepository.count();
     }
-    
+
     @Override
     public Long getNewsCountByCategory(Category category) {
         return newsRepository.countByCategory(category);
     }
-    
+
     @Override
     public void promoteToNews(Long newsCrawlId) {
         // 크롤링된 뉴스를 승격하여 노출용 뉴스로 전환
         NewsCrawl newsCrawl = newsCrawlRepository.findById(newsCrawlId)
                 .orElseThrow(() -> new NewsNotFoundException("NewsCrawl not found with id: " + newsCrawlId));
-        
+
         // 이미 승격된 뉴스인지 확인
 //        List<News> existingNews = newsRepository.findByOriginalNewsId(newsCrawl.getRawId());
 //        if (!existingNews.isEmpty()) {
@@ -397,10 +397,10 @@ public class NewsServiceImpl implements NewsService {
                 .categoryName(newsCrawl.getCategory()) // 카테고리 설정
                 .dedupState(DedupState.KEPT) // 기본값
                 .build();
-        
+
         newsRepository.save(news);
     }
-    
+
     @Override
     public Page<NewsCrawl> getCrawledNews(Pageable pageable) {
         return newsCrawlRepository.findAll(pageable);
@@ -425,7 +425,7 @@ public class NewsServiceImpl implements NewsService {
                 .oidAid(news.getOidAid())
                 .build();
     }
-    
+
     private NewsListResponse convertToNewsListResponse(News news) {
         return NewsListResponse.builder()
                 .newsId(news.getNewsId())
@@ -445,7 +445,7 @@ public class NewsServiceImpl implements NewsService {
                 .oidAid(news.getOidAid())
                 .build();
     }
-    
+
     private CategoryDto convertToCategoryDto(Category category) {
         return CategoryDto.builder()
                 .categoryCode(category.name())
@@ -453,7 +453,7 @@ public class NewsServiceImpl implements NewsService {
                 .icon("📰") // 기본 아이콘
                 .build();
     }
-    
+
     // 요약 생성 메서드 (간단한 구현)
     private String generateSummary(String content) {
         if (content == null || content.length() <= 200) {
@@ -461,11 +461,11 @@ public class NewsServiceImpl implements NewsService {
         }
         return content.substring(0, 200) + "...";
     }
-    
+
     // 신뢰도 계산 메서드 (간단한 구현)
     private Boolean calculateTrusted(NewsCrawl newsCrawl) {
         int trusted = 50; // 기본값
-        
+
         // 내용 길이에 따른 신뢰도 조정
         if (newsCrawl.getContent() != null) {
             if (newsCrawl.getContent().length() > 1000) {
@@ -474,12 +474,12 @@ public class NewsServiceImpl implements NewsService {
                 trusted += 10;
             }
         }
-        
+
         // 기자명이 있는 경우 신뢰도 증가
         if (newsCrawl.getReporterName() != null && !newsCrawl.getReporterName().trim().isEmpty()) {
             trusted += 10;
         }
-        
+
         // 언론사에 따른 신뢰도 조정
         if (newsCrawl.getPress() != null) {
             String press = newsCrawl.getPress().toLowerCase();
@@ -489,7 +489,7 @@ public class NewsServiceImpl implements NewsService {
                 trusted += 10;
             }
         }
-        
+
         return trusted >= 70; // 70 이상이면 true
     }
 
@@ -498,7 +498,7 @@ public class NewsServiceImpl implements NewsService {
         if (publishedAt == null || publishedAt.trim().isEmpty()) {
             return LocalDateTime.now();
         }
-        
+
         try {
             // MySQL의 DATETIME 형식 (2025-08-07 11:50:01.000000) 처리
             if (publishedAt.contains(".")) {
@@ -514,7 +514,7 @@ public class NewsServiceImpl implements NewsService {
             return LocalDateTime.now();
         }
     }
-    
+
     // 키워드 구독 관련 메서드들
     @Override
     public KeywordSubscriptionDto subscribeKeyword(Long userId, String keyword) {
@@ -522,27 +522,27 @@ public class NewsServiceImpl implements NewsService {
         if (keywordSubscriptionRepository.existsByUserIdAndKeywordAndIsActiveTrue(userId, keyword)) {
             throw new RuntimeException("이미 구독 중인 키워드입니다: " + keyword);
         }
-        
+
         KeywordSubscription subscription = KeywordSubscription.builder()
                 .userId(userId)
                 .keyword(keyword)
                 .isActive(true)
                 .build();
-        
+
         KeywordSubscription saved = keywordSubscriptionRepository.save(subscription);
         return convertToKeywordSubscriptionDto(saved);
     }
-    
+
     @Override
     public void unsubscribeKeyword(Long userId, String keyword) {
         KeywordSubscription subscription = keywordSubscriptionRepository
                 .findByUserIdAndKeywordAndIsActiveTrue(userId, keyword)
                 .orElseThrow(() -> new RuntimeException("구독하지 않은 키워드입니다: " + keyword));
-        
+
         subscription.setIsActive(false);
         keywordSubscriptionRepository.save(subscription);
     }
-    
+
     @Override
     public List<KeywordSubscriptionDto> getUserKeywordSubscriptions(Long userId) {
         return keywordSubscriptionRepository.findByUserIdAndIsActiveTrue(userId)
@@ -561,11 +561,11 @@ public class NewsServiceImpl implements NewsService {
         // 여기서는 간단한 예시로 인기 키워드를 반환
         return getPopularKeywords(limit);
     }
-    
+
     @Override
     public List<TrendingKeywordDto> getPopularKeywords(int limit) {
         List<Object[]> popularKeywords = keywordSubscriptionRepository.findPopularKeywords();
-        
+
         return popularKeywords.stream()
                 .limit(limit)
                 .map(result -> TrendingKeywordDto.builder()
@@ -575,7 +575,7 @@ public class NewsServiceImpl implements NewsService {
                         .build())
                 .collect(Collectors.toList());
     }
-    
+
     @Override
     public List<TrendingKeywordDto> getTrendingKeywordsByCategory(Category category, int limit) {
         log.info("카테고리별 트렌딩 키워드 조회 시작: category={}, limit={}", category, limit);
@@ -600,19 +600,19 @@ public class NewsServiceImpl implements NewsService {
                         }
                     })
                     .collect(Collectors.toList());
-            
+
             log.info("카테고리 {}의 최근 뉴스 수: {}", category, recentNews.size());
             
             if (recentNews.isEmpty()) {
                 log.warn("최근 뉴스가 없어 기본 키워드를 반환합니다: category={}", category);
                 return getDefaultKeywordsByCategory(category, limit);
             }
-            
+
             // 키워드 추출 및 빈도 계산
             Map<String, Long> keywordCounts = recentNews.stream()
                     .flatMap(news -> extractKeywordsFromNews(news).stream())
                     .collect(Collectors.groupingBy(keyword -> keyword, Collectors.counting()));
-            
+
             log.info("추출된 키워드 수: {}", keywordCounts.size());
             log.debug("키워드 빈도: {}", keywordCounts);
             
@@ -625,7 +625,7 @@ public class NewsServiceImpl implements NewsService {
                             .trendScore(entry.getValue().doubleValue())
                             .build())
                     .collect(Collectors.toList());
-            
+
             log.info("카테고리별 트렌드 키워드 결과: category={}, resultSize={}", category, result.size());
             
             // 결과가 비어있으면 기본 키워드 반환

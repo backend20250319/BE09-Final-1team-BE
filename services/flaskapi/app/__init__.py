@@ -73,9 +73,13 @@ def create_app() -> Flask:
         app.config.setdefault("SQLALCHEMY_ECHO", True)
 
     # 2) DB URI 확정: env > config > 기본값
-    db_uri = os.getenv("DATABASE_URL") or app.config.get("SQLALCHEMY_DATABASE_URI")
+    db_uri = (
+                os.getenv("FLASK_DATABASE_URL")              # ✅ 먼저 이걸 봅니다
+                or os.getenv("DATABASE_URL")
+                or app.config.get("SQLALCHEMY_DATABASE_URI")
+    )
     if not db_uri:
-        db_uri = "sqlite:///flaskapi.db"  # instance/flaskapi.db 로 정규화될 것
+        db_uri = "sqlite:///flaskapi.db"
 
     # 3) SQLite 정규화 + 엔진 옵션
     db_uri = _normalize_sqlite_uri(app, db_uri)

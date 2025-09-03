@@ -1,0 +1,24 @@
+# IDE에서 직접 실행할 때만 적용될 설정
+spring:
+  config:
+    # Config Server의 주소를 localhost로 변경
+    # import: configserver:http://192.168.0.38:8888
+    import: optional:configserver:http://localhost:8888
+    # import: configserver:http://dev.macacolabs.site:8888  #  다른 와이파이에서도 config와 연결 가능
+
+eureka:
+  client:
+    serviceUrl:
+      # Eureka Server의 주소를 localhost로 변경
+      defaultZone: http://192.168.0.38:8761/eureka/
+      # defaultZone: http://localhost:8761/eureka/
+
+# Feign Client URL 설정
+news:
+  base-url: http://localhost:8082
+user:
+  base-url: http://localhost:8081
+
+# 환경변수 설정 (Feign Client에서 사용)
+USER_SERVICE_URL: http://localhost:8081
+NEWS_SERVICE_URL: http://localhost:8082

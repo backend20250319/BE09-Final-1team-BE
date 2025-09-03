@@ -19,16 +19,20 @@ import com.newnormallist.newsservice.recommendation.entity.DedupState;
 public class FeedItemDto {
     private Long newsId;
     private String title;
+    private String content;
     private String press;
     private String link;
-    private Boolean trusted;
+    private String summary;
+    private Integer trusted;
     private LocalDateTime publishedAt;
     private LocalDateTime createdAt;
-    private String reporter;
-    private Integer viewCount;
+    private String reporterName;
     private RecommendationCategory categoryName;
+    private String categoryDescription;
     private DedupState dedupState;
+    private String dedupStateDescription;
     private String imageUrl;
     private String oidAid;
+    private String status;
     private LocalDateTime updatedAt;
 }

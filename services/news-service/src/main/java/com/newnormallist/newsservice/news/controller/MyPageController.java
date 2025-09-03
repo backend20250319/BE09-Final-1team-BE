@@ -5,7 +5,6 @@ import com.newnormallist.newsservice.news.exception.UnauthenticatedUserException
 import com.newnormallist.newsservice.news.service.MyPageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,12 +21,12 @@ public class MyPageController {
     public ResponseEntity<Page<NewsListResponse>> getMyScraps(
             @AuthenticationPrincipal String userIdString,
             @RequestParam(required = false) String category,
+            @RequestParam(required = false, name = "q") String query,
+            @RequestParam(required = false, defaultValue = "false") boolean uncollectedOnly,
             Pageable pageable) {
         Long userId = getUserIdOrThrow(userIdString);
 
-        Pageable fixedPageable = PageRequest.of(pageable.getPageNumber(), 10, pageable.getSort());
-
-        Page<NewsListResponse> scraps = myPageService.getScrappedNews(userId, category, fixedPageable);
+        Page<NewsListResponse> scraps = myPageService.getScrappedNews(userId, category, query, uncollectedOnly, pageable);
         return ResponseEntity.ok(scraps);
     }
 

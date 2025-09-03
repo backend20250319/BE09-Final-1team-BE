@@ -14,10 +14,12 @@ public interface MyPageService {
      *
      * @param userId   사용자의 ID
      * @param category
+     * @param query    검색어
+     * @param uncollectedOnly
      * @param pageable 페이징 정보
      * @return 페이징 처리된 스크랩 뉴스 목록
      */
-    Page<NewsListResponse> getScrappedNews(Long userId, String category, Pageable pageable);
+    Page<NewsListResponse> getScrappedNews(Long userId, String category, String query, boolean uncollectedOnly, Pageable pageable);
 
     /**
      * 특정 뉴스의 스크랩을 삭제합니다.

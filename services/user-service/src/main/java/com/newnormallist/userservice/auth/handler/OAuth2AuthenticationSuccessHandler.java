@@ -7,6 +7,7 @@ import com.newnormallist.userservice.auth.entity.RefreshToken;
 import com.newnormallist.userservice.auth.jwt.JwtTokenProvider;
 import com.newnormallist.userservice.auth.repository.CookieOAuth2AuthorizationRequestRepository;
 import com.newnormallist.userservice.auth.repository.RefreshTokenRepository;
+import com.newnormallist.userservice.common.util.CookieUtil;
 import com.newnormallist.userservice.user.entity.User;
 import com.newnormallist.userservice.user.repository.UserRepository;
 import jakarta.servlet.ServletException;
@@ -47,7 +48,6 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
 
-        // --- 여기가 수정된 핵심 로직 ---
         OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
         String registrationId = oauthToken.getAuthorizedClientRegistrationId();
 
@@ -63,47 +63,47 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         }
 
         String email = userInfo.getEmail();
-        // -----------------------------
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("OAuth2 login succeeded but user not found in DB."));
-
-        // ... (이하 분기 로직은 이전과 동일)
+        // 신규 소셜 로그인 사용자의 경우
         if (user.getBirthYear() == null || user.getGender() == null) {
             log.info("신규 소셜 로그인 사용자입니다. 추가 정보 입력 페이지로 리디렉션합니다. Email: {}", email);
             String tempToken = jwtTokenProvider.createTempToken(user.getEmail(), user.getId());
-            String targetUrl = createAdditionalInfoRedirectUrl(tempToken);
+            // 임시 토큰을 URL 대신 HttpOnly 쿠키로 전달
+            int tempTokenMaxAge = 10 * 60; // 10분
+            CookieUtil.addCookie(response, "temp_token", tempToken, tempTokenMaxAge);
+            // 토큰 정보 없는 URL로 리디렉션
+            String targetUrl = createAdditionalInfoRedirectUrl();
             getRedirectStrategy().sendRedirect(request, response, targetUrl);
         } else {
+            // 기존 소셜 로그인 사용자의 경우
             log.info("기존 소셜 로그인 사용자입니다. 최종 로그인 처리를 진행합니다. Email: {}", email);
             String accessToken = jwtTokenProvider.createAccessToken(user.getEmail(), user.getRole().name(), user.getId());
+            // 소셜 로그인에서는 deviceId가 없으므로 email을 대신 사용
             String refreshTokenValue = jwtTokenProvider.createRefreshToken(user.getEmail(), user.getRole().name(), user.getId(), email);
             refreshTokenRepository.findByUserId(user.getId())
                     .ifPresentOrElse(
                             refreshToken -> refreshToken.updateTokenValue(refreshTokenValue),
                             () -> refreshTokenRepository.save(new RefreshToken(user, refreshTokenValue))
                     );
-            String targetUrl = createFinalRedirectUrl(accessToken, refreshTokenValue);
+            // 토큰을 URL 대신 HttpOnly 쿠키로 전달
+            int accessTokenMaxAge = (int) (jwtTokenProvider.getAccessTokenValidityInMilliseconds() / 1000);
+            int refreshTokenMaxAge = (int) (jwtTokenProvider.getRefreshTokenValidityInMilliseconds() / 1000);
+            CookieUtil.addCookie(response, "access_token", accessToken, accessTokenMaxAge);
+            CookieUtil.addCookie(response, "refresh_token", refreshTokenValue, refreshTokenMaxAge);
+
+            String targetUrl = createFinalRedirectUrl();
             getRedirectStrategy().sendRedirect(request, response, targetUrl);
         }
     }
 
-    // ... (createFinalRedirectUrl, createAdditionalInfoRedirectUrl, clearAuthenticationAttributes 메소드는 동일)
-    private String createFinalRedirectUrl(String accessToken, String refreshToken) {
-        return UriComponentsBuilder.fromUriString(finalRedirectUrl)
-                .queryParam("accessToken", accessToken)
-                .queryParam("refreshToken", refreshToken)
-                .build()
-                .encode(StandardCharsets.UTF_8)
-                .toUriString();
+    private String createFinalRedirectUrl() {
+        return finalRedirectUrl;
     }
 
-    private String createAdditionalInfoRedirectUrl(String tempToken) {
-        return UriComponentsBuilder.fromUriString(additionalInfoUrl)
-                .queryParam("token", tempToken)
-                .build()
-                .encode(StandardCharsets.UTF_8)
-                .toUriString();
+    private String createAdditionalInfoRedirectUrl() {
+        return additionalInfoUrl;
     }
 
     protected void clearAuthenticationAttributes(HttpServletRequest request, HttpServletResponse response) {

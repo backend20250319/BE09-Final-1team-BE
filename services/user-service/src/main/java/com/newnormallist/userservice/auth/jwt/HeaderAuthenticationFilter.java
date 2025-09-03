@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
-@Slf4j // Slf4j 어노테이션 추가
+@Slf4j
 public class HeaderAuthenticationFilter extends OncePerRequestFilter {
 
     @Override

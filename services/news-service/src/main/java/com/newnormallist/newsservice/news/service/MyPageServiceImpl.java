@@ -4,10 +4,7 @@ import com.newnormallist.newsservice.news.dto.NewsListResponse;
 import com.newnormallist.newsservice.news.entity.Category;
 import com.newnormallist.newsservice.news.entity.News;
 import com.newnormallist.newsservice.news.entity.NewsScrap;
-import com.newnormallist.newsservice.news.entity.ScrapStorage;
-import com.newnormallist.newsservice.news.exception.ResourceNotFoundException;
 import com.newnormallist.newsservice.news.repository.NewsScrapRepository;
-import com.newnormallist.newsservice.news.repository.ScrapStorageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -16,10 +13,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -28,24 +23,37 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class MyPageServiceImpl implements MyPageService {
 
-    private final ScrapStorageRepository scrapStorageRepository;
     private final NewsScrapRepository newsScrapRepository;
 
     @Override
-    public Page<NewsListResponse> getScrappedNews(Long userId, String category, Pageable pageable) {
+    public Page<NewsListResponse> getScrappedNews(Long userId, String category, String query, boolean uncollectedOnly, Pageable pageable) {
         Page<NewsScrap> scrapsPage;
 
-        if (category == null || category.isEmpty() || category.equalsIgnoreCase("전체")) {
-            scrapsPage = newsScrapRepository.findByUserId(userId, pageable);
+        if (uncollectedOnly) {
+            if (query != null && !query.trim().isEmpty()) {
+                scrapsPage = newsScrapRepository.findByUserIdAndStorageIdIsNullAndNewsTitleContaining(userId, query, pageable);
+            } else if (category != null && !category.isEmpty() && !category.equalsIgnoreCase("전체")) {
+                Category categoryEnum = Arrays.stream(Category.values())
+                        .filter(c -> c.getCategoryName().equalsIgnoreCase(category))
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("No enum constant for category name: " + category));
+                scrapsPage = newsScrapRepository.findByUserIdAndStorageIdIsNullAndNews_CategoryName(userId, categoryEnum, pageable);
+            } else {
+                scrapsPage = newsScrapRepository.findByUserIdAndStorageIdIsNull(userId, pageable);
+            }
         } else {
-            scrapsPage = newsScrapRepository.findByUserId(userId, pageable);
-            Category categoryEnum = Arrays.stream(Category.values())
-                    .filter(c -> c.getCategoryName().equalsIgnoreCase(category))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("No enum constant for category name: " + category));
-            scrapsPage = new PageImpl<>(scrapsPage.getContent().stream()
-                    .filter(scrap -> scrap.getNews().getCategoryName().equals(categoryEnum))
-                    .collect(Collectors.toList()), pageable, scrapsPage.getTotalElements());
+            // 모든 스크랩 조회 (기존 로직)
+            if (query != null && !query.trim().isEmpty()) {
+                scrapsPage = newsScrapRepository.findByUserIdAndNewsTitleContaining(userId, query, pageable);
+            } else if (category != null && !category.isEmpty() && !category.equalsIgnoreCase("전체")) {
+                Category categoryEnum = Arrays.stream(Category.values())
+                        .filter(c -> c.getCategoryName().equalsIgnoreCase(category))
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("No enum constant for category name: " + category));
+                scrapsPage = newsScrapRepository.findByUserIdAndNews_CategoryName(userId, categoryEnum, pageable);
+            } else {
+                scrapsPage = newsScrapRepository.findByUserId(userId, pageable);
+            }
         }
 
         List<NewsListResponse> dtoList = scrapsPage.getContent().stream()
@@ -56,10 +64,13 @@ public class MyPageServiceImpl implements MyPageService {
     }
 
     @Override
+    @Transactional
     public void deleteScrap(Long userId, Long newsId) {
-        NewsScrap newsScrap = newsScrapRepository.findByUserIdAndNewsNewsId(userId, newsId)
-                .orElseThrow(() -> new IllegalStateException("스크랩된 뉴스를 찾을 수 없습니다."));
-        newsScrapRepository.delete(newsScrap);
+        List<NewsScrap> newsScraps = newsScrapRepository.findByUserIdAndNewsNewsId(userId, newsId);
+        if (newsScraps.isEmpty()) {
+            throw new IllegalStateException("스크랩된 뉴스를 찾을 수 없습니다.");
+        }
+        newsScrapRepository.deleteAll(newsScraps);
     }
 
     private NewsListResponse convertToNewsListResponse(NewsScrap newsScrap) {

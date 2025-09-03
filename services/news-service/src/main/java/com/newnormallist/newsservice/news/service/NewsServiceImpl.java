@@ -675,13 +675,13 @@ public class NewsServiceImpl implements NewsService {
 
         // 이미 스크랩되었는지 확인합니다. (storageId가 null인 경우 포함)
         // 동일 사용자가 이미 스크랩했는지 확인 (userId로 검사)
-        boolean alreadyScrapped = newsScrapRepository.findByUserIdAndNewsNewsId(userId, newsId).isPresent();
+        boolean alreadyScrapped = !newsScrapRepository.findByUserIdAndNewsNewsId(userId, newsId).isEmpty();
 
         if (alreadyScrapped) {
             throw new IllegalStateException("이미 스크랩된 뉴스입니다.");
         }
 
-        // NewsScrap 엔티티를 생성하고 저장합니다. storageId는 초기에는 null로 설정
+        // NewsScrap 엔티티를 생성하고 저장. storageId는 초기에는 null로 설정
         NewsScrap newsScrap = NewsScrap.builder()
                 .news(news)
                 .userId(userId) // userId 설정
@@ -728,29 +728,71 @@ public class NewsServiceImpl implements NewsService {
     }
 
     @Override
-    public void addNewsToCollection(Long userId, Integer collectionId, Long newsId) {
-        News news = newsRepository.findById(newsId)
-                .orElseThrow(() -> new NewsNotFoundException("뉴스를 찾을 수 없습니다: " + newsId));
-
-        // 사용자의 보관함이 맞는지 확인
+    public ScrapStorageResponse updateCollection(Long userId, Integer collectionId, String newName) {
+        // 1. 컬렉션 조회 및 소유권 확인
         ScrapStorage scrapStorage = scrapStorageRepository.findById(collectionId)
+                .filter(storage -> storage.getUserId().equals(userId))
+                .orElseThrow(() -> new IllegalStateException("수정 권한이 없거나 존재하지 않는 컬렉션입니다: " + collectionId));
+
+        // 2. 새로운 이름이 현재 이름과 동일한지 확인
+        if (scrapStorage.getStorageName().equals(newName)) {
+            return convertToScrapStorageResponse(scrapStorage);
+        }
+
+        // 3. 새로운 이름이 해당 사용자의 다른 컬렉션과 중복되는지 확인
+        scrapStorageRepository.findByUserId(userId).stream()
+                .filter(storage -> storage.getStorageName().equals(newName))
+                .findAny()
+                .ifPresent(storage -> {
+                    throw new IllegalStateException("이미 존재하는 컬렉션 이름입니다: " + newName);
+                });
+
+        // 4. 이름 변경 및 저장
+        scrapStorage.setStorageName(newName);
+        ScrapStorage updatedStorage = scrapStorageRepository.save(scrapStorage);
+        log.info("컬렉션 이름 변경 완료: userId={}, collectionId={}, newName={}", userId, collectionId, newName);
+
+        // 5. DTO로 변환하여 반환
+        return convertToScrapStorageResponse(updatedStorage);
+    }
+
+    @Override
+    public void addNewsToCollection(Long userId, Integer collectionId, Long newsId) {
+        // 1. 사용자의 보관함이 맞는지 확인
+        scrapStorageRepository.findById(collectionId)
                 .filter(storage -> storage.getUserId().equals(userId))
                 .orElseThrow(() -> new IllegalStateException("유효하지 않은 스크랩 보관함입니다: " + collectionId));
 
-        // 이미 스크랩되었는지 확인
-        newsScrapRepository.findByStorageIdAndNewsNewsId(scrapStorage.getStorageId(), newsId)
-                .ifPresent(scrap -> {
-                    throw new IllegalStateException("이미 해당 보관함에 스크랩된 뉴스입니다.");
-                });
+        // 2. 사용자가 해당 뉴스를 이미 스크랩했는지 확인
+        List<NewsScrap> existingScraps = newsScrapRepository.findByUserIdAndNewsNewsId(userId, newsId);
 
-        NewsScrap newsScrap = NewsScrap.builder()
-                .storageId(scrapStorage.getStorageId())
-                .news(news)
-                .userId(userId) // userId 추가
-                .build();
+        if (!existingScraps.isEmpty()) {
+            // 3. 이미 스크랩한 경우: 기존 스크랩의 storageId를 업데이트
+            NewsScrap scrapToUpdate = existingScraps.get(0); // 중복 스크랩이 없다고 가정
 
-        newsScrapRepository.save(newsScrap);
-        log.info("컬렉션에 뉴스 추가 완료: userId={}, newsId={}, storageId={}", userId, newsId, collectionId);
+            // 이미 해당 컬렉션에 속해 있는지 확인
+            if (collectionId.equals(scrapToUpdate.getStorageId())) {
+                throw new IllegalStateException("이미 해당 컬렉션에 추가된 뉴스입니다.");
+            }
+
+            scrapToUpdate.setStorageId(collectionId);
+            newsScrapRepository.save(scrapToUpdate);
+            log.info("기존 스크랩을 컬렉션에 추가: userId={}, newsId={}, collectionId={}", userId, newsId, collectionId);
+
+        } else {
+            // 4. 스크랩하지 않은 경우: 새로운 스크랩을 생성하고 컬렉션에 추가
+            News news = newsRepository.findById(newsId)
+                    .orElseThrow(() -> new NewsNotFoundException("뉴스를 찾을 수 없습니다: " + newsId));
+
+            NewsScrap newScrap = NewsScrap.builder()
+                    .storageId(collectionId)
+                    .news(news)
+                    .userId(userId)
+                    .build();
+
+            newsScrapRepository.save(newScrap);
+            log.info("새로운 스크랩을 생성하여 컬렉션에 추가: userId={}, newsId={}, collectionId={}", userId, newsId, collectionId);
+        }
     }
 
     @Override
@@ -786,16 +828,30 @@ public class NewsServiceImpl implements NewsService {
     }
 
     @Override
-    public Page<ScrappedNewsResponse> getNewsInCollection(Long userId, Integer collectionId, Pageable pageable) {
-        // 사용자의 보관함이 맞는지 확인
+    public Page<ScrappedNewsResponse> getNewsInCollection(Long userId, Integer collectionId, String category, String query, Pageable pageable) {
+        // 1. 사용자의 보관함이 맞는지 확인
         scrapStorageRepository.findById(collectionId)
                 .filter(storage -> storage.getUserId().equals(userId))
                 .orElseThrow(() -> new IllegalStateException("유효하지 않은 스크랩 보관함입니다: " + collectionId));
 
-        // 보관함에 있는 뉴스 스크랩 목록을 가져옴
-        Page<NewsScrap> scrapsPage = newsScrapRepository.findByStorageIdWithNews(collectionId, pageable);
+        Page<NewsScrap> scrapsPage;
 
-        // ScrappedNewsResponse DTO로 변환
+        // 2. 검색어(query)가 있을 경우, 제목으로 검색
+        if (query != null && !query.trim().isEmpty()) {
+            scrapsPage = newsScrapRepository.findByStorageIdAndNews_TitleContaining(collectionId, query, pageable);
+        } else if (category != null && !category.isEmpty() && !category.equalsIgnoreCase("전체")) {
+            // 3. 검색어가 없을 경우, 카테고리로 필터링
+            Category categoryEnum = Arrays.stream(Category.values())
+                    .filter(c -> c.getCategoryName().equalsIgnoreCase(category))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("No enum constant for category name: " + category));
+            scrapsPage = newsScrapRepository.findByStorageIdAndNews_CategoryName(collectionId, categoryEnum, pageable);
+        } else {
+            // 4. 검색어와 카테고리 필터가 모두 없을 경우, 전체 조회
+            scrapsPage = newsScrapRepository.findByStorageIdWithNews(collectionId, pageable);
+        }
+
+        // 5. ScrappedNewsResponse DTO로 변환
         return scrapsPage.map(ScrappedNewsResponse::from);
     }
 
@@ -813,6 +869,22 @@ public class NewsServiceImpl implements NewsService {
         // 3. 보관함 자체를 삭제
         scrapStorageRepository.delete(scrapStorage);
         log.info("컬렉션 삭제 완료: userId={}, storageId={}", userId, collectionId);
+    }
+
+    @Override
+    public void deleteNewsFromCollection(Long userId, Integer collectionId, Long newsId) {
+        // 1. 보관함이 사용자의 소유인지 확인
+        scrapStorageRepository.findById(collectionId)
+                .filter(storage -> storage.getUserId().equals(userId))
+                .orElseThrow(() -> new IllegalStateException("삭제 권한이 없거나 존재하지 않는 컬렉션입니다: " + collectionId));
+
+        // 2. 해당 보관함에 속한 특정 뉴스 스크랩을 찾음
+        NewsScrap newsScrap = newsScrapRepository.findByStorageIdAndNewsNewsId(collectionId, newsId)
+                .orElseThrow(() -> new IllegalStateException("컬렉션에 해당 뉴스가 존재하지 않습니다."));
+
+        // 3. 스크랩 삭제
+        newsScrapRepository.delete(newsScrap);
+        log.info("컬렉션에서 뉴스 삭제 완료: userId={}, collectionId={}, newsId={}", userId, collectionId, newsId);
     }
 
     /**
@@ -995,4 +1067,3 @@ public class NewsServiceImpl implements NewsService {
                 .build();
     }
 }
-

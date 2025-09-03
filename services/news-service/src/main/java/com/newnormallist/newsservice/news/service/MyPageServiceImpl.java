@@ -30,7 +30,6 @@ public class MyPageServiceImpl implements MyPageService {
         Page<NewsScrap> scrapsPage;
 
         if (uncollectedOnly) {
-            // 컬렉션에 속하지 않은 스크랩만 조회
             if (query != null && !query.trim().isEmpty()) {
                 scrapsPage = newsScrapRepository.findByUserIdAndStorageIdIsNullAndNewsTitleContaining(userId, query, pageable);
             } else if (category != null && !category.isEmpty() && !category.equalsIgnoreCase("전체")) {

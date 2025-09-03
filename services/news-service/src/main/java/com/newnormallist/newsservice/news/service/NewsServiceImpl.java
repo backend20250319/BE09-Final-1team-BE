@@ -681,7 +681,7 @@ public class NewsServiceImpl implements NewsService {
             throw new IllegalStateException("이미 스크랩된 뉴스입니다.");
         }
 
-        // NewsScrap 엔티티를 생성하고 저장합니다. storageId는 초기에는 null로 설정
+        // NewsScrap 엔티티를 생성하고 저장. storageId는 초기에는 null로 설정
         NewsScrap newsScrap = NewsScrap.builder()
                 .news(news)
                 .userId(userId) // userId 설정

@@ -26,8 +26,6 @@ public class MyPageController {
             Pageable pageable) {
         Long userId = getUserIdOrThrow(userIdString);
 
-        // [FIX] 페이지 크기를 10으로 고정하던 코드를 삭제하고,
-        // 프론트엔드에서 요청한 Pageable 객체를 그대로 서비스에 전달하여 페이지네이션 문제를 해결합니다.
         Page<NewsListResponse> scraps = myPageService.getScrappedNews(userId, category, query, uncollectedOnly, pageable);
         return ResponseEntity.ok(scraps);
     }

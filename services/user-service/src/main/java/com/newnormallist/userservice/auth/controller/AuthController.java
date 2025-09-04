@@ -1,14 +1,18 @@
 package com.newnormallist.userservice.auth.controller;
 
 import com.newnormallist.userservice.auth.dto.*;
+import com.newnormallist.userservice.auth.jwt.JwtTokenProvider;
 import com.newnormallist.userservice.auth.service.AuthService;
 import com.newnormallist.userservice.common.ApiResult;
 
+import com.newnormallist.userservice.common.util.CookieUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -34,8 +38,14 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "잘못된 요청(형식/필수값 누락)"),
     })
     @PostMapping("/login")
-    public ResponseEntity<ApiResult<LoginResponseDto>> login(@RequestBody LoginRequestDto loginRequestDto) {
+    public ResponseEntity<ApiResult<LoginResponseDto>> login(@RequestBody LoginRequestDto loginRequestDto,
+                                                             HttpServletResponse response) {
         LoginResponseDto loginResponse = authService.login(loginRequestDto);
+
+        // 쿠키에 토큰 저장
+        CookieUtil.addCookie(response, "access-token", loginResponse.getAccessToken(), 1800); // 30분
+        CookieUtil.addCookie(response, "refresh-token", loginResponse.getRefreshToken(), 604800); // 7일
+
         return ResponseEntity.ok(ApiResult.success(loginResponse));
     }
 
@@ -70,8 +80,16 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "잘못된 요청(토큰 형식/필수값 누락)")
     })
     @PostMapping("/logout")
-    public ResponseEntity<ApiResult<String>> logout(@RequestBody RefreshTokenRequestDto requestDto) {
+    public ResponseEntity<ApiResult<String>> logout(
+            @RequestBody RefreshTokenRequestDto requestDto,
+            HttpServletRequest request,
+            HttpServletResponse response) {
         authService.logout(requestDto);
+
+        // 쿠키에서 토큰 삭제
+        CookieUtil.deleteCookie(request, response, "access-token");
+        CookieUtil.deleteCookie(request, response, "refresh-token");
+
         return ResponseEntity.ok(ApiResult.success("로그아웃이 성공적으로 완료되었습니다."));
     }
 
@@ -112,6 +130,7 @@ public class AuthController {
         authService.resetPassword(request);
         return ResponseEntity.ok(ApiResult.success("비밀번호가 성공적으로 재설정되었습니다."));
     }
+
     /**
      * 소셜 로그인 추가 정보 입력 API
      */
@@ -128,3 +147,4 @@ public class AuthController {
         return ResponseEntity.ok(ApiResult.success(loginResponse));
     }
 }
+

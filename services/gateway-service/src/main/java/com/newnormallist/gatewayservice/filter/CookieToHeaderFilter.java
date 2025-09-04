@@ -15,7 +15,7 @@ import reactor.core.publisher.Mono;
 @Component
 public class CookieToHeaderFilter implements GlobalFilter, Ordered {
 
-    public static final String ACCESS_TOKEN_COOKIE_NAME = "access_token";
+    public static final String ACCESS_TOKEN_COOKIE_NAME = "access-token";
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -28,7 +28,7 @@ public class CookieToHeaderFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
-        // 2. 헤더가 없으면 'access_token' 쿠키를 찾습니다.
+        // 2. 헤더가 없으면 'access-token' 쿠키를 찾습니다.
         HttpCookie accessTokenCookie = request.getCookies().getFirst(ACCESS_TOKEN_COOKIE_NAME);
 
         if (accessTokenCookie != null) {

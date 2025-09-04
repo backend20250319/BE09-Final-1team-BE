@@ -90,8 +90,8 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             // 토큰을 URL 대신 HttpOnly 쿠키로 전달
             int accessTokenMaxAge = (int) (jwtTokenProvider.getAccessTokenValidityInMilliseconds() / 1000);
             int refreshTokenMaxAge = (int) (jwtTokenProvider.getRefreshTokenValidityInMilliseconds() / 1000);
-            CookieUtil.addCookie(response, "access_token", accessToken, accessTokenMaxAge);
-            CookieUtil.addCookie(response, "refresh_token", refreshTokenValue, refreshTokenMaxAge);
+            CookieUtil.addCookie(response, "access-token", accessToken, accessTokenMaxAge);
+            CookieUtil.addCookie(response, "refresh-token", refreshTokenValue, refreshTokenMaxAge);
 
             String targetUrl = createFinalRedirectUrl();
             getRedirectStrategy().sendRedirect(request, response, targetUrl);

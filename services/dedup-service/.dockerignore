@@ -4,6 +4,7 @@
 
 # 🔒 보안 파일들 (절대 업로드 금지)
 **/.env*
+.env.*
 **/.pem
 **/.rsa
 **/.key
@@ -60,14 +61,8 @@
 **/.tox/
 **/.venv/
 **/venv/
-.venv
 **/env/
 **/.env/
-
-# Flask 관련
-**/instance/
-**/migrations/
-**/.flaskenv
 
 # 로그 파일
 **/*.log
@@ -109,18 +104,3 @@
 **/.cache/
 **/.mypy_cache/
 **/.pytest_cache/
-# Git 잡동사니
-.git
-.gitignore
-# Venv / Python 캐시
-venv/
-.venv/
-env/
-ENV/
-__pycache__/
-*.pyc
-
-# 기타 불필요
-tests/
-*.log
-.DS_Store

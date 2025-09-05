@@ -68,10 +68,10 @@ pipeline {
                                         }
                                     }
 
-                                    def serviceName = servicePath.split('\\').last()
+                                    // [수정됨] Windows 경로 문자를 안전하게 처리하도록 로직을 변경합니다.
+                                    def serviceName = servicePath.replace('\\', '/').split('/').last()
                                     def imageName = "berrymas/${serviceName}:${env.BUILD_NUMBER}"
 
-                                    // [추가됨] Docker 명령어 실행 가능 여부를 확인하는 단계
                                     stage("Verify Docker Environment") {
                                         bat 'docker --version'
                                     }
@@ -85,7 +85,6 @@ pipeline {
                                         }
                                     }
                                 } catch (e) {
-                                    // [수정됨] 오류 발생 시 더 자세한 정보를 출력합니다.
                                     echo "ERROR: An exception occurred during build or push for ${servicePath}"
                                     echo "Caught Exception: ${e.toString()}"
                                     error("Build or push failed for ${servicePath}")

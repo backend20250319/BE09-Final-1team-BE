@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @Tag(name = "User History", description = "사용자 뉴스 읽은 기록 관리 API")
-@SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "bearerAuth")  // jwt bearer token 인증 필요
 @RequestMapping("/api/users/mypage/history")
 @RequiredArgsConstructor
 public class UserHistoryController {

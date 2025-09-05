@@ -14,12 +14,12 @@ import javax.crypto.SecretKey;
 @Component
 public class GatewayJwtTokenProvider {
 
-  @Value("${jwt.secret}") // application-secret.yml에서 비밀 키를 주입
+  @Value("${jwt.secret}")
   private String jwtSecret;
 
   private SecretKey secretKey;
 
-  @PostConstruct
+  @PostConstruct // 빈 생성 후 초기화 메서드 호출
   public void init() {
     byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
     secretKey = Keys.hmacShaKeyFor(keyBytes);

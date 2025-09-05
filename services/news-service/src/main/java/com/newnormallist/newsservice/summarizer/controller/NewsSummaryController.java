@@ -22,7 +22,7 @@ public class NewsSummaryController {
 
     private final NewsSummaryService newsSummaryService;
 
-    /** 뉴스ID 기반 요약 (DB 캐시 활용, 저장은 Flask, 자바는 재조회만) */
+    /** 뉴스ID 기반 요약 (DB 캐시 활용, 저장은 Flask, 자바는 재조회만 수행) */
     @PostMapping(
             path = "/{newsId}/summary",
             consumes = MediaType.APPLICATION_JSON_VALUE,

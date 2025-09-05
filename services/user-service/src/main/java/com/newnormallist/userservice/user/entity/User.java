@@ -39,7 +39,6 @@ public class User {
     @Column(name = "birth_year")
     private Integer birthYear;
 
-
     @Column(name = "gender")
     private String gender;
 

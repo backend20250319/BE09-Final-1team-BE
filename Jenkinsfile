@@ -1,5 +1,3 @@
-// Jenkinsfile for Monorepo with multiple microservices (final version with summary)
-
 // 빌드 결과를 저장하기 위한 전역 변수를 선언합니다.
 def buildResults = [succeeded: [], failed: []]
 

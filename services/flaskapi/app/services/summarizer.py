@@ -20,3 +20,4 @@ def summarize(text: str, prompt: str) -> str:
         ]
     )
     return resp.choices[0].message.content.strip()
+# End of app/services/summarizer.py

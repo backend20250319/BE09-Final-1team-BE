@@ -1,3 +1,5 @@
+// Jenkinsfile for Monorepo with multiple microservices (final version with summary)
+
 // 빌드 결과를 저장하기 위한 전역 변수를 선언합니다.
 def buildResults = [succeeded: [], failed: []]
 
@@ -15,35 +17,36 @@ pipeline {
                     echo "Checking for changes..."
 
                     def changedFiles
+                    // [수정됨] HashSet을 script 블록 최상단으로 이동
+                    def changedServices = new HashSet<String>()
+
+                    def servicePathsOutput = bat(returnStdout: true, script: "dir /s /b Dockerfile").trim()
+                    def allServicePaths = servicePathsOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }.collect { it.replace('\\Dockerfile', '') }
+
+                    def workspacePath = env.WORKSPACE
+                    def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
+                    echo "Found all relative service paths (based on Dockerfile): ${relativeServicePaths}"
+
                     if (env.GIT_PREVIOUS_COMMIT) {
                         echo "Comparing current commit (${env.GIT_COMMIT}) with previous build commit (${env.GIT_PREVIOUS_COMMIT})"
                         def commandOutput = bat(returnStdout: true, script: "git diff --name-only ${env.GIT_PREVIOUS_COMMIT} ${env.GIT_COMMIT}").trim()
                         changedFiles = commandOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }
-                    } else {
-                        echo "This is the first build. All services will be built."
-                        def commandOutput = bat(returnStdout: true, script: 'git ls-files').trim()
-                        changedFiles = commandOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }
-                    }
-                    echo "Cleaned changed files list: ${changedFiles}"
+                        echo "Cleaned changed files list: ${changedFiles}"
 
-                    def servicePathsOutput = bat(returnStdout: true, script: "dir /s /b Dockerfile").trim()
-                    def servicePaths = servicePathsOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }.collect { it.replace('\\Dockerfile', '') }
-
-                    def workspacePath = env.WORKSPACE
-                    def relativeServicePaths = servicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
-                    echo "Found relative service paths (based on Dockerfile): ${relativeServicePaths}"
-
-                    def changedServices = new HashSet<String>()
-
-                    for (String file in changedFiles) {
-                        def windowsStyleFile = file.replace('/', '\\')
-                        for (String servicePath in relativeServicePaths) {
-                            if (windowsStyleFile.startsWith(servicePath + '\\')) {
-                                if (changedServices.add(servicePath)) {
-                                     echo "SUCCESS: Detected change in service -> ${servicePath}"
+                        for (String file in changedFiles) {
+                            def windowsStyleFile = file.replace('/', '\\')
+                            for (String servicePath in relativeServicePaths) {
+                                if (windowsStyleFile.startsWith(servicePath + '\\')) {
+                                    if (changedServices.add(servicePath)) {
+                                         echo "SUCCESS: Detected change in service -> ${servicePath}"
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        // [수정됨] 첫 빌드일 경우, 복잡한 비교 없이 찾은 모든 서비스 경로를 빌드 대상으로 추가합니다.
+                        echo "This is the first build. Adding all services with a Dockerfile to the build queue."
+                        changedServices.addAll(relativeServicePaths)
                     }
 
                     echo "Final list of changed services to be built: ${changedServices.toList()}"

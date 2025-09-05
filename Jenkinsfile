@@ -14,9 +14,8 @@ pipeline {
         stage('Detect Changed Services') {
             steps {
                 script {
-                    echo "Checking for changes..."
+                    echo "Checking for changes using Jenkins changelog..."
 
-                    def changedFiles
                     def changedServices = new HashSet<String>()
 
                     def servicePathsOutput = bat(returnStdout: true, script: "dir /s /b Dockerfile").trim()
@@ -26,25 +25,36 @@ pipeline {
                     def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
                     echo "Found all relative service paths (based on Dockerfile): ${relativeServicePaths}"
 
-                    if (env.GIT_PREVIOUS_COMMIT) {
-                        echo "Comparing current commit (${env.GIT_COMMIT}) with previous build commit (${env.GIT_PREVIOUS_COMMIT})"
-                        def commandOutput = bat(returnStdout: true, script: "git diff --name-only ${env.GIT_PREVIOUS_COMMIT} ${env.GIT_COMMIT}").trim()
-                        changedFiles = commandOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }
-                        echo "Cleaned changed files list: ${changedFiles}"
+                    // ======================================================================
+                    // [수정됨] 수동 git diff 대신 Jenkins의 내장 'changeSets'를 사용하여 변경된 파일을 감지합니다.
+                    // 이것이 가장 안정적이고 정확한 방법입니다.
+                    // ======================================================================
+                    if (currentBuild.changeSets.isEmpty()) {
+                        echo "No changesets found. This might be a manual build or the first build. Building all services."
+                        changedServices.addAll(relativeServicePaths)
+                    } else {
+                        echo "Found ${currentBuild.changeSets.size()} changesets."
+                        // 각 changeset (보통 하나)을 순회합니다.
+                        for (changeSet in currentBuild.changeSets) {
+                            echo "Processing changeset with ${changeSet.items.length} commits."
+                            // changeset 안의 각 커밋을 순회합니다.
+                            for (item in changeSet.items) {
+                                echo "Commit ${item.commitId} by ${item.author}: ${item.msg}"
+                                // 커밋에 의해 영향을 받은 각 파일 경로를 순회합니다.
+                                for (path in item.affectedPaths) {
+                                    echo "  - Changed file: ${path}"
+                                    def windowsStyleFile = path.replace('/', '\\')
 
-                        for (String file in changedFiles) {
-                            def windowsStyleFile = file.replace('/', '\\')
-                            for (String servicePath in relativeServicePaths) {
-                                if (windowsStyleFile.startsWith(servicePath + '\\')) {
-                                    if (changedServices.add(servicePath)) {
-                                         echo "SUCCESS: Detected change in service -> ${servicePath}"
+                                    for (String servicePath in relativeServicePaths) {
+                                        if (windowsStyleFile.startsWith(servicePath + '\\')) {
+                                            if (changedServices.add(servicePath)) {
+                                                 echo "SUCCESS: Detected change in service -> ${servicePath}"
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                    } else {
-                        echo "This is the first build. Adding all services with a Dockerfile to the build queue."
-                        changedServices.addAll(relativeServicePaths)
                     }
 
                     echo "Final list of changed services to be built: ${changedServices.toList()}"
@@ -79,7 +89,6 @@ pipeline {
                                 try {
                                     stage("Build Application: ${servicePath}") {
                                         if (fileExists('gradlew.bat')) {
-                                            // [수정됨] Gradle Daemon과의 충돌을 막기 위해 --no-daemon 옵션을 추가합니다.
                                             bat 'gradlew.bat clean bootJar --no-daemon'
                                         }
                                     }
@@ -130,4 +139,3 @@ pipeline {
         }
     }
 }
-

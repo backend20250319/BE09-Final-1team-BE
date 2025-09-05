@@ -57,7 +57,7 @@ public class UserHistoryService {
         }
     }
     /**
-     * 사용자 읽음 기록 추가 메서드
+     * 사용자별 뉴스 읽음 기록 추가 로직
      * */
     private void createReadHistory(Long userId, Long newsId) {
         // 1. 사용자 조회

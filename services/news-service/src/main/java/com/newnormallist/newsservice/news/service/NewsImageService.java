@@ -1,9 +1,7 @@
-package com.newsletterservice.service;
-
+package com.newnormallist.newsservice.news.service;
 import com.newnormallist.newsservice.news.dto.TrendingKeywordDto;
 import com.newnormallist.newsservice.news.entity.News;
 import com.newnormallist.newsservice.news.repository.NewsRepository;
-import com.newnormallist.newsservice.news.service.TrendingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -12,35 +10,42 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class NewsImageService {
-    private final NewsRepository newsRepository;
-    private final TrendingService trendingService;
+        private final NewsRepository newsRepository;
+        private final TrendingService trendingService;
 
-    public String getPersonalizedSectionImage() {
-        // 개인화 뉴스 관련 이미지 또는 기본 이미지
-        return newsRepository.findTop1ByImageUrlIsNotNullOrderByPublishedAtDesc()
-                .map(News::getImageUrl)
-                .orElse(getDefaultPersonalizedImage());
-    }
+        public String getPersonalizedSectionImage() {
+            return newsRepository.findTop1ByImageUrlIsNotNullOrderByPublishedAtDesc()
+                    .map(News::getImageUrl)
+                    .orElse(getDefaultPersonalizedImage());
+        }
 
-    public String getTrendingNewsImage(String keyword) {
-        return newsRepository.findByTitleContainingAndImageUrlIsNotNull(keyword)
-                .stream()
-                .findFirst()
-                .map(News::getImageUrl)
-                .orElse(getDefaultTrendingImage());
-    }
+        public String getTrendingSectionImage() {
+            // 트렌딩 키워드 가져오기
+            List<TrendingKeywordDto> trending = trendingService.getTrendingKeywords(24, 1);
 
-    public String getLatestNewsImage() {
-        return newsRepository.findTop1ByImageUrlIsNotNullOrderByPublishedAtDesc()
-                .map(News::getImageUrl)
-                .orElse(getDefaultPersonalizedImage());
-    }
+            if (!trending.isEmpty()) {
+                String keyword = trending.get(0).getKeyword();
+                return newsRepository.findByTitleContainingAndImageUrlIsNotNull(keyword)
+                        .stream()
+                        .findFirst()
+                        .map(News::getImageUrl)
+                        .orElse(getDefaultTrendingImage());
+            }
 
-    private String getDefaultPersonalizedImage() {
-        return "http://be09-final-1team-fe-env.eba-92qhhhzz.ap-northeast-2.elasticbeanstalk.com/images/personalized-default.jpg";
-    }
+            return getDefaultTrendingImage();
+        }
 
-    private String getDefaultTrendingImage() {
-        return "http://be09-final-1team-fe-env.eba-92qhhhzz.ap-northeast-2.elasticbeanstalk.com/images/trending-default.jpg";
+        public String getLatestNewsImage() {
+            return newsRepository.findTop1ByImageUrlIsNotNullOrderByPublishedAtDesc()
+                    .map(News::getImageUrl)
+                    .orElse(getDefaultPersonalizedImage());
+        }
+
+        private String getDefaultPersonalizedImage() {
+            return "http://be09-final-1team-fe-env.eba-92qhhhzz.ap-northeast-2.elasticbeanstalk.com/images/personalized-default.jpg";
+        }
+
+        private String getDefaultTrendingImage() {
+            return "http://be09-final-1team-fe-env.eba-92qhhhzz.ap-northeast-2.elasticbeanstalk.com/images/trending-default.jpg";
+        }
     }
-}

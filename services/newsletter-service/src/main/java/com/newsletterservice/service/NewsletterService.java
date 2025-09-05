@@ -46,6 +46,7 @@ public class NewsletterService {
     private final EmailNewsletterRenderer emailRenderer;
     private final UserReadHistoryService userReadHistoryService;
     private final CategorySubscriberCountService categorySubscriberCountService;
+    private final KakaoMessageService kakaoMessageService;
 
     // ========================================
     // Constants
@@ -607,12 +608,40 @@ public class NewsletterService {
                 .map(this::toContentArticle)
                 .collect(Collectors.toList());
         
+        String sectionImageUrl = selectSectionImage(newsList, isPersonalized);
+        
         return NewsletterContent.Section.builder()
                 .heading(isPersonalized ? "당신을 위한 뉴스" : "오늘의 뉴스")
                 .sectionType(isPersonalized ? "PERSONALIZED" : "TRENDING")
                 .description(isPersonalized ? "관심 카테고리 기반으로 선별된 뉴스입니다." : "현재 인기 있는 뉴스입니다.")
                 .articles(articles)
                 .build();
+    }
+
+
+    /**
+     * 섹션 이미지 선택 로직
+     */
+    private String selectSectionImage(List<NewsResponse> newsList, boolean isPersonalized) {
+        // 1순위: 뉴스 목록에서 이미지가 있는 첫 번째 기사
+        String newsImage = newsList.stream()
+                .filter(news -> news.getImageUrl() != null && !news.getImageUrl().isEmpty())
+                .findFirst()
+                .map(NewsResponse::getImageUrl)
+                .orElse(null);
+
+        if (newsImage != null) {
+            return newsImage;
+        }
+
+        // 2순위: 섹션 타입에 따른 기본 이미지
+        if (isPersonalized) {
+            // 개인화 섹션용 이미지 - newsServiceClient 사용
+            return newsServiceClient.getPersonalizedSectionImage();
+        } else {
+            // 트렌딩 섹션용 이미지 - newsServiceClient 사용
+            return newsServiceClient.getTrendingSectionImage();
+        }
     }
 
     private NewsletterContent.Article toContentArticle(NewsResponse news) {

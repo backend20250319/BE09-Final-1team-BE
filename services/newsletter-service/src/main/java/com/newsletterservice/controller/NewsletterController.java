@@ -4,6 +4,7 @@ import com.newsletterservice.common.exception.NewsletterException;
 import com.newsletterservice.dto.*;
 import com.newsletterservice.repository.NewsletterDeliveryRepository;
 import com.newsletterservice.service.EmailNewsletterRenderer;
+import com.newsletterservice.service.KakaoMessageService;
 import com.newsletterservice.service.NewsletterService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -32,6 +33,7 @@ public class NewsletterController {
     private final NewsletterService newsletterService;
     private final EmailNewsletterRenderer emailRenderer;
     private final NewsletterDeliveryRepository deliveryRepository;
+    private final KakaoMessageService kakaoMessageService;
 
     // ========================================
     // 1. 구독 관리 기능
@@ -687,5 +689,33 @@ public class NewsletterController {
                 yield "POLITICS";
             }
         };
+    }
+
+    /**
+     * 카카오톡 뉴스레터 메시지 전송
+     */
+    @PostMapping("/{newsletterId}/send-kakao")
+    public ResponseEntity<ApiResponse<String>> sendKakaoMessage(
+            @PathVariable Long newsletterId,
+            HttpServletRequest httpRequest) {
+
+        try {
+            String userId = extractUserIdFromToken(httpRequest);
+            log.info("카카오톡 뉴스레터 메시지 전송 요청: userId={}, newsletterId={}", userId, newsletterId);
+
+            NewsletterContent content = newsletterService.buildPersonalizedContent(Long.valueOf(userId), newsletterId);
+            kakaoMessageService.sendNewsletterMessage(content);
+
+            return ResponseEntity.ok(ApiResponse.success("카카오톡 메시지가 전송되었습니다."));
+
+        } catch (NewsletterException e) {
+            log.warn("카카오톡 메시지 전송 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getErrorCode(), e.getMessage()));
+        } catch (Exception e) {
+            log.error("카카오톡 메시지 전송 중 오류 발생", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("KAKAO_SEND_ERROR", "카카오톡 메시지 전송에 실패했습니다."));
+        }
     }
 }

@@ -1,90 +1,16 @@
-# =================
-# Java Service .dockerignore (보안 강화)
-# =================
+Git 관련 폴더 제외
+.git
+.gitignore
 
-# 🔒 보안 파일들 (절대 업로드 금지)
-**/.env*
-**/.pem
-**/.rsa
-**/.key
-**/.p12
-**/.pfx
-**/.crt
-**/.cer
-**/.der
-**/.jks
-**/.keystore
-**/secrets/
-**/credentials/
-**/config/secrets/
-**/private/
-**/keys/
+IDE 설정 파일 제외
+.idea
+*.iml
 
-# Git 관련
-**/.git
-**/.gitignore
-**/.gitattributes
+Gradle 캐시 및 빌드 관련 파일 제외
+.gradle
+build/
+!build/libs/
+!build/libs/*.jar
 
-# IDE 관련
-**/.vscode/
-**/.idea/
-**/*.swp
-**/*.swo
-**/*~
-
-# Java 관련
-#**/build/
-**/target/
-**/*.jar
-**/*.war
-**/*.ear
-**/*.class
-**/.gradle/
-**/gradle/
-**/bin/
-**/out/
-**/.settings/
-**/.project
-**/.classpath
-**/.factorypath
-**/.metadata/
-**/.recommenders/
-
-# 로그 파일
-**/*.log
-**/logs/
-**/log/
-
-# 문서
-**/README.md
-**/*.md
-**/docs/
-**/documentation/
-
-# 테스트 관련
-**/src/test/
-**/test/
-**/tests/
-**/*Test.java
-**/*Tests.java
-**/test_*/
-
-# 임시 파일
-**/*.tmp
-**/*.temp
-**/*.bak
-**/*.backup
-
-# OS 관련
-**/.DS_Store
-**/Thumbs.db
-**/desktop.ini
-
-# Docker 관련
-**/Dockerfile*
-**/docker-compose*.yml
-**/.dockerignore
-
-# 기타
-**/node_modules/
-**/.cache/
+로그 파일 제외
+*.log

@@ -1,3 +1,4 @@
+# Configuration for the Gateway Service
 spring:
   application:
     name: gateway-service

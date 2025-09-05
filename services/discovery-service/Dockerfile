@@ -1,35 +1,18 @@
-# =================
-# 1단계: 프로젝트 빌드 (JDK가 포함된 이미지 사용)
-# =================
-FROM openjdk:17-jdk-slim AS builder
-WORKDIR /app
-
-# 💡 개선점: 종속성 파일 먼저 복사하여 캐싱 활용
-COPY build.gradle settings.gradle ./
-COPY gradlew ./gradlew
-COPY gradle ./gradle
-
-# 💡 개선점: 소스 코드 복사 전 종속성 먼저 다운로드
-# 이렇게 하면 소스 코드만 변경 시 이 단계는 캐시를 사용합니다.
-RUN ./gradlew dependencies
-
-# 소스 코드 복사
-COPY src ./src
-
-# 프로젝트 빌드
-RUN ./gradlew bootJar
-
-# =================
-# 2단계: 실행 환경 구성 (JRE만 포함된 가벼운 이미지 사용)
-# =================
+# 1단계: 최종 실행 환경 설정
+# 소스 코드를 다시 빌드하지 않으므로, 가벼운 JRE(Java Runtime Environment) 이미지를 사용합니다.
 FROM openjdk:17-slim
+
+# 작업 디렉토리를 지정합니다.
 WORKDIR /app
 
-# 빌드 단계(builder)에서 생성된 jar 파일만 복사
-COPY --from=builder /app/build/libs/*.jar ./app.jar
+# Jenkins가 이미 빌드한 JAR 파일을 복사합니다.
+# Dockerfile은 'services/user-service' 폴더에서 실행되므로,
+# 그 안의 'build/libs/' 경로에서 *.jar 파일을 찾습니다.
+COPY build/libs/*.jar app.jar
 
-# 컨테이너 실행
-ENTRYPOINT ["java", "-jar", "app.jar"]
-
-# 서비스 포트 명시
+# 애플리케이션이 사용할 포트를 노출합니다. (필요에 따라 변경)
 EXPOSE 8761
+
+# 컨테이너가 시작될 때 JAR 파일을 실행합니다.
+ENTRYPOINT ["java","-jar","/app/app.jar"]
+

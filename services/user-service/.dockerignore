@@ -16,14 +16,18 @@
 **/private/
 **/keys/
 
-.git
-.gitignore
+**/.git
+**/.gitignore
+**/.gitattributes
 
-.idea
-*.iml
+**/.vscode/
+**/.idea/
+**/*.swp
+**/*.swo
+**/*~
 
-.gradle
-build/
+**/.gradle
+**/build/
 !build/libs/
 !build/libs/*.jar
 

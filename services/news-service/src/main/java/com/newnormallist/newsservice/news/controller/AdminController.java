@@ -26,7 +26,7 @@ public class AdminController {
     private NewsService newsService;
 
     /**
-     * 관리자용: 크롤링된 뉴스 목록 조회
+     * 관리자용: 크롤링된 뉴스 전체 목록 조회
      */
     @Operation(
         summary = "크롤링된 뉴스 목록 조회",

@@ -119,16 +119,3 @@ pipeline {
         }
     }
 }
-```
-
-### 어떻게 확인하나요?
-
-1.  위 수정된 `Jenkinsfile`을 GitHub `develop` 브랜치에 푸시해주세요.
-2.  **여러 서비스의 코드를 동시에 수정**하고 푸시해보세요. (예: `gateway-service`와 `news-service`)
-3.  빌드가 완료된 후, **Console Output** 로그의 **맨 아래**를 확인해보세요. 아래와 같이 깔끔한 **빌드 요약(Build Summary)**이 나타날 것입니다.
-
-```
---- Build Summary ---
-✅ Succeeded services: services\gateway-service, services\news-service
----------------------
-

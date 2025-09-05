@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "Categories", description = "카테고리/뉴스 조회")
+@Tag(name = "Categories", description = "카테고리 / 뉴스 조회")
 @RestController
 @RequestMapping("/api/news/categories")
 @CrossOrigin(origins = "*")

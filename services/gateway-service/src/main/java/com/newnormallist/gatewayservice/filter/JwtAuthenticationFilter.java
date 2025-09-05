@@ -62,7 +62,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
       log.info("✅ [Gateway] Claims extracted. UserId: {}, Role: {}", userId, role);
 
-      // 새로운 헤더를 추가하여 다운스트림으로 요청 전달
+      // 새로운 헤더를 추가하여 각 서비스로 전달
       ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
               .header("X-User-Id", String.valueOf(userId))
               .header("X-User-Role", role)

@@ -1,4 +1,4 @@
-// Jenkinsfile for Monorepo with multiple microservices (updated for Polyglot support)
+// Jenkinsfile for Monorepo with multiple microservices (final version with fixes)
 
 pipeline {
     agent any
@@ -9,13 +9,10 @@ pipeline {
                 script {
                     echo "Checking for changes..."
 
-                    def changedFiles = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim().split('\r\n')
-                    echo "Changed files reported by Git: ${changedFiles}"
+                    def commandOutput = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim()
+                    def changedFiles = commandOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }
+                    echo "Cleaned changed files list: ${changedFiles}"
 
-                    // ======================================================================
-                    // [수정됨] 서비스 탐지 기준 변경: 'gradlew.bat' 대신 'Dockerfile'이 있는 모든 폴더를 서비스로 간주합니다.
-                    // 이렇게 하면 Java, Python 등 모든 유형의 마이크로서비스를 인식할 수 있습니다.
-                    // ======================================================================
                     def servicePaths = bat(returnStdout: true, script: "dir /s /b Dockerfile").trim().split('\r\n').collect { it.replace('\\Dockerfile', '') }
                     def workspacePath = env.WORKSPACE
                     def relativeServicePaths = servicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
@@ -55,26 +52,22 @@ pipeline {
 
                     for (String servicePath in changedServicesList) {
                         parallelStages["Build & Push ${servicePath}"] = {
-                            ws(servicePath) {
+                            // [수정됨] 잘못된 ws()를 올바른 dir() 명령어로 변경했습니다.
+                            dir(servicePath) {
                                 echo "--- Starting build & push for ${servicePath} ---"
                                 try {
-                                    // ======================================================================
-                                    // [추가됨] 프로젝트 유형(Java/Python)을 감지하고 그에 맞는 빌드를 실행하는 로직
-                                    // ======================================================================
                                     stage("Build Application: ${servicePath}") {
                                         if (fileExists('gradlew.bat')) {
                                             echo "Detected Java/Gradle project. Running Gradle build..."
                                             bat 'gradlew.bat clean bootJar'
-                                        } else if (fileExists('requirements.txt')) {
-                                            echo "Detected Python project. Skipping build step (handled in Dockerfile)."
-                                            // Python 프로젝트는 보통 Dockerfile 안에서 'pip install'을 하므로 별도의 빌드 단계는 생략합니다.
                                         } else {
-                                            error "Unknown project type in ${servicePath}. No gradlew.bat or requirements.txt found."
+                                            echo "Detected non-Gradle project (e.g., Python). Skipping build step."
                                         }
                                     }
 
-                                    def serviceName = new File(servicePath).name
-                                    def imageName = "berrymas/${serviceName}:${env.BUILD_NUMBER}"
+                                    // [수정됨] 스크립트 보안 승인이 필요 없는 안전한 방식으로 폴더 이름을 가져옵니다.
+                                    def serviceName = servicePath.split('\\').last()
+                                    def imageName = "apocalcal/${serviceName}:${env.BUILD_NUMBER}"
 
                                     stage("Docker Build: ${servicePath}") {
                                         bat "docker build -t ${imageName} ."
@@ -103,4 +96,3 @@ pipeline {
         }
     }
 }
-

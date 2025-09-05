@@ -46,20 +46,28 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     curl \
     unzip \
+    ca-certificates \
     && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# ChromeDriver 설치
-RUN CHROME_VERSION=$(google-chrome --version | cut -d " " -f3 | cut -d "." -f1) \
-    && CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}") \
-    && wget -O /tmp/chromedriver.zip "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip" \
+# ChromeDriver 설치 (최신 Chrome for Testing API 사용)
+RUN CHROME_VERSION=$(google-chrome --product-version) \
+    && echo "Chrome version: $CHROME_VERSION" \
+    && LATEST_DRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | jq -r --arg version "${CHROME_VERSION}" '.versions[] | select(.version == $version) | .downloads.chromedriver[0].url' | xargs basename | sed 's/chromedriver-linux64.zip//') \
+    && if [ -z "$LATEST_DRIVER_VERSION" ]; then \
+        echo "Exact version not found, trying major version fallback..." \
+        && CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d'.' -f1) \
+        && LATEST_DRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/latest-patch-versions-per-build.json" | jq -r ".builds.\"${CHROME_MAJOR_VERSION}\".version"); \
+    fi \
+    && echo "Using ChromeDriver version: $LATEST_DRIVER_VERSION" \
+    && wget -O /tmp/chromedriver.zip "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_DRIVER_VERSION}/linux64/chromedriver-linux64.zip" \
     && unzip /tmp/chromedriver.zip -d /tmp/ \
-    && mv /tmp/chromedriver /usr/local/bin/chromedriver \
+    && mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
     && chmod +x /usr/local/bin/chromedriver \
-    && rm /tmp/chromedriver.zip
+    && rm -rf /tmp/chromedriver.zip /tmp/chromedriver-linux64
 
 # 빌드 단계(builder)에서 생성된 jar 파일만 복사
 COPY --from=builder /app/build/libs/*.jar ./app.jar
@@ -73,7 +81,7 @@ ENV CHROME_BIN=/usr/bin/google-chrome
 ENV CHROME_PATH=/usr/bin/google-chrome
 
 # JVM 최적화 설정
-ENV JAVA_OPTS="-Xms512m -Xmx1g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+ENV JAVA_OPTS="-Xms512m -Xmx2g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
 
 # 포트 노출
 EXPOSE 8083
@@ -85,5 +93,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # 보안: root가 아닌 사용자로 전환
 USER appuser
 
-# 컨테이너 실행 시 이 명령어가 실행됨
+# 컨테이너 실행
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+

@@ -1,8 +1,8 @@
 # =================
-# 최적화된 Python 서비스 Dockerfile
+# 최적화된 멀티 스테이지 빌드 Dockerfile
 # =================
 
-# Python 3.11 기반 이미지 (slim 버전으로 용량 최적화)
+# 1단계: 의존성 빌드
 FROM python:3.11-slim AS builder
 
 # 보안: root가 아닌 사용자로 실행
@@ -11,19 +11,23 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# 시스템 패키지 업데이트 및 필수 도구 설치
+# 빌드에 필요한 패키지 설치
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     curl \
+    default-jdk \
     && rm -rf /var/lib/apt/lists/*
 
-# Python 의존성 파일 복사 및 설치
+# Python 의존성 파일 복사
 COPY requirements.txt .
 
-# pip 업그레이드 및 의존성 설치 (캐시 최적화)
+# pip 업그레이드 및 의존성 설치
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
+
+# KoNLPy 데이터 다운로드 (한번만 실행)
+RUN python -c "import nltk; nltk.download('punkt')" || true
 
 # =================
 # 2단계: 실행 환경 구성
@@ -45,7 +49,7 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# 전체 프로젝트 복사 (app/ 디렉토리 포함)
+# 소스 코드 복사
 COPY . .
 
 # 파일 소유권 변경 (보안)
@@ -67,5 +71,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # 보안: root가 아닌 사용자로 전환
 USER appuser
 
-# 애플리케이션 실행 (로컬 환경과 동일한 방식)
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8084", "--workers", "1"]
+# 애플리케이션 실행
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8084"]
+

@@ -26,7 +26,6 @@ pipeline {
                     }
                     echo "Cleaned changed files list: ${changedFiles}"
 
-                    // [수정됨] dir 명령어 결과에서도 불필요한 프롬프트 라인을 필터링합니다.
                     def servicePathsOutput = bat(returnStdout: true, script: "dir /s /b Dockerfile").trim()
                     def servicePaths = servicePathsOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }.collect { it.replace('\\Dockerfile', '') }
 
@@ -47,7 +46,6 @@ pipeline {
                         }
                     }
 
-                    // [디버깅 추가] 최종적으로 감지된 서비스 목록을 확인합니다.
                     echo "Final list of changed services to be built: ${changedServices.toList()}"
 
                     if (changedServices.isEmpty()) {
@@ -67,7 +65,6 @@ pipeline {
             }
             steps {
                 script {
-                    // [디버깅 추가] Build 단계가 받은 서비스 목록을 확인합니다.
                     echo "Build stage received the following services: ${env.CHANGED_SERVICES}"
                     def changedServicesList = env.CHANGED_SERVICES.split(',')
                     echo "Services list after splitting: ${changedServicesList}"

@@ -19,7 +19,7 @@ COPY src src
 RUN ./gradlew bootJar
 
 # 2단계: 최종 실행 환경 (JRE만 포함하여 가볍게 만듦)
-FROM openjdk:17-jre-slim
+FROM openjdk:17-slim
 
 WORKDIR /app
 

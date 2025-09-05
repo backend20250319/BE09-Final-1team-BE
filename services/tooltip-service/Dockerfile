@@ -53,14 +53,14 @@ COPY --from=builder /app/build/libs/*.jar ./app.jar
 RUN chown -R appuser:appuser /app
 
 # JVM 최적화 설정
-ENV JAVA_OPTS="-Xms512m -Xmx1g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
 
 # 포트 노출
-EXPOSE 8082
+EXPOSE 8086
 
 # 헬스체크 추가
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8082/actuator/health || exit 1
+    CMD curl -f http://localhost:8086/actuator/health || exit 1
 
 # 보안: root가 아닌 사용자로 전환
 USER appuser

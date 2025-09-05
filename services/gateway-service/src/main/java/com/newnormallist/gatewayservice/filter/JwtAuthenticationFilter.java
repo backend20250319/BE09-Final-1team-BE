@@ -109,7 +109,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
   @Override
   public int getOrder() {
-    // 이 필터가 다른 필터들보다 먼저 실행되도록 순서를 높게 설정합니다.
+    // 이 필터가 CookieToHeaderFilter(= -2) 다음에 실행되도록 설정
     return -1;
   }
 }

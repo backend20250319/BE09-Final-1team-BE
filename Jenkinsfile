@@ -17,7 +17,6 @@ pipeline {
                     echo "Checking for changes..."
 
                     def changedFiles
-                    // [수정됨] HashSet을 script 블록 최상단으로 이동
                     def changedServices = new HashSet<String>()
 
                     def servicePathsOutput = bat(returnStdout: true, script: "dir /s /b Dockerfile").trim()
@@ -44,7 +43,6 @@ pipeline {
                             }
                         }
                     } else {
-                        // [수정됨] 첫 빌드일 경우, 복잡한 비교 없이 찾은 모든 서비스 경로를 빌드 대상으로 추가합니다.
                         echo "This is the first build. Adding all services with a Dockerfile to the build queue."
                         changedServices.addAll(relativeServicePaths)
                     }
@@ -81,7 +79,8 @@ pipeline {
                                 try {
                                     stage("Build Application: ${servicePath}") {
                                         if (fileExists('gradlew.bat')) {
-                                            bat 'gradlew.bat clean bootJar'
+                                            // [수정됨] Gradle Daemon과의 충돌을 막기 위해 --no-daemon 옵션을 추가합니다.
+                                            bat 'gradlew.bat clean bootJar --no-daemon'
                                         }
                                     }
 
@@ -131,3 +130,4 @@ pipeline {
         }
     }
 }
+

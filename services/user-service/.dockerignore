@@ -33,7 +33,7 @@
 **/*~
 
 # Java 관련
-**/build/
+#**/build/
 **/target/
 **/*.jar
 **/*.war

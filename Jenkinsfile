@@ -1,37 +1,56 @@
-// Jenkinsfile for Monorepo with multiple microservices (updated for Windows environment)
+// Jenkinsfile for Monorepo with multiple microservices (updated for Windows path matching)
 
 pipeline {
-    agent any // 빌드를 실행할 Jenkins 에이전트를 지정합니다.
+    agent any
 
     stages {
-        // 1단계: 어떤 서비스의 코드가 변경되었는지 감지하는 단계
         stage('Detect Changed Services') {
             steps {
                 script {
                     echo "Checking for changes..."
-                    // [수정됨] sh -> bat. Git 명령어는 Windows에서도 동일하게 작동합니다.
+
+                    // 1. 변경된 파일 목록 가져오기 (결과는 상대 경로)
                     def changedFiles = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim().split('\r\n')
+                    echo "Changed files reported by Git: ${changedFiles}"
 
                     // ======================================================================
-                    // [수정됨] 리눅스 명령어 'find', 'sed'를 윈도우 명령어 'dir'로 변경합니다.
-                    // Windows 환경에서 모든 'gradlew.bat' 파일의 경로를 찾습니다.
-                    def servicePaths = bat(returnStdout: true, script: 'dir /s /b gradlew.bat').trim().split('\r\n').collect { it.replace('\\gradlew.bat', '') }
+                    // [수정됨] 서비스 경로를 찾는 방식을 '상대 경로' 기준으로 변경합니다.
+                    // ======================================================================
+
+                    // 2. 먼저 모든 'gradlew.bat' 파일의 전체 경로를 찾습니다.
+                    def fullServiceGradlePaths = bat(returnStdout: true, script: 'dir /s /b gradlew.bat').trim()
+
+                    if (!fullServiceGradlePaths) {
+                        error("FATAL: No 'gradlew.bat' files found in the workspace. Cannot determine service directories.")
+                    }
+
+                    // 3. Jenkins의 현재 작업 공간(Workspace) 경로를 가져옵니다.
+                    def workspacePath = env.WORKSPACE
+                    echo "Current workspace path is: ${workspacePath}"
+
+                    // 4. 전체 경로를 작업 공간 기준의 '상대 경로'로 변환합니다.
+                    def servicePaths = fullServiceGradlePaths.split('\r\n').collect { fullPath ->
+                        def serviceDir = fullPath.replace('\\gradlew.bat', '')
+                        // 작업 공간 경로 부분을 제거하여 상대 경로로 만듭니다.
+                        def relativePath = serviceDir.replace(workspacePath, '').replaceAll('^\\\\', '')
+                        return relativePath
+                    }
+                    echo "Found relative service paths: ${servicePaths}"
                     // ======================================================================
 
                     def changedServices = []
 
-                    // 변경된 파일이 어떤 서비스 폴더 경로에 속하는지 확인합니다.
+                    // 5. '상대 경로'끼리 비교하여 변경된 서비스를 찾습니다.
                     for (String file in changedFiles) {
+                        def windowsStyleFile = file.replace('/', '\\') // Git 경로를 Windows 형식으로 변경
                         for (String servicePath in servicePaths) {
-                            // [수정됨] Windows 경로 구분자인 '\'를考慮하여 로직 수정
-                            if (file.replace('/', '\\').startsWith(servicePath + '\\') && !changedServices.contains(servicePath)) {
+                            if (windowsStyleFile.startsWith(servicePath + '\\') && !changedServices.contains(servicePath)) {
                                 changedServices.add(servicePath)
-                                echo "Detected change in service: ${servicePath}"
+                                echo "SUCCESS: Detected change in service -> ${servicePath}"
                             }
                         }
                     }
 
-                    // 변경된 서비스가 없으면, 파이프라인을 더 이상 진행하지 않고 중단합니다.
                     if (changedServices.isEmpty()) {
                         echo "No changes detected in any service directory. Skipping build."
                         currentBuild.result = 'NOT_BUILT'
@@ -43,7 +62,7 @@ pipeline {
             }
         }
 
-        // 2단계: 변경이 감지된 서비스들을 빌드하고 푸시하는 단계
+        // Build and Push 단계는 이전과 동일합니다.
         stage('Build and Push Changed Services') {
             when {
                 expression { env.CHANGED_SERVICES != null && env.CHANGED_SERVICES != '' }
@@ -55,32 +74,24 @@ pipeline {
 
                     for (String servicePath in changedServicesList) {
                         parallelStages["Build & Push ${servicePath}"] = {
-                            // [수정됨] dir -> ws. Windows에서 폴더 경로를 지정할 때는 ws를 사용하는 것이 더 안정적입니다.
                             ws(servicePath) {
                                 echo "--- Starting build & push for ${servicePath} ---"
                                 try {
                                     def serviceName = new File(servicePath).name
-                                    def imageName = "berrymas/${serviceName}:${env.BUILD_NUMBER}" // Docker Hub 사용자 이름은 그대로 유지
+                                    def imageName = "apocalcal/${serviceName}:${env.BUILD_NUMBER}"
 
                                     stage("Gradle Build: ${servicePath}") {
-                                        // [제거됨] chmod는 Windows에 필요 없는 명령어입니다.
-                                        // [수정됨] sh -> bat, ./gradlew -> gradlew.bat
                                         bat 'gradlew.bat clean bootJar'
                                     }
                                     stage("Docker Build: ${servicePath}") {
-                                        // [수정됨] sh -> bat
                                         bat "docker build -t ${imageName} ."
-                                        echo "Successfully built Docker image: ${imageName}"
                                     }
                                     stage("Push Docker Image: ${servicePath}") {
                                         docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
-                                            // [수정됨] sh -> bat
                                             bat "docker push ${imageName}"
-                                            echo "Successfully pushed Docker image: ${imageName}"
                                         }
                                     }
                                 } catch (e) {
-                                    echo "Failed to build or push service ${servicePath}"
                                     error("Build or push failed for ${servicePath}")
                                 }
                             }

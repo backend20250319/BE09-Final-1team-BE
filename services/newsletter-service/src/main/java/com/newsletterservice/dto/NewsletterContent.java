@@ -13,6 +13,7 @@ public class NewsletterContent {
     private Long userId;
     private Boolean personalized;
     private String title;
+    private String featuredImageUrl;
     private LocalDateTime generatedAt;
     private List<Section> sections;
     
@@ -30,6 +31,7 @@ public class NewsletterContent {
         private String sectionType; // "PERSONALIZED", "TRENDING", "CATEGORY", "LATEST"
         private String description;
         private List<Article> articles;
+        private String sectionImageUrl;
     }
     
     @Data

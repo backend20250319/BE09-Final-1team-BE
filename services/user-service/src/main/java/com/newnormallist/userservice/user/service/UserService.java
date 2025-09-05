@@ -145,7 +145,6 @@ public class UserService {
 
         // 3. 상태를 DELETED로 변경 (Soft Delete)
         user.changeStatus(UserStatus.DELETED);
-        // userRepository.delete(user); <-- 이 코드를 위 코드로 대체
 
         log.info("사용자 탈퇴 처리 완료 - 사용자 ID: {}", userId);;
     }

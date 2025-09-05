@@ -16,16 +16,26 @@ pipeline {
                 script {
                     echo "Checking for changes..."
 
-                    def commandOutput = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim()
-                    def changedFiles = commandOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }
+                    def changedFiles
+                    if (env.GIT_PREVIOUS_COMMIT) {
+                        echo "Comparing current commit (${env.GIT_COMMIT}) with previous build commit (${env.GIT_PREVIOUS_COMMIT})"
+                        def commandOutput = bat(returnStdout: true, script: "git diff --name-only ${env.GIT_PREVIOUS_COMMIT} ${env.GIT_COMMIT}").trim()
+                        changedFiles = commandOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }
+                    } else {
+                        echo "This is the first build. All services will be built."
+                        def commandOutput = bat(returnStdout: true, script: 'git ls-files').trim()
+                        changedFiles = commandOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }
+                    }
                     echo "Cleaned changed files list: ${changedFiles}"
 
-                    def servicePaths = bat(returnStdout: true, script: "dir /s /b Dockerfile").trim().split('\r\n').collect { it.replace('\\Dockerfile', '') }
+                    // [수정됨] dir 명령어 결과에서도 불필요한 프롬프트 라인을 필터링합니다.
+                    def servicePathsOutput = bat(returnStdout: true, script: "dir /s /b Dockerfile").trim()
+                    def servicePaths = servicePathsOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }.collect { it.replace('\\Dockerfile', '') }
+
                     def workspacePath = env.WORKSPACE
                     def relativeServicePaths = servicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
                     echo "Found relative service paths (based on Dockerfile): ${relativeServicePaths}"
 
-                    // [수정됨] 이제 Set을 사용하여 중복 없이 모든 변경된 서비스를 담습니다.
                     def changedServices = new HashSet<String>()
 
                     for (String file in changedFiles) {
@@ -38,6 +48,9 @@ pipeline {
                             }
                         }
                     }
+
+                    // [디버깅 추가] 최종적으로 감지된 서비스 목록을 확인합니다.
+                    echo "Final list of changed services to be built: ${changedServices.toList()}"
 
                     if (changedServices.isEmpty()) {
                         echo "No changes detected in any service directory. Skipping build."
@@ -56,7 +69,11 @@ pipeline {
             }
             steps {
                 script {
+                    // [디버깅 추가] Build 단계가 받은 서비스 목록을 확인합니다.
+                    echo "Build stage received the following services: ${env.CHANGED_SERVICES}"
                     def changedServicesList = env.CHANGED_SERVICES.split(',')
+                    echo "Services list after splitting: ${changedServicesList}"
+
                     def parallelStages = [:]
 
                     for (String servicePath in changedServicesList) {
@@ -71,7 +88,7 @@ pipeline {
                                     }
 
                                     def serviceName = servicePath.replace('\\', '/').split('/').last()
-                                    def imageName = "berrymas/${serviceName}:${env.BUILD_NUMBER}" // Docker Hub 사용자 이름 확인
+                                    def imageName = "berrymas/${serviceName}:${env.BUILD_NUMBER}"
 
                                     stage("Docker Build & Push: ${servicePath}") {
                                         bat "docker build -t ${imageName} ."
@@ -79,10 +96,8 @@ pipeline {
                                             bat "docker push ${imageName}"
                                         }
                                     }
-                                    // 빌드 성공 시, 결과를 기록합니다.
                                     buildResults.succeeded.add(servicePath)
                                 } catch (e) {
-                                    // 빌드 실패 시, 결과를 기록합니다.
                                     buildResults.failed.add(servicePath)
                                     echo "ERROR during build or push for ${servicePath}: ${e.toString()}"
                                 }
@@ -91,7 +106,6 @@ pipeline {
                     }
                     parallel parallelStages
 
-                    // 실패한 서비스가 하나라도 있으면 전체 빌드를 실패 처리합니다.
                     if (!buildResults.failed.isEmpty()) {
                         error("One or more services failed to build: ${buildResults.failed.join(', ')}")
                     }

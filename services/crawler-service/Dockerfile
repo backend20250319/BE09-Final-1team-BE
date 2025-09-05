@@ -7,11 +7,18 @@ FROM openjdk:17-jdk-slim AS builder
 WORKDIR /app
 
 # 프로젝트 파일 전체 복사
-COPY . .
+COPY build.gradle settings.gradle ./
+COPY gradlew ./gradlew
+COPY gradle ./gradle
 
 # Gradle을 사용하여 프로젝트를 빌드 (jar 파일 생성)
-RUN ./gradlew bootJar
+RUN ./gradlew dependencies
 
+# 소스 코드 복사
+COPY src ./src
+
+# 프로젝트 빌드
+RUN ./gradlew bootJar
 # =================
 # 2단계: 실행 환경 구성 (Chrome + JRE 포함)
 # =================

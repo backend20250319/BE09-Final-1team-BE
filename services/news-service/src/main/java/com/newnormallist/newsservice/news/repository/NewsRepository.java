@@ -1,5 +1,4 @@
 package com.newnormallist.newsservice.news.repository;
-import com.newnormallist.newsservice.news.entity.NewsStatus;
 import com.newnormallist.newsservice.news.entity.Category;
 import com.newnormallist.newsservice.news.entity.News;
 import org.springframework.data.domain.Page;
@@ -92,7 +91,4 @@ public interface NewsRepository extends JpaRepository<News, Long> {
                                                                      @Param("endDate") String endDate,
                                                                      @Param("categoryName") Category categoryName,
                                                                      @Param("excludeNewsIds") List<Long> excludeNewsIds);
-    List<News> findByCreatedAtBetween(LocalDateTime startDate, LocalDateTime endDate);
-
-    List<News> findByStatus(NewsStatus status);
 }

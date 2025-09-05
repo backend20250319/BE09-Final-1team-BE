@@ -225,49 +225,4 @@ public class UserController {
         int deleted = userService.adminPurgeDeleted(before);
         return ResponseEntity.ok(ApiResult.success(Map.of("deleted", deleted, "before", before.toString())));
     }
-
-    /**
-     * 마이페이지 - 읽은 뉴스 목록 저장 API
-     */
-    @Operation(
-            summary = "읽은 뉴스 저장",
-            description = "사용자의 읽은 뉴스 이력을 저장합니다.",
-            operationId = "addReadHistory"
-    )
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "읽은 뉴스 저장 성공"),
-            @ApiResponse(responseCode = "401", description = "인증 필요")
-    })
-    @PostMapping("/mypage/history/{newsId}")
-    public ResponseEntity<ApiResult<String>> addReadHistory(
-            @Parameter(hidden = true) @AuthenticationPrincipal String userIdStr,
-            @Parameter(description = "뉴스 ID", example = "98765") @PathVariable Long newsId
-    ) {
-        Long userId = Long.parseLong(userIdStr);
-        userService.addReadHistory(userId, newsId);
-        return ResponseEntity.ok(ApiResult.success("읽은 뉴스가 저장되었습니다."));
-    }
-
-    /**
-     * 마이페이지 - 읽은 뉴스 목록 조회 API
-     */
-    @Operation(
-            summary = "읽은 뉴스 목록 조회",
-            description = "사용자가 읽은 뉴스 이력을 최신순으로 페이지 조회합니다.",
-            operationId = "getReadHistory"
-    )
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "읽은 뉴스 목록 조회 성공"),
-            @ApiResponse(responseCode = "401", description = "인증 필요")
-    })
-    @GetMapping("/mypage/history/index")
-    public ResponseEntity<ApiResult<Page<ReadHistoryResponse>>> getReadHistory(
-            @Parameter(hidden = true) @AuthenticationPrincipal String userIdStr,
-            @ParameterObject
-            @PageableDefault(size = 10, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable
-    ) {
-        Long userId = Long.parseLong(userIdStr);
-        Page<ReadHistoryResponse> historyPage = userService.getReadHistory(userId, pageable);
-        return ResponseEntity.ok(ApiResult.success(historyPage));
-    }
 }

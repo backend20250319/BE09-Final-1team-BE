@@ -4,5 +4,5 @@ import com.newnormallist.newsservice.news.entity.NewsComplaint;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface NewsComplaintRepository extends JpaRepository<NewsComplaint, Long> {
-    long countByNewsId(Long newsId);
+    long countByNewsNewsId(Long newsId);
 }

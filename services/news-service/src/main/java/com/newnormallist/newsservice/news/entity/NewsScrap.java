@@ -25,8 +25,11 @@ public class NewsScrap {
     @JoinColumn(name = "news_id", nullable = false)
     private News news;
 
-    @Column(name = "storage_id", nullable = false)
+    @Column(name = "storage_id", nullable = true)
     private Integer storageId;
+
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -74,11 +74,18 @@ public class RelatedNewsServiceImpl implements RelatedNewsService {
             }
         }
 
-        // 4. 4개 미만이면 같은 created_at, 같은 category_name인 뉴스로 채우기
+        // 4. 4개 미만이면 같은 시간대, 같은 카테고리 뉴스로 채우기
         if (relatedNewsList.size() < MAX_RELATED_NEWS) {
             int remainingCount = MAX_RELATED_NEWS - relatedNewsList.size();
             List<News> additionalNews = getNewsBySameTimeAndCategory(news, relatedNewsList, remainingCount);
             relatedNewsList.addAll(additionalNews);
+        }
+        
+        // 5. 여전히 4개 미만이면 최근 3일간 같은 카테고리 뉴스로 채우기
+        if (relatedNewsList.size() < MAX_RELATED_NEWS) {
+            int remainingCount = MAX_RELATED_NEWS - relatedNewsList.size();
+            List<News> recentNews = getRecentNewsByCategory(news, relatedNewsList, remainingCount);
+            relatedNewsList.addAll(recentNews);
         }
 
         return relatedNewsList;
@@ -88,16 +95,27 @@ public class RelatedNewsServiceImpl implements RelatedNewsService {
      * KEPT 상태의 뉴스에 대한 연관뉴스 조회
      */
     private List<News> getRelatedNewsForKept(News news) {
+        List<News> relatedNewsList = new ArrayList<>();
+        
         // 같은 published_at, 같은 category_name인 뉴스를 랜덤으로 4개 조회 (해당 뉴스 제외)
         List<News> sameTimeCategoryNews = newsRepository.findByPublishedAtAndCategoryNameAndNewsIdNot(
                 news.getPublishedAt(), news.getCategoryName(), news.getNewsId());
 
         if (sameTimeCategoryNews.size() >= MAX_RELATED_NEWS) {
             Collections.shuffle(sameTimeCategoryNews);
-            return sameTimeCategoryNews.subList(0, MAX_RELATED_NEWS);
+            relatedNewsList = sameTimeCategoryNews.subList(0, MAX_RELATED_NEWS);
         } else {
-            return sameTimeCategoryNews;
+            relatedNewsList.addAll(sameTimeCategoryNews);
         }
+        
+        // 4개 미만이면 최근 3일간 같은 카테고리 뉴스로 채우기
+        if (relatedNewsList.size() < MAX_RELATED_NEWS) {
+            int remainingCount = MAX_RELATED_NEWS - relatedNewsList.size();
+            List<News> recentNews = getRecentNewsByCategory(news, relatedNewsList, remainingCount);
+            relatedNewsList.addAll(recentNews);
+        }
+        
+        return relatedNewsList;
     }
 
     /**
@@ -126,11 +144,18 @@ public class RelatedNewsServiceImpl implements RelatedNewsService {
             }
         }
 
-        // 4. 4개 미만이면 같은 created_at, 같은 category_name인 뉴스로 채우기
+        // 4. 4개 미만이면 같은 시간대, 같은 카테고리 뉴스로 채우기
         if (relatedNewsList.size() < MAX_RELATED_NEWS) {
             int remainingCount = MAX_RELATED_NEWS - relatedNewsList.size();
             List<News> additionalNews = getNewsBySameTimeAndCategory(news, relatedNewsList, remainingCount);
             relatedNewsList.addAll(additionalNews);
+        }
+        
+        // 5. 여전히 4개 미만이면 최근 3일간 같은 카테고리 뉴스로 채우기
+        if (relatedNewsList.size() < MAX_RELATED_NEWS) {
+            int remainingCount = MAX_RELATED_NEWS - relatedNewsList.size();
+            List<News> recentNews = getRecentNewsByCategory(news, relatedNewsList, remainingCount);
+            relatedNewsList.addAll(recentNews);
         }
 
         return relatedNewsList;
@@ -146,30 +171,97 @@ public class RelatedNewsServiceImpl implements RelatedNewsService {
                 .collect(Collectors.toList());
         excludeNewsIds.add(news.getNewsId()); // 현재 뉴스도 제외
 
-        // 같은 날짜, 같은 카테고리, 같은 시간대(오전/오후)인 뉴스 조회
-        LocalDateTime startOfDay = LocalDateTime.parse(news.getPublishedAt()).toLocalDate().atStartOfDay();
-        LocalDateTime endOfDay = startOfDay.plusDays(1);
-        
-        List<News> sameDayCategoryNews = newsRepository.findByPublishedAtBetweenAndCategoryNameAndNewsIdNotIn(
-                startOfDay.toString(), endOfDay.toString(), news.getCategoryName(), excludeNewsIds);
+        try {
+            // 같은 날짜, 같은 카테고리, 같은 시간대(오전/오후)인 뉴스 조회
+            LocalDateTime newsDateTime = parsePublishedAt(news.getPublishedAt());
+            LocalDateTime startOfDay = newsDateTime.toLocalDate().atStartOfDay();
+            LocalDateTime endOfDay = startOfDay.plusDays(1);
+            
+            List<News> sameDayCategoryNews = newsRepository.findByPublishedAtBetweenAndCategoryNameAndNewsIdNotIn(
+                    startOfDay.toString(), endOfDay.toString(), news.getCategoryName(), excludeNewsIds);
 
-        // 오전/오후 시간대 필터링
-        LocalTime newsTime = LocalDateTime.parse(news.getPublishedAt()).toLocalTime();
-        boolean isMorning = newsTime.isBefore(LocalTime.NOON);
-        
-        List<News> filteredNews = sameDayCategoryNews.stream()
-                .filter(n -> {
-                    LocalTime time = LocalDateTime.parse(n.getPublishedAt()).toLocalTime();
-                    boolean newsIsMorning = time.isBefore(LocalTime.NOON);
-                    return isMorning == newsIsMorning;
-                })
+            // 오전/오후 시간대 필터링
+            LocalTime newsTime = newsDateTime.toLocalTime();
+            boolean isMorning = newsTime.isBefore(LocalTime.NOON);
+            
+            List<News> filteredNews = sameDayCategoryNews.stream()
+                    .filter(n -> {
+                        try {
+                            LocalTime time = parsePublishedAt(n.getPublishedAt()).toLocalTime();
+                            boolean newsIsMorning = time.isBefore(LocalTime.NOON);
+                            return isMorning == newsIsMorning;
+                        } catch (Exception e) {
+                            // 날짜 파싱 실패 시 제외
+                            return false;
+                        }
+                    })
+                    .collect(Collectors.toList());
+
+            if (filteredNews.size() >= count) {
+                Collections.shuffle(filteredNews);
+                return filteredNews.subList(0, count);
+            } else {
+                return filteredNews;
+            }
+        } catch (Exception e) {
+            // 날짜 파싱 실패 시 빈 리스트 반환
+            log.warn("날짜 파싱 실패로 인해 연관뉴스 조회를 건너뜁니다: {}", e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * 안전한 날짜 파싱 메서드
+     */
+    private LocalDateTime parsePublishedAt(String publishedAt) {
+        if (publishedAt == null || publishedAt.trim().isEmpty()) {
+            return LocalDateTime.now();
+        }
+
+        try {
+            // MySQL의 DATETIME 형식 (2025-08-07 11:50:01.000000) 처리
+            if (publishedAt.contains(".")) {
+                // 마이크로초 부분 제거
+                String withoutMicroseconds = publishedAt.substring(0, publishedAt.lastIndexOf("."));
+                return LocalDateTime.parse(withoutMicroseconds, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            } else {
+                // 일반적인 형식
+                return LocalDateTime.parse(publishedAt, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            }
+        } catch (Exception e) {
+            log.warn("날짜 파싱 실패: {}, 기본값 사용", publishedAt);
+            return LocalDateTime.now();
+        }
+    }
+    
+    /**
+     * 최근 3일간 같은 카테고리의 뉴스를 조회하여 추가
+     */
+    private List<News> getRecentNewsByCategory(News news, List<News> excludeNews, int count) {
+        // 이미 선택된 뉴스들의 ID 목록
+        List<Long> excludeNewsIds = excludeNews.stream()
+                .map(News::getNewsId)
                 .collect(Collectors.toList());
+        excludeNewsIds.add(news.getNewsId()); // 현재 뉴스도 제외
 
-        if (filteredNews.size() >= count) {
-            Collections.shuffle(filteredNews);
-            return filteredNews.subList(0, count);
-        } else {
-            return filteredNews;
+        try {
+            // 최근 3일간의 같은 카테고리 뉴스 조회
+            LocalDateTime threeDaysAgo = LocalDateTime.now().minusDays(3);
+            LocalDateTime now = LocalDateTime.now();
+            
+            List<News> recentCategoryNews = newsRepository.findByPublishedAtBetweenAndCategoryNameAndNewsIdNotIn(
+                    threeDaysAgo.toString(), now.toString(), news.getCategoryName(), excludeNewsIds);
+
+            if (recentCategoryNews.size() >= count) {
+                Collections.shuffle(recentCategoryNews);
+                return recentCategoryNews.subList(0, count);
+            } else {
+                return recentCategoryNews;
+            }
+        } catch (Exception e) {
+            // 날짜 파싱 실패 시 빈 리스트 반환
+            log.warn("최근 뉴스 조회 중 오류 발생: {}", e.getMessage());
+            return new ArrayList<>();
         }
     }
 }

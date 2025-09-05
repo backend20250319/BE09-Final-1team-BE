@@ -49,22 +49,36 @@ def _aggregate_summaries(items, lines: int) -> str:
 def _resolve_prompt_and_type(data, news) -> tuple[str, str, int]:
     """
     요약 타입/프롬프트/줄수 확정.
-    - type 후보: data.type / data.summary_type / (news.category)
-    - PromptManager에 미등록이면 DEFAULT로 정규화
-    반환: (resolved_type, prompt_text, lines)
+    우선순위: (요청 type/summary_type) → DB news.category_name → DEFAULT
+    단, 요청이 'DEFAULT'로 정규화되면 '미지정'으로 간주하여 DB 카테고리 사용.
     """
-    type_candidate = (
-            data.get("summary_type")
-            or data.get("type")
-            or (getattr(news, "category", None) if news else None)
-    )
+    # 1) 요청값 수집
+    type_in = (data.get("type") or "").strip()
+    stype_in = (data.get("summary_type") or "").strip()
+    req_type_raw = type_in or stype_in
+
+    # 2) 'DEFAULT'로 정규화되면 요청값은 무시(=미지정)
+    req_type_norm = PromptManager._canon_type(req_type_raw) if req_type_raw else None
+    req_type_effective = None if req_type_norm == PromptManager.DEFAULT_TYPE else req_type_raw
+
+    # 3) DB 카테고리
+    db_cat = getattr(news, "category_name", None) if news else None  # ← 컬럼명 정확히!
+    type_candidate = req_type_effective or db_cat
+
+    # 4) 줄수/프롬프트 확정
     lines = _parse_lines(data, default=3)
     resolved_type, prompt_text = PromptManager.get_effective(
         prompt_or_id=data.get("prompt"),
         type_candidate=type_candidate,
         lines=lines,
     )
+
+    # 5) 로깅으로 추적 쉽게
+    current_app.logger.info(
+        f"[{g.rid}] type_in={type_in} summary_type_in={stype_in} db_cat={db_cat} -> resolved={resolved_type}"
+    )
     return resolved_type, prompt_text, lines
+
 
 @summary_bp.before_app_request
 def _bind_request_id():

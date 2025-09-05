@@ -55,4 +55,5 @@ public class GatewayJwtTokenProvider {
     // 동일한 최신 스타일의 메소드를 사용하도록 수정
     return getClaims(token).get("role", String.class);
   }
+
 }

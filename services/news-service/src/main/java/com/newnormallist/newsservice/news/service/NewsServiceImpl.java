@@ -3,6 +3,7 @@ package com.newnormallist.newsservice.news.service;
 import com.newnormallist.newsservice.news.dto.*;
 import com.newnormallist.newsservice.news.entity.*;
 import com.newnormallist.newsservice.news.exception.NewsNotFoundException;
+import com.newnormallist.newsservice.news.exception.NewsForbiddenException;
 
 import com.newnormallist.newsservice.news.repository.KeywordSubscriptionRepository;
 import com.newnormallist.newsservice.news.repository.NewsCrawlRepository;
@@ -10,6 +11,12 @@ import com.newnormallist.newsservice.news.repository.NewsRepository;
 import com.newnormallist.newsservice.tooltip.client.TooltipServiceClient;
 import com.newnormallist.newsservice.tooltip.dto.ProcessContentRequest;
 import com.newnormallist.newsservice.tooltip.dto.ProcessContentResponse;
+import com.newnormallist.newsservice.news.repository.NewsScrapRepository;
+import com.newnormallist.newsservice.news.repository.ScrapStorageRepository;
+import com.newnormallist.newsservice.news.entity.NewsComplaint;
+import com.newnormallist.newsservice.news.entity.NewsStatus;
+import com.newnormallist.newsservice.news.repository.NewsComplaintRepository;
+import com.newnormallist.newsservice.news.dto.ScrappedNewsResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -32,16 +39,25 @@ public class NewsServiceImpl implements NewsService {
 
     @Autowired
     private NewsCrawlRepository newsCrawlRepository;
-    
+
     @Autowired
     private NewsRepository newsRepository;
-    
+
     @Autowired
     private TooltipServiceClient tooltipServiceClient;
-    
+
     @Autowired
     private KeywordSubscriptionRepository keywordSubscriptionRepository;
-    
+
+    @Autowired
+    private NewsScrapRepository newsScrapRepository;
+
+    @Autowired
+    private ScrapStorageRepository scrapStorageRepository;
+
+    @Autowired
+    private NewsComplaintRepository newsComplaintRepository;
+
 
 
     // 크롤링 관련 메서드들
@@ -93,19 +109,25 @@ public class NewsServiceImpl implements NewsService {
                     .map(this::convertToNewsResponse);
         }
     }
-    
+
     @Override
     public NewsResponse getNewsById(Long newsId) {
         News news = newsRepository.findById(newsId)
                 .orElseThrow(() -> new NewsNotFoundException("존재하지 않는 뉴스입니다: " + newsId));
-        // return convertToNewsResponse(news);
+
+        // 신고 건수 확인
+        long complaintCount = newsComplaintRepository.countByNewsNewsId(newsId);
+        if (complaintCount >= 10) {
+            throw new NewsForbiddenException("많은 신고가 접수되어 접근이 제한된 뉴스입니다.");
+        }
+
         // ----- 툴팁 기능을 위한 코드 시작 -----
         // 툴팁 서비스를 호출하여 마크업된 본문 가져오기
         String processedContent = getProcessedContent(newsId, news.getContent());
-        
+
         return convertToNewsResponseWithTooltip(news, processedContent);
     }
-    
+
     /**
      * 툴팁 서비스를 호출하여 마크업된 본문을 가져옵니다.
      * 실패 시 원본 본문을 반환합니다.
@@ -122,7 +144,7 @@ public class NewsServiceImpl implements NewsService {
             return originalContent;
         }
     }
-    
+
     /**
      * 툴팁이 적용된 NewsResponse 생성
      */
@@ -143,7 +165,7 @@ public class NewsServiceImpl implements NewsService {
                 .build();
                 // ----- 툴팁 기능을 위한 코드 끝 -----
     }
-    
+
     @Override
     public List<NewsResponse> getPersonalizedNews(Long userId) {
         // TODO: 사용자 선호도 기반 개인화 로직 구현
@@ -154,7 +176,7 @@ public class NewsServiceImpl implements NewsService {
                 .map(this::convertToNewsResponse)
                 .collect(Collectors.toList());
     }
-    
+
     @Override
     public List<NewsResponse> getTrendingNews() {
         // 신뢰도가 높은 뉴스 10개 반환
@@ -164,7 +186,7 @@ public class NewsServiceImpl implements NewsService {
                 .map(this::convertToNewsResponse)
                 .collect(Collectors.toList());
     }
-    
+
     @Override
     public void incrementViewCount(Long newsId) {
         // TODO: 조회수 증가 로직 구현
@@ -177,7 +199,7 @@ public class NewsServiceImpl implements NewsService {
         return newsRepository.findTrendingNews(pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public Page<NewsListResponse> getRecommendedNews(Long userId, Pageable pageable) {
         // TODO: 사용자 기반 추천 로직 구현
@@ -185,26 +207,26 @@ public class NewsServiceImpl implements NewsService {
         return newsRepository.findByTrustedTrue(pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public Page<NewsListResponse> getNewsByCategory(Category category, Pageable pageable) {
         return newsRepository.findByCategory(category, pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public Page<NewsListResponse> searchNews(String query, Pageable pageable) {
         return newsRepository.searchByKeyword(query, pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
-    public Page<NewsListResponse> searchNewsWithFilters(String query, String sortBy, String sortOrder, 
-                                                       String category, String press, String startDate, 
-                                                       String endDate, Pageable pageable) {
+    public Page<NewsListResponse> searchNewsWithFilters(String query, String sortBy, String sortOrder,
+            String category, String press, String startDate,
+            String endDate, Pageable pageable) {
         // 기본 검색 결과 가져오기
         Page<News> newsPage = newsRepository.searchByKeyword(query, pageable);
-        
+
         // 필터링 적용
         List<News> filteredNews = newsPage.getContent().stream()
                 .filter(news -> {
@@ -219,14 +241,14 @@ public class NewsServiceImpl implements NewsService {
                             return false;
                         }
                     }
-                    
+
                     // 언론사 필터
                     if (press != null && !press.isEmpty()) {
                         if (!news.getPress().toLowerCase().contains(press.toLowerCase())) {
                             return false;
                         }
                     }
-                    
+
                     // 날짜 필터
                     if (startDate != null && !startDate.isEmpty()) {
                         LocalDateTime start = parsePublishedAt(startDate);
@@ -234,22 +256,22 @@ public class NewsServiceImpl implements NewsService {
                             return false;
                         }
                     }
-                    
+
                     if (endDate != null && !endDate.isEmpty()) {
                         LocalDateTime end = parsePublishedAt(endDate);
                         if (news.getCreatedAt().isAfter(end)) {
                             return false;
                         }
                     }
-                    
+
                     return true;
                 })
                 .collect(Collectors.toList());
-        
+
         // 정렬 적용
         if (sortBy != null && !sortBy.isEmpty()) {
             String order = (sortOrder != null && sortOrder.equalsIgnoreCase("desc")) ? "desc" : "asc";
-            
+
             switch (sortBy.toLowerCase()) {
                 case "date":
                 case "publishedat":
@@ -287,35 +309,35 @@ public class NewsServiceImpl implements NewsService {
                     filteredNews.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
             }
         }
-        
+
         // 페이징 적용
         int pageSize = pageable.getPageSize();
         int pageNumber = pageable.getPageNumber();
         int start = pageNumber * pageSize;
         int end = Math.min(start + pageSize, filteredNews.size());
-        
+
         List<News> pagedNews = filteredNews.subList(start, end);
         List<NewsListResponse> responseList = pagedNews.stream()
                 .map(this::convertToNewsListResponse)
                 .collect(Collectors.toList());
-        
+
         // Page 객체 생성
         return new org.springframework.data.domain.PageImpl<>(
                 responseList, pageable, filteredNews.size());
     }
-    
+
     @Override
     public Page<NewsListResponse> getPopularNews(Pageable pageable) {
         return newsRepository.findPopularNews(pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public Page<NewsListResponse> getLatestNews(Pageable pageable) {
         return newsRepository.findLatestNews(pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public List<CategoryDto> getAllCategories() {
         return List.of(Category.values())
@@ -323,14 +345,14 @@ public class NewsServiceImpl implements NewsService {
                 .map(this::convertToCategoryDto)
                 .collect(Collectors.toList());
     }
-    
+
     // 새로 추가된 메서드들의 구현
     @Override
     public Page<NewsListResponse> getNewsByPress(String press, Pageable pageable) {
         return newsRepository.findByPress(press, pageable)
                 .map(this::convertToNewsListResponse);
     }
-    
+
     @Override
     public List<NewsListResponse> getNewsByDateRange(LocalDateTime startDate, LocalDateTime endDate) {
         // LocalDateTime을 String으로 변환하여 전달
@@ -341,23 +363,23 @@ public class NewsServiceImpl implements NewsService {
                 .map(this::convertToNewsListResponse)
                 .collect(Collectors.toList());
     }
-    
+
     @Override
     public Long getNewsCount() {
         return newsRepository.count();
     }
-    
+
     @Override
     public Long getNewsCountByCategory(Category category) {
         return newsRepository.countByCategory(category);
     }
-    
+
     @Override
     public void promoteToNews(Long newsCrawlId) {
         // 크롤링된 뉴스를 승격하여 노출용 뉴스로 전환
         NewsCrawl newsCrawl = newsCrawlRepository.findById(newsCrawlId)
                 .orElseThrow(() -> new NewsNotFoundException("NewsCrawl not found with id: " + newsCrawlId));
-        
+
         // 이미 승격된 뉴스인지 확인
 //        List<News> existingNews = newsRepository.findByOriginalNewsId(newsCrawl.getRawId());
 //        if (!existingNews.isEmpty()) {
@@ -375,10 +397,10 @@ public class NewsServiceImpl implements NewsService {
                 .categoryName(newsCrawl.getCategory()) // 카테고리 설정
                 .dedupState(DedupState.KEPT) // 기본값
                 .build();
-        
+
         newsRepository.save(news);
     }
-    
+
     @Override
     public Page<NewsCrawl> getCrawledNews(Pageable pageable) {
         return newsCrawlRepository.findAll(pageable);
@@ -403,7 +425,7 @@ public class NewsServiceImpl implements NewsService {
                 .oidAid(news.getOidAid())
                 .build();
     }
-    
+
     private NewsListResponse convertToNewsListResponse(News news) {
         return NewsListResponse.builder()
                 .newsId(news.getNewsId())
@@ -423,7 +445,7 @@ public class NewsServiceImpl implements NewsService {
                 .oidAid(news.getOidAid())
                 .build();
     }
-    
+
     private CategoryDto convertToCategoryDto(Category category) {
         return CategoryDto.builder()
                 .categoryCode(category.name())
@@ -431,7 +453,7 @@ public class NewsServiceImpl implements NewsService {
                 .icon("📰") // 기본 아이콘
                 .build();
     }
-    
+
     // 요약 생성 메서드 (간단한 구현)
     private String generateSummary(String content) {
         if (content == null || content.length() <= 200) {
@@ -439,11 +461,11 @@ public class NewsServiceImpl implements NewsService {
         }
         return content.substring(0, 200) + "...";
     }
-    
+
     // 신뢰도 계산 메서드 (간단한 구현)
     private Boolean calculateTrusted(NewsCrawl newsCrawl) {
         int trusted = 50; // 기본값
-        
+
         // 내용 길이에 따른 신뢰도 조정
         if (newsCrawl.getContent() != null) {
             if (newsCrawl.getContent().length() > 1000) {
@@ -452,12 +474,12 @@ public class NewsServiceImpl implements NewsService {
                 trusted += 10;
             }
         }
-        
+
         // 기자명이 있는 경우 신뢰도 증가
         if (newsCrawl.getReporterName() != null && !newsCrawl.getReporterName().trim().isEmpty()) {
             trusted += 10;
         }
-        
+
         // 언론사에 따른 신뢰도 조정
         if (newsCrawl.getPress() != null) {
             String press = newsCrawl.getPress().toLowerCase();
@@ -467,7 +489,7 @@ public class NewsServiceImpl implements NewsService {
                 trusted += 10;
             }
         }
-        
+
         return trusted >= 70; // 70 이상이면 true
     }
 
@@ -476,7 +498,7 @@ public class NewsServiceImpl implements NewsService {
         if (publishedAt == null || publishedAt.trim().isEmpty()) {
             return LocalDateTime.now();
         }
-        
+
         try {
             // MySQL의 DATETIME 형식 (2025-08-07 11:50:01.000000) 처리
             if (publishedAt.contains(".")) {
@@ -492,7 +514,7 @@ public class NewsServiceImpl implements NewsService {
             return LocalDateTime.now();
         }
     }
-    
+
     // 키워드 구독 관련 메서드들
     @Override
     public KeywordSubscriptionDto subscribeKeyword(Long userId, String keyword) {
@@ -500,27 +522,27 @@ public class NewsServiceImpl implements NewsService {
         if (keywordSubscriptionRepository.existsByUserIdAndKeywordAndIsActiveTrue(userId, keyword)) {
             throw new RuntimeException("이미 구독 중인 키워드입니다: " + keyword);
         }
-        
+
         KeywordSubscription subscription = KeywordSubscription.builder()
                 .userId(userId)
                 .keyword(keyword)
                 .isActive(true)
                 .build();
-        
+
         KeywordSubscription saved = keywordSubscriptionRepository.save(subscription);
         return convertToKeywordSubscriptionDto(saved);
     }
-    
+
     @Override
     public void unsubscribeKeyword(Long userId, String keyword) {
         KeywordSubscription subscription = keywordSubscriptionRepository
                 .findByUserIdAndKeywordAndIsActiveTrue(userId, keyword)
                 .orElseThrow(() -> new RuntimeException("구독하지 않은 키워드입니다: " + keyword));
-        
+
         subscription.setIsActive(false);
         keywordSubscriptionRepository.save(subscription);
     }
-    
+
     @Override
     public List<KeywordSubscriptionDto> getUserKeywordSubscriptions(Long userId) {
         return keywordSubscriptionRepository.findByUserIdAndIsActiveTrue(userId)
@@ -539,11 +561,11 @@ public class NewsServiceImpl implements NewsService {
         // 여기서는 간단한 예시로 인기 키워드를 반환
         return getPopularKeywords(limit);
     }
-    
+
     @Override
     public List<TrendingKeywordDto> getPopularKeywords(int limit) {
         List<Object[]> popularKeywords = keywordSubscriptionRepository.findPopularKeywords();
-        
+
         return popularKeywords.stream()
                 .limit(limit)
                 .map(result -> TrendingKeywordDto.builder()
@@ -553,7 +575,7 @@ public class NewsServiceImpl implements NewsService {
                         .build())
                 .collect(Collectors.toList());
     }
-    
+
     @Override
     public List<TrendingKeywordDto> getTrendingKeywordsByCategory(Category category, int limit) {
         log.info("카테고리별 트렌딩 키워드 조회 시작: category={}, limit={}", category, limit);
@@ -578,19 +600,19 @@ public class NewsServiceImpl implements NewsService {
                         }
                     })
                     .collect(Collectors.toList());
-            
+
             log.info("카테고리 {}의 최근 뉴스 수: {}", category, recentNews.size());
             
             if (recentNews.isEmpty()) {
                 log.warn("최근 뉴스가 없어 기본 키워드를 반환합니다: category={}", category);
                 return getDefaultKeywordsByCategory(category, limit);
             }
-            
+
             // 키워드 추출 및 빈도 계산
             Map<String, Long> keywordCounts = recentNews.stream()
                     .flatMap(news -> extractKeywordsFromNews(news).stream())
                     .collect(Collectors.groupingBy(keyword -> keyword, Collectors.counting()));
-            
+
             log.info("추출된 키워드 수: {}", keywordCounts.size());
             log.debug("키워드 빈도: {}", keywordCounts);
             
@@ -603,7 +625,7 @@ public class NewsServiceImpl implements NewsService {
                             .trendScore(entry.getValue().doubleValue())
                             .build())
                     .collect(Collectors.toList());
-            
+
             log.info("카테고리별 트렌드 키워드 결과: category={}, resultSize={}", category, result.size());
             
             // 결과가 비어있으면 기본 키워드 반환
@@ -622,32 +644,247 @@ public class NewsServiceImpl implements NewsService {
 
     @Override
     public void reportNews(Long newsId, Long userId) {
+        News news = newsRepository.findById(newsId)
+                .orElseThrow(() -> new NewsNotFoundException("뉴스를 찾을 수 없습니다: " + newsId));
 
+        // TODO: 이미 신고한 사용자인지 체크하는 로직을 추가하면 좋습니다. (중복 신고 방지)
+
+        NewsComplaint complaint = NewsComplaint.builder()
+                .userId(userId)
+                .news(news)
+                .build();
+
+        newsComplaintRepository.save(complaint);
+        log.info("사용자 {}가 뉴스 {}를 신고했습니다. DB 저장 완료.", userId, newsId);
+
+        // 신고 건수 확인
+        long complaintCount = newsComplaintRepository.countByNewsNewsId(newsId);
+        log.info("뉴스 {}의 총 신고 건수: {}", newsId, complaintCount);
+
+        if (complaintCount >= 20) {
+            log.warn("뉴스 {}의 신고 건수가 {}건에 도달하여 상태를 HIDDEN으로 변경합니다.", newsId, complaintCount);
+            news.setStatus(NewsStatus.HIDDEN);
+            newsRepository.save(news);
+        }
     }
 
     @Override
     public void scrapNews(Long newsId, Long userId) {
+        News news = newsRepository.findById(newsId)
+                .orElseThrow(() -> new NewsNotFoundException("뉴스를 찾을 수 없습니다: " + newsId));
 
+        // 이미 스크랩되었는지 확인합니다. (storageId가 null인 경우 포함)
+        // 동일 사용자가 이미 스크랩했는지 확인 (userId로 검사)
+        boolean alreadyScrapped = !newsScrapRepository.findByUserIdAndNewsNewsId(userId, newsId).isEmpty();
+
+        if (alreadyScrapped) {
+            throw new IllegalStateException("이미 스크랩된 뉴스입니다.");
+        }
+
+        // NewsScrap 엔티티를 생성하고 저장. storageId는 초기에는 null로 설정
+        NewsScrap newsScrap = NewsScrap.builder()
+                .news(news)
+                .userId(userId) // userId 설정
+                .storageId(null) // 초기에는 storageId를 null로 설정
+                .build();
+
+        newsScrapRepository.save(newsScrap);
+        log.info("뉴스 스크랩 완료 (임시 저장): userId={}, newsId={}", userId, newsId);
     }
 
     @Override
     public List<ScrapStorageResponse> getUserScrapStorages(Long userId) {
-        return List.of();
+        return scrapStorageRepository.findByUserId(userId)
+                .stream()
+                .map(this::convertToScrapStorageResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public ScrapStorageResponse getCollectionDetails(Long userId, Integer collectionId) {
+        ScrapStorage scrapStorage = scrapStorageRepository.findById(collectionId)
+                .filter(storage -> storage.getUserId().equals(userId))
+                .orElseThrow(() -> new IllegalStateException("조회 권한이 없거나 존재하지 않는 컬렉션입니다: " + collectionId));
+        return convertToScrapStorageResponse(scrapStorage);
     }
 
     @Override
     public ScrapStorageResponse createCollection(Long userId, String storageName) {
-        return null;
+        // 보관함 이름 중복 체크
+        scrapStorageRepository.findByUserId(userId).stream()
+                .filter(storage -> storage.getStorageName().equals(storageName))
+                .findAny()
+                .ifPresent(storage -> {
+                    throw new IllegalStateException("이미 존재하는 보관함 이름입니다: " + storageName);
+                });
+
+        ScrapStorage newStorage = ScrapStorage.builder()
+                .userId(userId)
+                .storageName(storageName)
+                .build();
+        ScrapStorage savedStorage = scrapStorageRepository.save(newStorage);
+        log.info("새 스크랩 보관함 생성: userId={}, storageName={}", userId, storageName);
+        return convertToScrapStorageResponse(savedStorage);
+    }
+
+    @Override
+    public ScrapStorageResponse updateCollection(Long userId, Integer collectionId, String newName) {
+        // 1. 컬렉션 조회 및 소유권 확인
+        ScrapStorage scrapStorage = scrapStorageRepository.findById(collectionId)
+                .filter(storage -> storage.getUserId().equals(userId))
+                .orElseThrow(() -> new IllegalStateException("수정 권한이 없거나 존재하지 않는 컬렉션입니다: " + collectionId));
+
+        // 2. 새로운 이름이 현재 이름과 동일한지 확인
+        if (scrapStorage.getStorageName().equals(newName)) {
+            return convertToScrapStorageResponse(scrapStorage);
+        }
+
+        // 3. 새로운 이름이 해당 사용자의 다른 컬렉션과 중복되는지 확인
+        scrapStorageRepository.findByUserId(userId).stream()
+                .filter(storage -> storage.getStorageName().equals(newName))
+                .findAny()
+                .ifPresent(storage -> {
+                    throw new IllegalStateException("이미 존재하는 컬렉션 이름입니다: " + newName);
+                });
+
+        // 4. 이름 변경 및 저장
+        scrapStorage.setStorageName(newName);
+        ScrapStorage updatedStorage = scrapStorageRepository.save(scrapStorage);
+        log.info("컬렉션 이름 변경 완료: userId={}, collectionId={}, newName={}", userId, collectionId, newName);
+
+        // 5. DTO로 변환하여 반환
+        return convertToScrapStorageResponse(updatedStorage);
     }
 
     @Override
     public void addNewsToCollection(Long userId, Integer collectionId, Long newsId) {
+        // 1. 사용자의 보관함이 맞는지 확인
+        scrapStorageRepository.findById(collectionId)
+                .filter(storage -> storage.getUserId().equals(userId))
+                .orElseThrow(() -> new IllegalStateException("유효하지 않은 스크랩 보관함입니다: " + collectionId));
 
+        // 2. 사용자가 해당 뉴스를 이미 스크랩했는지 확인
+        List<NewsScrap> existingScraps = newsScrapRepository.findByUserIdAndNewsNewsId(userId, newsId);
+
+        if (!existingScraps.isEmpty()) {
+            // 3. 이미 스크랩한 경우: 기존 스크랩의 storageId를 업데이트
+            NewsScrap scrapToUpdate = existingScraps.get(0); // 중복 스크랩이 없다고 가정
+
+            // 이미 해당 컬렉션에 속해 있는지 확인
+            if (collectionId.equals(scrapToUpdate.getStorageId())) {
+                throw new IllegalStateException("이미 해당 컬렉션에 추가된 뉴스입니다.");
+            }
+
+            scrapToUpdate.setStorageId(collectionId);
+            newsScrapRepository.save(scrapToUpdate);
+            log.info("기존 스크랩을 컬렉션에 추가: userId={}, newsId={}, collectionId={}", userId, newsId, collectionId);
+
+        } else {
+            // 4. 스크랩하지 않은 경우: 새로운 스크랩을 생성하고 컬렉션에 추가
+            News news = newsRepository.findById(newsId)
+                    .orElseThrow(() -> new NewsNotFoundException("뉴스를 찾을 수 없습니다: " + newsId));
+
+            NewsScrap newScrap = NewsScrap.builder()
+                    .storageId(collectionId)
+                    .news(news)
+                    .userId(userId)
+                    .build();
+
+            newsScrapRepository.save(newScrap);
+            log.info("새로운 스크랩을 생성하여 컬렉션에 추가: userId={}, newsId={}, collectionId={}", userId, newsId, collectionId);
+        }
     }
 
     @Override
-    public Page<ScrappedNewsResponse> getNewsInCollection(Long userId, Integer collectionId, Pageable pageable) {
-        return null;
+    public void assignScrapToStorage(Long userId, Integer newsScrapId, Integer targetStorageId) {
+        NewsScrap newsScrap = newsScrapRepository.findById(newsScrapId)
+                .orElseThrow(() -> new IllegalStateException("스크랩을 찾을 수 없습니다: " + newsScrapId));
+
+        // 스크랩이 현재 사용자에게 속하는지 확인
+        if (!newsScrap.getUserId().equals(userId)) {
+            throw new IllegalStateException("해당 스크랩에 대한 권한이 없습니다: " + newsScrapId);
+        }
+
+        // 대상 보관함이 사용자의 것인지 확인
+        ScrapStorage targetStorage = scrapStorageRepository.findById(targetStorageId)
+                .filter(storage -> storage.getUserId().equals(userId))
+                .orElseThrow(() -> new IllegalStateException("유효하지 않은 대상 보관함입니다: " + targetStorageId));
+
+        // 스크랩의 storageId를 업데이트
+        newsScrap.setStorageId(targetStorageId);
+        newsScrapRepository.save(newsScrap);
+        log.info("스크랩 이동 완료: newsScrapId={}, targetStorageId={}", newsScrapId, targetStorageId);
+    }
+
+    private ScrapStorageResponse convertToScrapStorageResponse(ScrapStorage storage) {
+        long newsCount = newsScrapRepository.countByStorageId(storage.getStorageId());
+        return ScrapStorageResponse.builder()
+                .storageId(storage.getStorageId())
+                .storageName(storage.getStorageName())
+                .newsCount(newsCount)
+                .createdAt(storage.getCreatedAt())
+                .updatedAt(storage.getUpdatedAt())
+                .build();
+    }
+
+    @Override
+    public Page<ScrappedNewsResponse> getNewsInCollection(Long userId, Integer collectionId, String category, String query, Pageable pageable) {
+        // 1. 사용자의 보관함이 맞는지 확인
+        scrapStorageRepository.findById(collectionId)
+                .filter(storage -> storage.getUserId().equals(userId))
+                .orElseThrow(() -> new IllegalStateException("유효하지 않은 스크랩 보관함입니다: " + collectionId));
+
+        Page<NewsScrap> scrapsPage;
+
+        // 2. 검색어(query)가 있을 경우, 제목으로 검색
+        if (query != null && !query.trim().isEmpty()) {
+            scrapsPage = newsScrapRepository.findByStorageIdAndNews_TitleContaining(collectionId, query, pageable);
+        } else if (category != null && !category.isEmpty() && !category.equalsIgnoreCase("전체")) {
+            // 3. 검색어가 없을 경우, 카테고리로 필터링
+            Category categoryEnum = Arrays.stream(Category.values())
+                    .filter(c -> c.getCategoryName().equalsIgnoreCase(category))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("No enum constant for category name: " + category));
+            scrapsPage = newsScrapRepository.findByStorageIdAndNews_CategoryName(collectionId, categoryEnum, pageable);
+        } else {
+            // 4. 검색어와 카테고리 필터가 모두 없을 경우, 전체 조회
+            scrapsPage = newsScrapRepository.findByStorageIdWithNews(collectionId, pageable);
+        }
+
+        // 5. ScrappedNewsResponse DTO로 변환
+        return scrapsPage.map(ScrappedNewsResponse::from);
+    }
+
+    @Override
+    public void deleteCollection(Long userId, Integer collectionId) {
+        // 1. 보관함이 사용자의 소유인지 확인
+        ScrapStorage scrapStorage = scrapStorageRepository.findById(collectionId)
+                .filter(storage -> storage.getUserId().equals(userId))
+                .orElseThrow(() -> new IllegalStateException("삭제 권한이 없거나 존재하지 않는 컬렉션입니다: " + collectionId));
+
+        // 2. 해당 보관함에 속한 모든 스크랩(news_scrap)을 삭제
+        newsScrapRepository.deleteByStorageId(collectionId);
+        log.info("컬렉션에 포함된 뉴스 스크랩 삭제 완료: storageId={}", collectionId);
+
+        // 3. 보관함 자체를 삭제
+        scrapStorageRepository.delete(scrapStorage);
+        log.info("컬렉션 삭제 완료: userId={}, storageId={}", userId, collectionId);
+    }
+
+    @Override
+    public void deleteNewsFromCollection(Long userId, Integer collectionId, Long newsId) {
+        // 1. 보관함이 사용자의 소유인지 확인
+        scrapStorageRepository.findById(collectionId)
+                .filter(storage -> storage.getUserId().equals(userId))
+                .orElseThrow(() -> new IllegalStateException("삭제 권한이 없거나 존재하지 않는 컬렉션입니다: " + collectionId));
+
+        // 2. 해당 보관함에 속한 특정 뉴스 스크랩을 찾음
+        NewsScrap newsScrap = newsScrapRepository.findByStorageIdAndNewsNewsId(collectionId, newsId)
+                .orElseThrow(() -> new IllegalStateException("컬렉션에 해당 뉴스가 존재하지 않습니다."));
+
+        // 3. 스크랩 삭제
+        newsScrapRepository.delete(newsScrap);
+        log.info("컬렉션에서 뉴스 삭제 완료: userId={}, collectionId={}, newsId={}", userId, collectionId, newsId);
     }
 
     /**
@@ -829,4 +1066,4 @@ public class NewsServiceImpl implements NewsService {
                 .updatedAt(subscription.getUpdatedAt())
                 .build();
     }
-} 
+}

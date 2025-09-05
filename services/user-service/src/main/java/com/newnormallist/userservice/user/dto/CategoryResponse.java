@@ -8,7 +8,7 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 public class CategoryResponse {
-    private final String id;
+    private final String categoryCode;
     private final String categoryName;
     private final String icon;
 }

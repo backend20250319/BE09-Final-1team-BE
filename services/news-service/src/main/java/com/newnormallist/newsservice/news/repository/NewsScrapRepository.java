@@ -16,25 +16,38 @@ import java.util.Optional;
 public interface NewsScrapRepository extends JpaRepository<NewsScrap, Integer> {
 
     @Query(value = "SELECT ns FROM NewsScrap ns LEFT JOIN FETCH ns.news n WHERE ns.storageId = :storageId",
-           countQuery = "SELECT count(ns) FROM NewsScrap ns WHERE ns.storageId = :storageId")
+            countQuery = "SELECT count(ns) FROM NewsScrap ns WHERE ns.storageId = :storageId")
     Page<NewsScrap> findByStorageIdWithNews(@Param("storageId") Integer storageId, Pageable pageable);
-
-    @Query(value = "SELECT ns FROM NewsScrap ns LEFT JOIN FETCH ns.news n WHERE ns.storageId = :storageId AND n.categoryName = :category",
-           countQuery = "SELECT count(ns) FROM NewsScrap ns JOIN ns.news n WHERE ns.storageId = :storageId AND n.categoryName = :category")
-    Page<NewsScrap> findByStorageIdAndNewsCategoryNameWithNews(@Param("storageId") Integer storageId, @Param("category") Category category, Pageable pageable);
-
-    Page<NewsScrap> findByStorageId(Integer storageId, Pageable pageable);
-
-    Optional<NewsScrap> findTopByOrderByScrapIdDesc();
 
     Optional<NewsScrap> findByStorageIdAndNewsNewsId(Integer storageId, Long newsId);
 
-    // 특정 컬렉션의 뉴스 개수를 세는 메서드 추가
     long countByStorageId(Integer storageId);
 
     @Modifying
     @Transactional
     void deleteByStorageId(Integer storageId);
 
-    Page<NewsScrap> findByStorageIdIn(List<Integer> storageIds, Pageable pageable);
+    Page<NewsScrap> findByUserId(Long userId, Pageable pageable);
+
+    List<NewsScrap> findByUserIdAndNewsNewsId(Long userId, Long newsId);
+
+    @Query("SELECT ns FROM NewsScrap ns JOIN ns.news n WHERE ns.userId = :userId AND n.title LIKE %:query%")
+    Page<NewsScrap> findByUserIdAndNewsTitleContaining(@Param("userId") Long userId, @Param("query") String query, Pageable pageable);
+
+    Page<NewsScrap> findByUserIdAndNews_CategoryName(Long userId, Category category, Pageable pageable);
+
+    Page<NewsScrap> findByStorageIdAndNews_CategoryName(Integer storageId, Category category, Pageable pageable);
+
+    @Query("SELECT ns FROM NewsScrap ns JOIN ns.news n WHERE ns.storageId = :storageId AND n.title LIKE %:query%")
+    Page<NewsScrap> findByStorageIdAndNews_TitleContaining(@Param("storageId") Integer storageId, @Param("query") String query, Pageable pageable);
+
+    // 컬렉션에 속하지 않은 스크랩 조회
+    Page<NewsScrap> findByUserIdAndStorageIdIsNull(Long userId, Pageable pageable);
+
+    // 컬렉션에 속하지 않은 스크랩을 카테고리별로 조회
+    Page<NewsScrap> findByUserIdAndStorageIdIsNullAndNews_CategoryName(Long userId, Category category, Pageable pageable);
+
+    // 컬렉션에 속하지 않은 스크랩을 제목으로 검색
+    @Query("SELECT ns FROM NewsScrap ns JOIN ns.news n WHERE ns.userId = :userId AND ns.storageId IS NULL AND n.title LIKE %:query%")
+    Page<NewsScrap> findByUserIdAndStorageIdIsNullAndNewsTitleContaining(@Param("userId") Long userId, @Param("query") String query, Pageable pageable);
 }

@@ -1,16 +1,30 @@
-Git 관련 폴더 제외
+# 보안 관련 파일
+**/.env*
+**/.pem
+**/.rsa
+**/.key
+**/.p12
+**/.pfx
+**/.crt
+**/.cer
+**/.der
+**/.jks
+**/.keystore
+**/secrets/
+**/credentials/
+**/config/secrets/
+**/private/
+**/keys/
+
 .git
 .gitignore
 
-IDE 설정 파일 제외
 .idea
 *.iml
 
-Gradle 캐시 및 빌드 관련 파일 제외
 .gradle
 build/
 !build/libs/
 !build/libs/*.jar
 
-로그 파일 제외
 *.log

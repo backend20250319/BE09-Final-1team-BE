@@ -50,7 +50,7 @@ public class UserHistoryController {
             description = "사용자가 읽은 뉴스 이력을 최신순으로 페이지 조회합니다.",
             operationId = "getReadHistory"
     )
-    @GetMapping("/index")
+    @GetMapping("/index") // 핵심: 상대 경로로 단순화
     public ResponseEntity<ApiResult<Page<ReadHistoryResponse>>> getReadHistory(
             @Parameter(hidden = true) @AuthenticationPrincipal String userIdStr,
             @ParameterObject

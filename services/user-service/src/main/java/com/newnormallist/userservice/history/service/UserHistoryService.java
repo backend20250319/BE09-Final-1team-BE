@@ -62,7 +62,7 @@ public class UserHistoryService {
     private void createReadHistory(Long userId, Long newsId) {
         // 1. 사용자 조회
         User user = findByUserId(userId);
-        // 2. 뉴스 정보 조회 (제목, 카테고리)
+        // 2. 뉴스 정보 조회 (제목 및 카테고리)
         NewsInfo newsInfo = getNewsInfo(newsId);
         // 3. 읽음 기록 엔티티 생성 및 저장
         UserReadHistory history = UserReadHistory.builder()

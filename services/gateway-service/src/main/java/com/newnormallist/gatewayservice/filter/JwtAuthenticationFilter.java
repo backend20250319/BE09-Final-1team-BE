@@ -107,7 +107,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
    */
   private Mono<Void> handleUnauthorized(ServerWebExchange exchange, String message) {
     exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-    // 필요하다면 응답 본문에 에러 메시지를 추가할 수도 있습니다.
+    // 필요하다면 응답 본문에 에러 메시지를 추가할수 있음.
     return exchange.getResponse().setComplete();
   }
 

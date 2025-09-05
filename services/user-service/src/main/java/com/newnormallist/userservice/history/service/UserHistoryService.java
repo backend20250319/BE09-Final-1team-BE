@@ -39,7 +39,7 @@ public class UserHistoryService {
         Optional<UserReadHistory> existingHistory = userReadHistoryRepository.findByUser_IdAndNewsId(userId, newsId);
 
         if (existingHistory.isPresent()) {
-            // 2. 기록이 있으면 시간만 업데이트
+            // 2. 기록이 있으면 시간만 업데이트하기
             existingHistory.get().updateReadTime();
             log.info("뉴스 읽음 기록 업데이트 완료 - 사용자 ID: {}, 뉴스 ID: {}", userId, newsId);
         } else {

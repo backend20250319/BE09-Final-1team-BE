@@ -2,9 +2,10 @@
 
 pipeline {
     agent any
+
     tools {
-            jdk 'jdk17'
-        }
+        jdk 'jdk17'
+    }
 
     stages {
         stage('Detect Changed Services') {
@@ -55,7 +56,6 @@ pipeline {
 
                     for (String servicePath in changedServicesList) {
                         parallelStages["Build & Push ${servicePath}"] = {
-                            // [수정됨] 잘못된 ws()를 올바른 dir() 명령어로 변경했습니다.
                             dir(servicePath) {
                                 echo "--- Starting build & push for ${servicePath} ---"
                                 try {
@@ -68,9 +68,13 @@ pipeline {
                                         }
                                     }
 
-                                    // [수정됨] 스크립트 보안 승인이 필요 없는 안전한 방식으로 폴더 이름을 가져옵니다.
                                     def serviceName = servicePath.split('\\').last()
-                                    def imageName = "apocalcal/${serviceName}:${env.BUILD_NUMBER}"
+                                    def imageName = "berrymas/${serviceName}:${env.BUILD_NUMBER}"
+
+                                    // [추가됨] Docker 명령어 실행 가능 여부를 확인하는 단계
+                                    stage("Verify Docker Environment") {
+                                        bat 'docker --version'
+                                    }
 
                                     stage("Docker Build: ${servicePath}") {
                                         bat "docker build -t ${imageName} ."
@@ -81,6 +85,9 @@ pipeline {
                                         }
                                     }
                                 } catch (e) {
+                                    // [수정됨] 오류 발생 시 더 자세한 정보를 출력합니다.
+                                    echo "ERROR: An exception occurred during build or push for ${servicePath}"
+                                    echo "Caught Exception: ${e.toString()}"
                                     error("Build or push failed for ${servicePath}")
                                 }
                             }
@@ -99,3 +106,4 @@ pipeline {
         }
     }
 }
+

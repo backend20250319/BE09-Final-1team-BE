@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 public class RelatedNewsResponseDto {
 
     private Long newsId;
+    private String oidAid;
     private String title;
     private String press;
     private String publishedAt;
@@ -21,18 +22,19 @@ public class RelatedNewsResponseDto {
     private LocalDateTime createdAt;
     private String imageUrl;
     private String summary;
-    private Category categoryName;
+    private String categoryName;
 
     public static RelatedNewsResponseDto from(News news) {
         return RelatedNewsResponseDto.builder()
                 .newsId(news.getNewsId())
+                .oidAid(news.getOidAid())
                 .title(news.getTitle())
                 .press(news.getPress())
                 .publishedAt(news.getPublishedAt())
                 .reporter(news.getReporter())
                 .createdAt(news.getCreatedAt())
                 .imageUrl(news.getImageUrl())
-                .categoryName(news.getCategoryName())
+                .categoryName(news.getCategoryName().name())
                 .build();
     }
 }

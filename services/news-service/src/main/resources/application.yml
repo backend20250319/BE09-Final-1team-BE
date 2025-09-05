@@ -1,3 +1,5 @@
+# Spring Boot news-service의 application.yml
+# 서버 포트 설정
 server:
   port: 8082
 

@@ -6,7 +6,7 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@EnableDiscoveryClient
+@EnableDiscoveryClient // Eureka Client 활성화
 @EnableScheduling
 public class UserServiceApplication {
     public static void main(String[] args) {

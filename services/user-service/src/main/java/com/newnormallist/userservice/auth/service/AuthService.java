@@ -161,10 +161,11 @@ public class AuthService {
         String lowerPassword = password.toLowerCase();
         String emailId = email.split("@")[0].toLowerCase();
         String lowerName = name.toLowerCase();
-
+        // 사용자 이름이 비밀번호에 포함되어 있는지 검사
         if (lowerPassword.contains(lowerName)) {
             throw new UserException(ErrorCode.PASSWORD_CONTAINS_NAME);
         }
+        // 이메일 아이디가 비밀번호에 포함되어 있는지 검사
         if (lowerPassword.contains(emailId)) {
             throw new UserException(ErrorCode.PASSWORD_CONTAINS_EMAIL);
         }

@@ -35,21 +35,21 @@ public class UserHistoryService {
      * */
     @Transactional
     public void addReadHistory(Long userId, Long newsId) {
-        // 1. 먼저 기존 기록이 있는지 조회합니다.
+        // 1. 먼저 기존 기록이 있는지 조회
         Optional<UserReadHistory> existingHistory = userReadHistoryRepository.findByUser_IdAndNewsId(userId, newsId);
 
         if (existingHistory.isPresent()) {
-            // 2. 기록이 있으면 시간만 업데이트합니다.
+            // 2. 기록이 있으면 시간만 업데이트
             existingHistory.get().updateReadTime();
             log.info("뉴스 읽음 기록 업데이트 완료 - 사용자 ID: {}, 뉴스 ID: {}", userId, newsId);
         } else {
-            // 3. 기록이 없으면 새로 생성합니다.
+            // 3. 기록이 없으면 새로 생성하기
             try {
                 createReadHistory(userId, newsId);
                 log.info("뉴스 읽음 기록 추가 완료 - 사용자 ID: {}, 뉴스 ID: {}", userId, newsId);
             } catch (DataIntegrityViolationException e) {
                 // 4. 만약 다른 스레드가 그사이에 먼저 INSERT 해서 예외가 터지면,
-                //    그냥 한 번 더 조회해서 업데이트 해줍니다.
+                //    그냥 한 번 더 조회해서 업데이트
                 log.warn("읽기 기록 추가 중 동시성 충돌 발생. 업데이트 로직으로 전환. userId={}, newsId={}", userId, newsId);
                 userReadHistoryRepository.findByUser_IdAndNewsId(userId, newsId)
                         .ifPresent(UserReadHistory::updateReadTime);
@@ -57,12 +57,12 @@ public class UserHistoryService {
         }
     }
     /**
-     * 사용자 읽음 기록 추가 메서드
+     * 사용자별 뉴스 읽음 기록 추가 로직
      * */
     private void createReadHistory(Long userId, Long newsId) {
         // 1. 사용자 조회
         User user = findByUserId(userId);
-        // 2. 뉴스 정보 조회 (제목, 카테고리)
+        // 2. 뉴스 정보 조회 (제목 및 카테고리)
         NewsInfo newsInfo = getNewsInfo(newsId);
         // 3. 읽음 기록 엔티티 생성 및 저장
         UserReadHistory history = UserReadHistory.builder()

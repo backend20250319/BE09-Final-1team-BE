@@ -191,6 +191,7 @@ public class UserController {
             @ApiResponse(responseCode = "403", description = "권한 없음"),
             @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     })
+    // 내부 운영용 API 이므로 관리자 권한 필요
     @DeleteMapping("/internal/admin/{userId}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResult<Void>> hardDelete(

@@ -33,7 +33,7 @@ public class CookieToHeaderFilter implements GlobalFilter, Ordered {
 
         if (accessTokenCookie != null) {
             String token = accessTokenCookie.getValue();
-            log.info("✅ [Gateway] Found access_token in cookie. Converting to Authorization header.");
+            log.info("✅ [Gateway] Found access-token in cookie. Converting to Authorization header.");
 
             // 3. 쿠키 값을 사용하여 Authorization 헤더를 생성합니다.
             ServerHttpRequest mutatedRequest = request.mutate()

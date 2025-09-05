@@ -1,5 +1,5 @@
 # =================
-# Python Service .dockerignore (보안 강화)
+# Java Service .dockerignore (보안 강화)
 # =================
 
 # 🔒 보안 파일들 (절대 업로드 금지)
@@ -32,42 +32,23 @@
 **/*.swo
 **/*~
 
-# Python 관련
-**/__pycache__/
-**/*.pyc
-**/*.pyo
-**/*.pyd
-**/.Python
+# Java 관련
 **/build/
-**/develop-eggs/
-**/dist/
-**/downloads/
-**/eggs/
-**/.eggs/
-**/lib/
-**/lib64/
-**/parts/
-**/sdist/
-**/var/
-**/wheels/
-**/*.egg-info/
-**/.installed.cfg
-**/*.egg
-**/MANIFEST
-**/.pytest_cache/
-**/.coverage
-**/htmlcov/
-**/.tox/
-**/.venv/
-**/venv/
-.venv
-**/env/
-**/.env/
-
-# Flask 관련
-**/instance/
-**/migrations/
-**/.flaskenv
+**/target/
+**/*.jar
+**/*.war
+**/*.ear
+**/*.class
+**/.gradle/
+**/gradle/
+**/bin/
+**/out/
+**/.settings/
+**/.project
+**/.classpath
+**/.factorypath
+**/.metadata/
+**/.recommenders/
 
 # 로그 파일
 **/*.log
@@ -81,12 +62,12 @@
 **/documentation/
 
 # 테스트 관련
+**/src/test/
 **/test/
 **/tests/
-**/*_test.py
-**/*_tests.py
-**/test_*.py
-**/tests_*.py
+**/*Test.java
+**/*Tests.java
+**/test_*/
 
 # 임시 파일
 **/*.tmp
@@ -107,20 +88,3 @@
 # 기타
 **/node_modules/
 **/.cache/
-**/.mypy_cache/
-**/.pytest_cache/
-# Git 잡동사니
-.git
-.gitignore
-# Venv / Python 캐시
-venv/
-.venv/
-env/
-ENV/
-__pycache__/
-*.pyc
-
-# 기타 불필요
-tests/
-*.log
-.DS_Store

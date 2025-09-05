@@ -164,7 +164,6 @@ public class UserController {
             @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     })
     @GetMapping("/admin")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResult<Page<UserAdminResponse>>> getUsers(
             @Parameter(description = "회원 상태 필터", schema = @Schema(implementation = UserStatus.class))
             @RequestParam(required = false) UserStatus status,

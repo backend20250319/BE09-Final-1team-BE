@@ -6,6 +6,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
@@ -73,4 +74,17 @@ public class News {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        News news = (News) o;
+        return Objects.equals(newsId, news.newsId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(newsId);
+    }
 }

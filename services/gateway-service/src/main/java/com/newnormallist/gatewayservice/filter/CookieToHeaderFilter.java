@@ -22,27 +22,27 @@ public class CookieToHeaderFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         HttpHeaders headers = request.getHeaders();
 
-        // 1. Authorization 헤더가 이미 있는지 확인합니다.
+        // 1. Authorization 헤더가 이미 있는지 확인
         if (headers.containsKey(HttpHeaders.AUTHORIZATION)) {
-            // 헤더가 있으면 이 필터는 아무 작업도 하지 않습니다.
+            // 헤더가 있으면 이 필터는 아무 작업도 하지 않음
             return chain.filter(exchange);
         }
 
-        // 2. 헤더가 없으면 'access-token' 쿠키를 찾습니다.
+        // 2. 헤더가 없으면 'access-token' 쿠키를 찾기
         HttpCookie accessTokenCookie = request.getCookies().getFirst(ACCESS_TOKEN_COOKIE_NAME);
 
         if (accessTokenCookie != null) {
             String token = accessTokenCookie.getValue();
             log.info("✅ [Gateway] Found access-token in cookie. Converting to Authorization header.");
 
-            // 3. 쿠키 값을 사용하여 Authorization 헤더를 생성합니다.
+            // 3. 쿠키 값을 사용하여 Authorization 헤더 생성
             ServerHttpRequest mutatedRequest = request.mutate()
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .build();
 
             return chain.filter(exchange.mutate().request(mutatedRequest).build());
         }
-        // 헤더도 없고 쿠키도 없으면 그냥 다음 필터로 보냅니다. (JwtAuthenticationFilter가 처리할 것임)
+        // 헤더도 없고 쿠키도 없으면 그냥 다음 필터로 보냄. (JwtAuthenticationFilter가 처리할 것임)
         return chain.filter(exchange);
     }
 

@@ -43,7 +43,7 @@ public class UserHistoryService {
             existingHistory.get().updateReadTime();
             log.info("뉴스 읽음 기록 업데이트 완료 - 사용자 ID: {}, 뉴스 ID: {}", userId, newsId);
         } else {
-            // 3. 기록이 없으면 새로 생성
+            // 3. 기록이 없으면 새로 생성하기
             try {
                 createReadHistory(userId, newsId);
                 log.info("뉴스 읽음 기록 추가 완료 - 사용자 ID: {}, 뉴스 ID: {}", userId, newsId);

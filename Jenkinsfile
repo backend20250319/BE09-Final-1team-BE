@@ -94,7 +94,7 @@ pipeline {
                                     }
 
                                     def serviceName = servicePath.replace('\\', '/').split('/').last()
-                                    def imageName = "berrymas/${serviceName}:${env.BUILD_NUMBER}"
+                                    def imageName = "heechae15/${serviceName}:${env.BUILD_NUMBER}"
 
                                     stage("Docker Build & Push: ${servicePath}") {
                                         bat "docker build -t ${imageName} ."

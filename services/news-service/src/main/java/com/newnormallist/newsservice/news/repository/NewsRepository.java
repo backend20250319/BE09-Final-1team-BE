@@ -10,9 +10,15 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface NewsRepository extends JpaRepository<News, Long> {
+
+
+    Optional<News> findTop1ByImageUrlIsNotNullOrderByPublishedAtDesc();
+
+    List<News> findByTitleContainingAndImageUrlIsNotNull(String keyword);
 
     @Query("SELECT n FROM News n WHERE STR_TO_DATE(n.publishedAt, '%Y-%m-%d %H:%i:%s') > :since")
     List<News> findByPublishedAtAfter(@Param("since") LocalDateTime since);
@@ -70,6 +76,10 @@ public interface NewsRepository extends JpaRepository<News, Long> {
 
     // 연관뉴스 조회를 위한 메서드들
 
+    // oid_aid로 뉴스 조회
+    @Query("SELECT n FROM News n WHERE n.oidAid = :oidAid")
+    List<News> findByOidAid(@Param("oidAid") String oidAid);
+
     // oid_aid 리스트로 뉴스 조회
     @Query("SELECT n FROM News n WHERE n.oidAid IN :oidAids")
     List<News> findByOidAidIn(@Param("oidAids") List<String> oidAids);
@@ -86,9 +96,12 @@ public interface NewsRepository extends JpaRepository<News, Long> {
                                           @Param("excludeNewsId") Long excludeNewsId);
 
     // 특정 기간, 같은 카테고리, 특정 뉴스들 제외
-    @Query("SELECT n FROM News n WHERE n.publishedAt BETWEEN :startDate AND :endDate AND n.categoryName = :categoryName AND n.newsId NOT IN :excludeNewsIds")
-    List<News> findByPublishedAtBetweenAndCategoryNameAndNewsIdNotIn(@Param("startDate") String startDate,
+    @Query("SELECT n FROM News n WHERE n.categoryName = :categoryName AND n.publishedAt BETWEEN :startDate AND :endDate AND n.newsId NOT IN :excludeNewsIds")
+    List<News> findByCategoryNameAndPublishedAtBetweenAndNewsIdNotIn(@Param("categoryName") Category categoryName,
+                                                                     @Param("startDate") String startDate,
                                                                      @Param("endDate") String endDate,
-                                                                     @Param("categoryName") Category categoryName,
                                                                      @Param("excludeNewsIds") List<Long> excludeNewsIds);
+
+    // 같은 카테고리, 특정 뉴스들 제외 (페이징)
+    Page<News> findByCategoryNameAndNewsIdNotIn(Category categoryName, List<Long> excludeNewsIds, Pageable pageable);
 }

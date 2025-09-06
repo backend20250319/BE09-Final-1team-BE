@@ -51,7 +51,9 @@ public class SecurityConfig {
                                 "/error",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
-                                "/news-api-docs/**"
+                                "/api-docs/**",
+                                "/news-api-docs/**",
+                                "/news-swagger-ui.html"  // 새로운 Swagger UI 경로 추가
                         ).permitAll()
                         .requestMatchers(
                                 "/api/news/summary",        // 본문(텍스트) 요약
@@ -74,8 +76,15 @@ public class SecurityConfig {
                         // "/api/news/**" 경로에 대한 GET 요청만 허용합니다. (예: /api/news/list, /api/news/123)
                         .requestMatchers(HttpMethod.GET, "/api/news/**").permitAll() // GET 요청은 모든 사용자에게 접근 허용
                         
-                        // 3-4. 개인화 피드는 인증된 사용자만 접근 가능
-                        .requestMatchers("/api/feed/**").permitAll()
+                        // 3-4. 트렌딩 관련 API는 누구나 접근 가능하도록 허용합니다.
+                        .requestMatchers(HttpMethod.GET, "/api/trending/**").permitAll() // 트렌딩 API는 모든 사용자에게 접근 허용
+                        
+                        // 3-5. 카테고리 관련 API는 누구나 접근 가능하도록 허용합니다.
+                        .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll() // 카테고리 API는 모든 사용자에게 접근 허용
+                        
+                        // 3-6. 검색 관련 API는 누구나 접근 가능하도록 허용합니다.
+                        .requestMatchers(HttpMethod.GET, "/api/search/**").permitAll() // 검색 API는 모든 사용자에게 접근 허용
+                        
                         .anyRequest().authenticated()
                 )
 

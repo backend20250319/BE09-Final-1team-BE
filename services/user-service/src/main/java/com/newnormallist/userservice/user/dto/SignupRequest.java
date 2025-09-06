@@ -34,5 +34,6 @@ public class SignupRequest {
     @Pattern(regexp = "^(MALE|FEMALE)$", message = "성별은 'MALE' 또는 'FEMALE'로만 입력 가능합니다.")
     private String gender;
 
+    @NotEmpty(message = "관심사는 최소 하나 이상 선택해야 합니다.")
     private Set<NewsCategory> hobbies;
 }

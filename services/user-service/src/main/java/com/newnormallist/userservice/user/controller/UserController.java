@@ -52,14 +52,14 @@ public class UserController {
             // requestBody 속성은 springdoc이 자동으로 생성해주므로 제거
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "회원가입 성공"),
+            @ApiResponse(responseCode = "201", description = "회원가입 성공"),
             @ApiResponse(responseCode = "400", description = "잘못된 요청"),
             @ApiResponse(responseCode = "409", description = "이미 존재하는 사용자")
     })
     @PostMapping("/signup")
     public ResponseEntity<ApiResult<String>> signup(@Valid @RequestBody SignupRequest signupRequest) {
         userService.signup(signupRequest);
-        return ResponseEntity.ok(ApiResult.success("회원가입이 성공적으로 완료되었습니다."));
+        return ResponseEntity.status(201).body(ApiResult.success("회원가입이 성공적으로 완료되었습니다."));
     }
 
     /**
@@ -191,6 +191,7 @@ public class UserController {
             @ApiResponse(responseCode = "403", description = "권한 없음"),
             @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     })
+    // 내부 운영용 API 이므로 관리자 권한 필요
     @DeleteMapping("/internal/admin/{userId}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResult<Void>> hardDelete(

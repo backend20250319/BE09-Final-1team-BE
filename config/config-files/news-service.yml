@@ -18,7 +18,7 @@ management:
       exposure:
         include: health,info,metrics
 
-# 4. 로깅 레벨 설정
+# 5. 로깅 레벨 설정
 logging:
   level:
     com.newnormallist.newsservice: DEBUG
@@ -40,7 +40,7 @@ springdoc:
   packages-to-scan: com.newnormallist.newsservice
   paths-to-match: /api/**
 
-# 6. 추천 시스템 설정
+# 7. 추천 시스템 설정
 reco:
   quotas: [9, 7, 5] # 상위 3개 카테고리에서 각각 가져올 뉴스 수
   read-threshold: 10 # 조회 수 임계값
@@ -69,7 +69,7 @@ reco:
   case4-read: 0.30
   case4-scrap: 0.25
 
-# # 6. 스케줄러 설정
+# # 8. 스케줄러 설정
 # scheduling:
 #   vector-update:
 #     daily-cron: '0 0 2 * * ?' # 매일 새벽 2시

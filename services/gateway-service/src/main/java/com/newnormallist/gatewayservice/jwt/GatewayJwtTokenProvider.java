@@ -38,7 +38,7 @@ public class GatewayJwtTokenProvider {
       return false;
     }
   }
-    // 클레임을 가져오는 공통 메서드
+    // JWT 토큰에서 클레임을 추출하는 메서드
   private Claims getClaims(String token) {
     return Jwts.parser()
             .verifyWith(secretKey)

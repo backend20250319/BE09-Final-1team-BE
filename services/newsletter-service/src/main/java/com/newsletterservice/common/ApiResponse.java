@@ -10,15 +10,15 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApiResponse<T> {
-
-    private boolean success;
-    private T data;
-    private String errorCode;
-    private String message;
     /**
      * API 응답을 표준화하기 위한 전 서비스 공통 클래스 및 메소드
      * @param <T> 응답 데이터의 타입
      */
+    private boolean success;
+    private T data;
+    private String errorCode;
+    private String message;
+
     public static <T> ApiResponse<T> success(T data) {
         return new ApiResponse<>(true, data, null, null);
     }

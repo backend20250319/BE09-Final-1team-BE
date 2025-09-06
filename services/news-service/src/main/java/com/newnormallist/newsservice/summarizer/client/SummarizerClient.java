@@ -22,7 +22,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Flask 요약 API 클라이언트.
+ * Flask 요약 API 클라이언트 - RestTemplate 사용
  * - 뉴스ID 요약: 문자열(줄바꿈 결합) 또는 SummaryResponse 형태로 반환
  * - 텍스트 요약: 문자열로 반환
  */

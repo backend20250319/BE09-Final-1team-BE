@@ -62,7 +62,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
       log.info("✅ [Gateway] Claims extracted. UserId: {}, Role: {}", userId, role);
 
-      // 새로운 헤더를 추가하여 다운스트림으로 요청 전달
+      // 새로운 헤더를 추가하여 각 서비스로 전달
       ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
               .header("X-User-Id", String.valueOf(userId))
               .header("X-User-Role", role)
@@ -90,10 +90,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             !path.contains("/collection") &&
             !path.contains("/feed");
 
+    // /api/search/ 경로는 검색 기능으로 공개 접근 허용
+    boolean isPublicSearchPath = path.startsWith("/api/search");
+
     return path.startsWith("/api/users/signup")
             || path.startsWith("/api/auth/")
             || path.startsWith("/api/users/categories")
             || isPublicNewsPath
+            || isPublicSearchPath
             || path.startsWith("/swagger-ui")
             || path.contains("api-docs");
   }
@@ -103,7 +107,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
    */
   private Mono<Void> handleUnauthorized(ServerWebExchange exchange, String message) {
     exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-    // 필요하다면 응답 본문에 에러 메시지를 추가할 수도 있습니다.
+    // 필요하다면 응답 본문에 에러 메시지를 추가할수 있음.
     return exchange.getResponse().setComplete();
   }
 

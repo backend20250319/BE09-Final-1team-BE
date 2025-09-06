@@ -14,7 +14,7 @@ import javax.crypto.SecretKey;
 @Component
 public class GatewayJwtTokenProvider {
 
-  @Value("${jwt.secret}")
+  @Value("${jwt.secret}") // application-secret.yml에서 비밀 키를 주입
   private String jwtSecret;
 
   private SecretKey secretKey;

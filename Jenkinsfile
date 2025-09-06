@@ -1,37 +1,57 @@
-// Jenkinsfile for Monorepo with multiple microservices (updated for Windows environment)
+// Jenkinsfile for Monorepo with multiple microservices (final version with summary)
+
+// 빌드 결과를 저장하기 위한 전역 변수를 선언합니다.
+def buildResults = [succeeded: [], failed: []]
 
 pipeline {
-    agent any // 빌드를 실행할 Jenkins 에이전트를 지정합니다.
+    agent any
+
+    tools {
+        jdk 'jdk17'
+    }
 
     stages {
-        // 1단계: 어떤 서비스의 코드가 변경되었는지 감지하는 단계
         stage('Detect Changed Services') {
             steps {
                 script {
                     echo "Checking for changes..."
-                    // [수정됨] sh -> bat. Git 명령어는 Windows에서도 동일하게 작동합니다.
-                    def changedFiles = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim().split('\r\n')
 
-                    // ======================================================================
-                    // [수정됨] 리눅스 명령어 'find', 'sed'를 윈도우 명령어 'dir'로 변경합니다.
-                    // Windows 환경에서 모든 'gradlew.bat' 파일의 경로를 찾습니다.
-                    def servicePaths = bat(returnStdout: true, script: 'dir /s /b gradlew.bat').trim().split('\r\n').collect { it.replace('\\gradlew.bat', '') }
-                    // ======================================================================
+                    def changedFiles
+                    if (env.GIT_PREVIOUS_COMMIT) {
+                        echo "Comparing current commit (${env.GIT_COMMIT}) with previous build commit (${env.GIT_PREVIOUS_COMMIT})"
+                        def commandOutput = bat(returnStdout: true, script: "git diff --name-only ${env.GIT_PREVIOUS_COMMIT} ${env.GIT_COMMIT}").trim()
+                        changedFiles = commandOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }
+                    } else {
+                        echo "This is the first build. All services will be built."
+                        def commandOutput = bat(returnStdout: true, script: 'git ls-files').trim()
+                        changedFiles = commandOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }
+                    }
+                    echo "Cleaned changed files list: ${changedFiles}"
 
-                    def changedServices = []
+                    // [수정됨] dir 명령어 결과에서도 불필요한 프롬프트 라인을 필터링합니다.
+                    def servicePathsOutput = bat(returnStdout: true, script: "dir /s /b Dockerfile").trim()
+                    def servicePaths = servicePathsOutput.split('\r\n').findAll { line -> !line.contains('>') && line.trim() != '' }.collect { it.replace('\\Dockerfile', '') }
 
-                    // 변경된 파일이 어떤 서비스 폴더 경로에 속하는지 확인합니다.
+                    def workspacePath = env.WORKSPACE
+                    def relativeServicePaths = servicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
+                    echo "Found relative service paths (based on Dockerfile): ${relativeServicePaths}"
+
+                    def changedServices = new HashSet<String>()
+
                     for (String file in changedFiles) {
-                        for (String servicePath in servicePaths) {
-                            // [수정됨] Windows 경로 구분자인 '\'를考慮하여 로직 수정
-                            if (file.replace('/', '\\').startsWith(servicePath + '\\') && !changedServices.contains(servicePath)) {
-                                changedServices.add(servicePath)
-                                echo "Detected change in service: ${servicePath}"
+                        def windowsStyleFile = file.replace('/', '\\')
+                        for (String servicePath in relativeServicePaths) {
+                            if (windowsStyleFile.startsWith(servicePath + '\\')) {
+                                if (changedServices.add(servicePath)) {
+                                     echo "SUCCESS: Detected change in service -> ${servicePath}"
+                                }
                             }
                         }
                     }
 
-                    // 변경된 서비스가 없으면, 파이프라인을 더 이상 진행하지 않고 중단합니다.
+                    // [디버깅 추가] 최종적으로 감지된 서비스 목록을 확인합니다.
+                    echo "Final list of changed services to be built: ${changedServices.toList()}"
+
                     if (changedServices.isEmpty()) {
                         echo "No changes detected in any service directory. Skipping build."
                         currentBuild.result = 'NOT_BUILT'
@@ -43,50 +63,52 @@ pipeline {
             }
         }
 
-        // 2단계: 변경이 감지된 서비스들을 빌드하고 푸시하는 단계
         stage('Build and Push Changed Services') {
             when {
                 expression { env.CHANGED_SERVICES != null && env.CHANGED_SERVICES != '' }
             }
             steps {
                 script {
+                    // [디버깅 추가] Build 단계가 받은 서비스 목록을 확인합니다.
+                    echo "Build stage received the following services: ${env.CHANGED_SERVICES}"
                     def changedServicesList = env.CHANGED_SERVICES.split(',')
+                    echo "Services list after splitting: ${changedServicesList}"
+
                     def parallelStages = [:]
 
                     for (String servicePath in changedServicesList) {
                         parallelStages["Build & Push ${servicePath}"] = {
-                            // [수정됨] dir -> ws. Windows에서 폴더 경로를 지정할 때는 ws를 사용하는 것이 더 안정적입니다.
-                            ws(servicePath) {
+                            dir(servicePath) {
                                 echo "--- Starting build & push for ${servicePath} ---"
                                 try {
-                                    def serviceName = new File(servicePath).name
-                                    def imageName = "berrymas/${serviceName}:${env.BUILD_NUMBER}" // Docker Hub 사용자 이름은 그대로 유지
-
-                                    stage("Gradle Build: ${servicePath}") {
-                                        // [제거됨] chmod는 Windows에 필요 없는 명령어입니다.
-                                        // [수정됨] sh -> bat, ./gradlew -> gradlew.bat
-                                        bat 'gradlew.bat clean bootJar'
-                                    }
-                                    stage("Docker Build: ${servicePath}") {
-                                        // [수정됨] sh -> bat
-                                        bat "docker build -t ${imageName} ."
-                                        echo "Successfully built Docker image: ${imageName}"
-                                    }
-                                    stage("Push Docker Image: ${servicePath}") {
-                                        docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
-                                            // [수정됨] sh -> bat
-                                            bat "docker push ${imageName}"
-                                            echo "Successfully pushed Docker image: ${imageName}"
+                                    stage("Build Application: ${servicePath}") {
+                                        if (fileExists('gradlew.bat')) {
+                                            bat 'gradlew.bat clean bootJar'
                                         }
                                     }
+
+                                    def serviceName = servicePath.replace('\\', '/').split('/').last()
+                                    def imageName = "berrymas/${serviceName}:${env.BUILD_NUMBER}"
+
+                                    stage("Docker Build & Push: ${servicePath}") {
+                                        bat "docker build -t ${imageName} ."
+                                        docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
+                                            bat "docker push ${imageName}"
+                                        }
+                                    }
+                                    buildResults.succeeded.add(servicePath)
                                 } catch (e) {
-                                    echo "Failed to build or push service ${servicePath}"
-                                    error("Build or push failed for ${servicePath}")
+                                    buildResults.failed.add(servicePath)
+                                    echo "ERROR during build or push for ${servicePath}: ${e.toString()}"
                                 }
                             }
                         }
                     }
                     parallel parallelStages
+
+                    if (!buildResults.failed.isEmpty()) {
+                        error("One or more services failed to build: ${buildResults.failed.join(', ')}")
+                    }
                 }
             }
         }
@@ -94,9 +116,20 @@ pipeline {
 
     post {
         always {
-            echo 'Pipeline finished.'
-            cleanWs()
+            script {
+                echo '--- Build Summary ---'
+                if (!buildResults.succeeded.isEmpty()) {
+                    echo "✅ Succeeded services: ${buildResults.succeeded.join(', ')}"
+                }
+                if (!buildResults.failed.isEmpty()) {
+                    echo "❌ Failed services: ${buildResults.failed.join(', ')}"
+                }
+                if (currentBuild.result == 'NOT_BUILT') {
+                    echo "- No services were built as no changes were detected."
+                }
+                echo '---------------------'
+                cleanWs()
+            }
         }
     }
 }
-

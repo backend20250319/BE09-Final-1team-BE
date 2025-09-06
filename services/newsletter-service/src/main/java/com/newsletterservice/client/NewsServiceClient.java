@@ -115,4 +115,13 @@ public interface NewsServiceClient {
             @RequestParam(defaultValue = "8") int limit,
             @RequestParam(defaultValue = "24") int hours
     );
+
+    @GetMapping("/images/personalized-section")
+    String getPersonalizedSectionImage();
+
+    @GetMapping("/images/trending-section")
+    String getTrendingSectionImage();
+
+    @GetMapping("/images/latest-news")
+    String getLatestNewsImage();
 }

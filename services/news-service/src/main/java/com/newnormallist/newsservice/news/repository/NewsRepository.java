@@ -10,9 +10,15 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface NewsRepository extends JpaRepository<News, Long> {
+
+
+    Optional<News> findTop1ByImageUrlIsNotNullOrderByPublishedAtDesc();
+
+    List<News> findByTitleContainingAndImageUrlIsNotNull(String keyword);
 
     @Query("SELECT n FROM News n WHERE STR_TO_DATE(n.publishedAt, '%Y-%m-%d %H:%i:%s') > :since")
     List<News> findByPublishedAtAfter(@Param("since") LocalDateTime since);

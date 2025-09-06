@@ -53,6 +53,7 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
             );
         }
 
+        // User 엔티티 저장 또는 업데이트를 위한 공통 메소드
         private User saveOrUpdate(OAuth2UserInfo userInfo) {
             User user = userRepository.findByEmail(userInfo.getEmail())
                     .map(entity -> entity.updateSocialInfo(userInfo.getName(), userInfo.getProvider(), userInfo.getProviderId()))

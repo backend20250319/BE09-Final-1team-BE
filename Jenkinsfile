@@ -77,9 +77,15 @@ pipeline {
 
                     for (String servicePath in changedServicesList) {
                         parallelStages["Build & Push ${servicePath}"] = {
-                            dir(servicePath) {
-                                echo "--- Starting build & push for ${servicePath} ---"
-                                try {
+                            // ======================================================================
+                            // [FIXED] 각 병렬 스테이지가 직접 공유 변수를 수정하는 대신,
+                            //         결과를 담은 맵(Map)을 반환하도록 구조를 변경합니다.
+                            // ======================================================================
+                            def result = [service: servicePath, status: 'SUCCESS']
+                            try {
+                                dir(servicePath) {
+                                    echo "--- Starting build & push for ${servicePath} ---"
+
                                     stage("Build Application: ${servicePath}") {
                                         if (fileExists('gradlew.bat')) {
                                             bat 'gradlew.bat clean bootJar --no-daemon'
@@ -95,25 +101,28 @@ pipeline {
                                             bat "docker push ${imageName}"
                                         }
                                     }
-
-                                    // ======================================================================
-                                    // [FIXED] 'synchronized' 블록을 추가하여 공유 변수(buildResults)에 대한
-                                    // 동시 접근을 제어하고 데이터 무결성을 보장합니다.
-                                    // ======================================================================
-                                    synchronized(buildResults) {
-                                        buildResults.succeeded.add(servicePath)
-                                    }
-                                } catch (e) {
-                                    // [FIXED] 여기도 마찬가지로 synchronized 블록을 추가합니다.
-                                    synchronized(buildResults) {
-                                        buildResults.failed.add(servicePath)
-                                    }
-                                    echo "ERROR during build or push for ${servicePath}: ${e.toString()}"
                                 }
+                            } catch (e) {
+                                result.status = 'FAILURE'
+                                echo "ERROR during build or push for ${servicePath}: ${e.toString()}"
+                            }
+                            return result // 작업 결과를 반환합니다.
+                        }
+                    }
+
+                    // 병렬 스테이지를 실행하고, 반환된 결과들을 stageResults 변수에 저장합니다.
+                    def stageResults = parallel parallelStages
+
+                    // 모든 병렬 작업이 끝난 후, 안전하게 결과를 취합합니다.
+                    for (def result in stageResults.values()) {
+                        if (result != null) { // 작업이 중단된 경우 결과가 null일 수 있습니다.
+                            if (result.status == 'SUCCESS') {
+                                buildResults.succeeded.add(result.service)
+                            } else {
+                                buildResults.failed.add(result.service)
                             }
                         }
                     }
-                    parallel parallelStages
 
                     if (!buildResults.failed.isEmpty()) {
                         error("One or more services failed to build: ${buildResults.failed.join(', ')}")
@@ -142,3 +151,4 @@ pipeline {
         }
     }
 }
+

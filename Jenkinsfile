@@ -1,4 +1,4 @@
-// Jenkinsfile: 서비스별 통합 YAML + 배포 순서 보장 최종 버전
+// Jenkinsfile: AWS Secrets Manager 연동 및 모든 오류 수정 최종 버전
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]
@@ -86,8 +86,9 @@ pipeline {
                         parallelStages["Build & Push ${currentService}"] = {
                             try {
                                 def serviceName = currentService.split('\\\\').last()
-                                def imageTag = "${IMAGE_TAG}"
-                                buildAndPush(serviceName, currentService, imageTag)
+                                // ▼▼▼ [오류 수정] fullTag를 사용하도록 수정했습니다. ▼▼▼
+                                def fullTag = "${serviceName}-${IMAGE_TAG}"
+                                buildAndPush(serviceName, currentService, fullTag)
                                 buildResults.succeeded.add(serviceName)
                             } catch (e) {
                                 echo "ERROR during build or push for ${currentService}: ${e.toString()}"
@@ -118,52 +119,33 @@ pipeline {
 
                     // 1. 서비스 의존성에 따른 배포 순서 정의
                     def deploymentOrder = [
-                        'config-server',
-                        'discovery-service',
-                        'gateway-service',
-                        'user-service',
-                        'news-service',
-                        'flaskapi',
-                        'dedup-service',
-                        'crawler-service',
-                        'newsletter-service',
-                        'tooltip-service'
+                        'config-server', 'discovery-service', 'gateway-service', 'user-service',
+                        'news-service', 'flaskapi', 'dedup-service', 'crawler-service',
+                        'newsletter-service', 'tooltip-service'
                     ]
-
-                    // 2. 전역 설정(Namespace, Secrets)을 먼저 적용
-                    echo "Applying global manifests..."
-                    bat "kubectl apply -f manifests-repo\\k8s-namespace.yml"
                     
-                    // 시크릿 생성 (환경변수에서)
-                    bat """
-                        kubectl create secret generic db-secret ^
-                          --from-literal=url="%DB_URL%" ^
-                          --from-literal=username="%DB_USERNAME%" ^
-                          --from-literal=password="%DB_PASSWORD%" ^
-                          -n ${EKS_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                        
-                        kubectl create secret generic jwt-secret ^
-                          --from-literal=secret="%JWT_SECRET%" ^
-                          --from-literal=expiration="%JWT_EXPIRATION%" ^
-                          -n ${EKS_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                        
-                        kubectl create secret generic mail-secret ^
-                          --from-literal=host="%MAIL_HOST%" ^
-                          --from-literal=port="%MAIL_PORT%" ^
-                          --from-literal=username="%MAIL_USERNAME%" ^
-                          --from-literal=password="%MAIL_PASSWORD%" ^
-                          -n ${EKS_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                    """
+                    // ▼▼▼ [리팩토링] Secret 생성 블록을 제거하고, ConfigMap과 SPC 배포 로직으로 교체 ▼▼▼
+                    
+                    // 2. 전역 및 사전 설정(Namespace, ConfigMap, SPC)을 먼저 적용
+                    echo "Applying global and prerequisite manifests..."
+                    bat "kubectl apply -f manifests-repo\\k8s-namespace.yml"
+                    bat "kubectl apply -f manifests-repo\\k8s-flaskapi-configmap.yml"
+                    
+                    // 모든 SecretProviderClass 파일들을 적용
+                    bat "for %%i in (manifests-repo\\k8s-*-spc.yml) do kubectl apply -f %%i"
 
                     // 3. 정의된 순서대로, 빌드된 서비스만 골라서 배포
                     deploymentOrder.each { serviceName ->
                         if (buildResults.succeeded.contains(serviceName)) {
                             echo "--- Starting deployment for ${serviceName} (in order) ---"
-                            def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${serviceName}-${IMAGE_TAG}"
+                            def fullTag = "${serviceName}-${IMAGE_TAG}"
+                            def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
                             def serviceManifestFile = "manifests-repo\\k8s-${serviceName}.yml"
 
-                            // 매니페스트 파일에서 IMAGE_TAG 변수를 실제 이미지로 치환
-                            bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace '\\$\\{IMAGE_TAG\\}', '${IMAGE_TAG}' | Set-Content '${serviceManifestFile}'\""
+                            // YAML 파일 내의 image 태그를 교체
+                            bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
+                            
+                            // 수정된 서비스 YAML 파일을 클러스터에 적용
                             bat "kubectl apply -f ${serviceManifestFile}"
                         }
                     }
@@ -198,9 +180,9 @@ pipeline {
     }
 }
 
-// 공통 빌드/푸시 함수 (Windows / 통합 ECR 리포지토리 용)
-def buildAndPush(String serviceName, String servicePath, String imageTag) {
-    def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${serviceName}-${imageTag}"
+// 공통 빌드/푸시 함수 (Windows / 단일 ECR 리포지토리 용)
+def buildAndPush(String serviceName, String servicePath, String fullTag) {
+    def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
     
     echo "Building ${serviceName} from path ${servicePath}..."
     dir(servicePath) {

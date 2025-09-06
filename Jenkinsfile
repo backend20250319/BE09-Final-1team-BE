@@ -76,26 +76,28 @@ pipeline {
                     def parallelStages = [:]
 
                     for (String servicePath in changedServicesList) {
-                        parallelStages["Build & Push ${servicePath}"] = {
-                            // ======================================================================
-                            // [FIXED] 각 병렬 스테이지가 직접 공유 변수를 수정하는 대신,
-                            //         결과를 담은 맵(Map)을 반환하도록 구조를 변경합니다.
-                            // ======================================================================
-                            def result = [service: servicePath, status: 'SUCCESS']
-                            try {
-                                dir(servicePath) {
-                                    echo "--- Starting build & push for ${servicePath} ---"
+                        // ======================================================================
+                        // [CRITICAL FIX] 루프의 각 반복마다 servicePath를 새로운 지역 변수에 할당합니다.
+                        // 이렇게 하면 각 병렬 클로저가 올바른 서비스 경로를 "캡처"하게 됩니다.
+                        // ======================================================================
+                        def currentService = servicePath
 
-                                    stage("Build Application: ${servicePath}") {
+                        parallelStages["Build & Push ${currentService}"] = {
+                            def result = [service: currentService, status: 'SUCCESS']
+                            try {
+                                dir(currentService) {
+                                    echo "--- Starting build & push for ${currentService} ---"
+
+                                    stage("Build Application: ${currentService}") {
                                         if (fileExists('gradlew.bat')) {
                                             bat 'gradlew.bat clean bootJar --no-daemon'
                                         }
                                     }
 
-                                    def serviceName = servicePath.replace('\\', '/').split('/').last()
+                                    def serviceName = currentService.replace('\\', '/').split('/').last()
                                     def imageName = "heechae15/${serviceName}:${env.BUILD_NUMBER}"
 
-                                    stage("Docker Build & Push: ${servicePath}") {
+                                    stage("Docker Build & Push: ${currentService}") {
                                         bat "docker build -t ${imageName} ."
                                         docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
                                             bat "docker push ${imageName}"
@@ -104,18 +106,16 @@ pipeline {
                                 }
                             } catch (e) {
                                 result.status = 'FAILURE'
-                                echo "ERROR during build or push for ${servicePath}: ${e.toString()}"
+                                echo "ERROR during build or push for ${currentService}: ${e.toString()}"
                             }
                             return result // 작업 결과를 반환합니다.
                         }
                     }
 
-                    // 병렬 스테이지를 실행하고, 반환된 결과들을 stageResults 변수에 저장합니다.
                     def stageResults = parallel parallelStages
 
-                    // 모든 병렬 작업이 끝난 후, 안전하게 결과를 취합합니다.
                     for (def result in stageResults.values()) {
-                        if (result != null) { // 작업이 중단된 경우 결과가 null일 수 있습니다.
+                        if (result != null) {
                             if (result.status == 'SUCCESS') {
                                 buildResults.succeeded.add(result.service)
                             } else {
@@ -151,4 +151,3 @@ pipeline {
         }
     }
 }
-

@@ -25,22 +25,15 @@ pipeline {
                     def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
                     echo "Found all relative service paths (based on Dockerfile): ${relativeServicePaths}"
 
-                    // ======================================================================
-                    // [수정됨] 수동 git diff 대신 Jenkins의 내장 'changeSets'를 사용하여 변경된 파일을 감지합니다.
-                    // 이것이 가장 안정적이고 정확한 방법입니다.
-                    // ======================================================================
                     if (currentBuild.changeSets.isEmpty()) {
                         echo "No changesets found. This might be a manual build or the first build. Building all services."
                         changedServices.addAll(relativeServicePaths)
                     } else {
                         echo "Found ${currentBuild.changeSets.size()} changesets."
-                        // 각 changeset (보통 하나)을 순회합니다.
                         for (changeSet in currentBuild.changeSets) {
                             echo "Processing changeset with ${changeSet.items.length} commits."
-                            // changeset 안의 각 커밋을 순회합니다.
                             for (item in changeSet.items) {
                                 echo "Commit ${item.commitId} by ${item.author}: ${item.msg}"
-                                // 커밋에 의해 영향을 받은 각 파일 경로를 순회합니다.
                                 for (path in item.affectedPaths) {
                                     echo "  - Changed file: ${path}"
                                     def windowsStyleFile = path.replace('/', '\\')
@@ -102,9 +95,19 @@ pipeline {
                                             bat "docker push ${imageName}"
                                         }
                                     }
-                                    buildResults.succeeded.add(servicePath)
+
+                                    // ======================================================================
+                                    // [FIXED] 'synchronized' 블록을 추가하여 공유 변수(buildResults)에 대한
+                                    // 동시 접근을 제어하고 데이터 무결성을 보장합니다.
+                                    // ======================================================================
+                                    synchronized(buildResults) {
+                                        buildResults.succeeded.add(servicePath)
+                                    }
                                 } catch (e) {
-                                    buildResults.failed.add(servicePath)
+                                    // [FIXED] 여기도 마찬가지로 synchronized 블록을 추가합니다.
+                                    synchronized(buildResults) {
+                                        buildResults.failed.add(servicePath)
+                                    }
                                     echo "ERROR during build or push for ${servicePath}: ${e.toString()}"
                                 }
                             }

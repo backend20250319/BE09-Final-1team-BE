@@ -29,7 +29,7 @@ public class GatewayJwtTokenProvider {
   public boolean validateToken(String token) {
     try {
       Jwts.parser()
-              .verifyWith(secretKey) // 최신 스타일로 통일
+              .verifyWith(secretKey)
               .build()
               .parseSignedClaims(token);
       return true;

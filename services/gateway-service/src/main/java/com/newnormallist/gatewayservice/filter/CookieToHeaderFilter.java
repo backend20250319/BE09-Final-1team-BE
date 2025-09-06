@@ -15,7 +15,7 @@ import reactor.core.publisher.Mono;
 @Component
 public class CookieToHeaderFilter implements GlobalFilter, Ordered {
 
-    public static final String ACCESS_TOKEN_COOKIE_NAME = "access-token";
+    public static final String ACCESS_TOKEN_COOKIE_NAME = "access-token"; // 쿠키 이름 상수화하여 재사용 가능하게
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {

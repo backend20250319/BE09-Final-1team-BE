@@ -14,7 +14,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 
-import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -352,6 +351,38 @@ public class NewsletterController {
     }
 
     /**
+     * 뉴스레터 상세 조회 (ID 검증 강화)
+     */
+    @GetMapping("/{newsletterId}")
+    public ResponseEntity<ApiResponse<Object>> getNewsletterDetail(
+            @PathVariable String newsletterId) {
+        
+        log.info("뉴스레터 상세 조회 요청: newsletterId={}", newsletterId);
+        
+        // 1. ID 형식 검증
+        Long id = validateAndParseId(newsletterId);
+        if (id == null) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("INVALID_ID_FORMAT", 
+                    "뉴스레터 ID는 숫자여야 합니다. 입력값: " + newsletterId));
+        }
+        
+        try {
+            // 2. 뉴스레터 조회 로직
+            Object newsletter = newsletterService.getNewsletterById(id);
+            
+            return ResponseEntity.ok(
+                ApiResponse.success(newsletter, "뉴스레터 조회가 완료되었습니다."));
+                
+        } catch (RuntimeException e) {
+            if (e.getMessage().contains("찾을 수 없습니다")) {
+                return ResponseEntity.notFound().build();
+            }
+            throw e;
+        }
+    }
+
+    /**
      * 개인화된 뉴스레터 콘텐츠 조회 (JSON)
      */
     @GetMapping("/{newsletterId}/content")
@@ -408,33 +439,44 @@ public class NewsletterController {
     }
 
     /**
-     * 개인화된 뉴스레터 미리보기 (HTML)
+     * 뉴스레터 미리보기 (ID 검증 강화)
      */
     @GetMapping("/{newsletterId}/preview")
-    public ResponseEntity<String> getNewsletterPreview(
-            @PathVariable Long newsletterId,
-            HttpServletRequest httpRequest) {
+    public ResponseEntity<?> getNewsletterPreview(
+            @PathVariable String newsletterId) {
+        
+        log.info("뉴스레터 미리보기 요청: newsletterId={}", newsletterId);
+        
+        // 1. ID 형식 검증
+        Long id = validateAndParseId(newsletterId);
+        if (id == null) {
+            String errorHtml = generateErrorHtml(
+                "잘못된 ID 형식", 
+                "뉴스레터 ID는 숫자여야 합니다. 입력값: " + newsletterId,
+                "올바른 URL 형식: /newsletter/123/preview"
+            );
+            return ResponseEntity.badRequest()
+                .header("Content-Type", "text/html; charset=UTF-8")
+                .body(errorHtml);
+        }
         
         try {
-            String userId = extractUserIdFromToken(httpRequest);
-            log.info("퍼스널라이즈드 뉴스레터 미리보기 - userId: {}, newsletterId: {}", userId, newsletterId);
-            
-            NewsletterContent content = newsletterService.buildPersonalizedContent(Long.valueOf(userId), newsletterId);
-            String previewHtml = emailRenderer.renderToPreviewHtml(content);
+            // 2. 미리보기 HTML 생성
+            String previewHtml = newsletterService.generatePreviewHtml(id);
             
             return ResponseEntity.ok()
-                    .header("Content-Type", "text/html; charset=UTF-8")
-                    .body(previewHtml);
-        } catch (NewsletterException e) {
-            log.warn("뉴스레터 미리보기 실패: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                    .header("Content-Type", "text/html; charset=UTF-8")
-                    .body("<html><body><h1>오류</h1><p>" + e.getMessage() + "</p></body></html>");
-        } catch (Exception e) {
-            log.error("뉴스레터 미리보기 중 오류 발생", e);
-            return ResponseEntity.badRequest()
-                    .header("Content-Type", "text/html; charset=UTF-8")
-                    .body("<html><body><h1>오류</h1><p>뉴스레터 미리보기 중 오류가 발생했습니다.</p></body></html>");
+                .header("Content-Type", "text/html; charset=UTF-8")
+                .body(previewHtml);
+                
+        } catch (RuntimeException e) {
+            String errorHtml = generateErrorHtml(
+                "뉴스레터를 찾을 수 없습니다",
+                "ID " + id + "에 해당하는 뉴스레터가 존재하지 않습니다.",
+                "뉴스레터 목록으로 돌아가서 올바른 ID를 확인해주세요."
+            );
+            return ResponseEntity.status(404)
+                .header("Content-Type", "text/html; charset=UTF-8")
+                .body(errorHtml);
         }
     }
 
@@ -692,6 +734,49 @@ public class NewsletterController {
     }
 
     /**
+     * 개발/테스트용 샘플 뉴스레터 생성
+     */
+    @PostMapping("/sample")
+    public ResponseEntity<ApiResponse<Object>> createSampleNewsletter() {
+        log.info("샘플 뉴스레터 생성 요청");
+        
+        try {
+            Object sampleNewsletter = newsletterService.createSampleNewsletter();
+            
+            return ResponseEntity.ok(
+                ApiResponse.success(sampleNewsletter, "샘플 뉴스레터가 생성되었습니다."));
+                
+        } catch (Exception e) {
+            log.error("샘플 뉴스레터 생성 실패", e);
+            return ResponseEntity.status(500)
+                .body(ApiResponse.error("SAMPLE_CREATION_FAILED", "샘플 생성에 실패했습니다: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 뉴스레터 목록 조회 (페이징)
+     */
+    @GetMapping("/list")
+    public ResponseEntity<ApiResponse<Object>> getNewsletterList(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        
+        log.info("뉴스레터 목록 조회: page={}, size={}", page, size);
+        
+        try {
+            Object newsletterList = newsletterService.getNewsletterList(page, size);
+            
+            return ResponseEntity.ok(
+                ApiResponse.success(newsletterList, "뉴스레터 목록 조회가 완료되었습니다."));
+                
+        } catch (Exception e) {
+            log.error("뉴스레터 목록 조회 실패", e);
+            return ResponseEntity.status(500)
+                .body(ApiResponse.error("LIST_QUERY_FAILED", "목록 조회에 실패했습니다: " + e.getMessage()));
+        }
+    }
+
+    /**
      * 카카오톡 뉴스레터 메시지 전송
      */
     @PostMapping("/{newsletterId}/send-kakao")
@@ -718,4 +803,108 @@ public class NewsletterController {
                     .body(ApiResponse.error("KAKAO_SEND_ERROR", "카카오톡 메시지 전송에 실패했습니다."));
         }
     }
+
+    // ========================================
+    // ID 검증 및 오류 처리 헬퍼 메서드
+    // ========================================
+
+    /**
+     * ID 형식 검증 및 파싱
+     */
+    private Long validateAndParseId(String idString) {
+        if (idString == null || idString.trim().isEmpty()) {
+            return null;
+        }
+        
+        // 템플릿 문자열 체크
+        if (idString.contains("{") || idString.contains("}")) {
+            log.warn("템플릿 문자열이 ID로 전달됨: {}", idString);
+            return null;
+        }
+        
+        try {
+            return Long.parseLong(idString.trim());
+        } catch (NumberFormatException e) {
+            log.warn("잘못된 ID 형식: {}", idString);
+            return null;
+        }
+    }
+
+    /**
+     * 오류 HTML 생성
+     */
+    private String generateErrorHtml(String title, String message, String suggestion) {
+        return String.format("""
+            <!DOCTYPE html>
+            <html lang="ko">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>%s</title>
+                <style>
+                    body {
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        max-width: 600px;
+                        margin: 50px auto;
+                        padding: 20px;
+                        text-align: center;
+                        background-color: #f5f5f5;
+                    }
+                    .error-container {
+                        background: white;
+                        padding: 40px;
+                        border-radius: 10px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    }
+                    .error-icon {
+                        font-size: 48px;
+                        color: #e74c3c;
+                        margin-bottom: 20px;
+                    }
+                    .error-title {
+                        color: #e74c3c;
+                        font-size: 24px;
+                        margin-bottom: 10px;
+                    }
+                    .error-message {
+                        color: #666;
+                        margin-bottom: 20px;
+                        line-height: 1.6;
+                    }
+                    .suggestion {
+                        background: #e3f2fd;
+                        padding: 15px;
+                        border-radius: 5px;
+                        color: #1976d2;
+                        margin-bottom: 20px;
+                    }
+                    .back-button {
+                        display: inline-block;
+                        background: #2196f3;
+                        color: white;
+                        padding: 10px 20px;
+                        text-decoration: none;
+                        border-radius: 5px;
+                        margin-top: 10px;
+                    }
+                    .back-button:hover {
+                        background: #1976d2;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="error-container">
+                    <div class="error-icon">⚠️</div>
+                    <h1 class="error-title">%s</h1>
+                    <p class="error-message">%s</p>
+                    <div class="suggestion">
+                        💡 %s
+                    </div>
+                    <a href="javascript:history.back()" class="back-button">뒤로 가기</a>
+                </div>
+            </body>
+            </html>
+            """, title, title, message, suggestion);
+    }
 }
+

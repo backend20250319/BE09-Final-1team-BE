@@ -38,7 +38,7 @@ public class GatewayJwtTokenProvider {
       return false;
     }
   }
-    // JWT 토큰에서 클레임을 추출하는 메서드
+    // JWT 토큰에서 클레임을 추출하는 공통 메서드
   private Claims getClaims(String token) {
     return Jwts.parser()
             .verifyWith(secretKey)
@@ -48,13 +48,11 @@ public class GatewayJwtTokenProvider {
   }
 
   public Long getUserIdFromJWT(String token) {
-    // 클레임을 가져오는 로직을 별도 메소드로 분리하여 중복 제거
+    // 클레임을 가져오는 로직을 공통 메소드로 분리하여 중복 제거
     return getClaims(token).get("userId", Long.class);
   }
 
   public String getRoleFromJWT(String token) {
-    // 동일한 최신 스타일의 메소드를 사용하도록 수정
     return getClaims(token).get("role", String.class);
   }
-
 }

@@ -85,7 +85,7 @@ pipeline {
                         def currentService = servicePath
                         parallelStages["Build & Push ${currentService}"] = {
                             try {
-                                def serviceName = new File(currentService).getName()
+                                def serviceName = currentService.split('\\\\').last()
                                 def image = "${ECR_REGISTRY}/${serviceName}:${IMAGE_TAG}"
                                 buildAndPush(serviceName, currentService, image)
                                 buildResults.succeeded.add(serviceName)

@@ -48,6 +48,14 @@ public interface UserNewsletterSubscriptionRepository extends JpaRepository<User
     int updateSubscriptionStatus(@Param("userId") Long userId, @Param("category") String category, @Param("isActive") Boolean isActive);
 
     /**
+     * 구독 ID로 상태 업데이트
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE UserNewsletterSubscription s SET s.isActive = :isActive, s.updatedAt = CURRENT_TIMESTAMP WHERE s.id = :subscriptionId AND s.userId = :userId")
+    int updateSubscriptionStatusById(@Param("subscriptionId") Long subscriptionId, @Param("userId") Long userId, @Param("isActive") Boolean isActive);
+
+    /**
      * 구독 정보 삭제
      */
     @Modifying

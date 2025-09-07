@@ -10,7 +10,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -26,11 +29,15 @@ import java.util.Optional;
 public class NewsletterSubscriptionController extends BaseController {
 
     private final UserNewsletterSubscriptionRepository subscriptionRepository;
+    
+    @PersistenceContext
+    private EntityManager entityManager;
 
     /**
      * 뉴스레터 구독
      */
     @PostMapping("/subscribe")
+    @Transactional
     public ResponseEntity<ApiResponse<Map<String, Object>>> subscribe(
             @Valid @RequestBody Map<String, Object> request,
             HttpServletRequest httpRequest) {
@@ -50,18 +57,27 @@ public class NewsletterSubscriptionController extends BaseController {
             }
             
             // 새 구독 생성
+            LocalDateTime now = LocalDateTime.now();
             UserNewsletterSubscription subscription = UserNewsletterSubscription.builder()
                     .userId(userId)
                     .category(category)
                     .isActive(true)
+                    .subscribedAt(now)
+                    .updatedAt(now)
                     .build();
             
             subscriptionRepository.save(subscription);
+            entityManager.flush();
+            
+            log.info("뉴스레터 구독 생성 완료: subscriptionId={}, userId={}, category={}, isActive={}", 
+                    subscription.getId(), userId, category, subscription.getIsActive());
             
             Map<String, Object> response = new HashMap<>();
             response.put("subscriptionId", subscription.getId());
             response.put("category", category);
             response.put("isActive", true);
+            response.put("subscribedAt", subscription.getSubscribedAt());
+            response.put("updatedAt", subscription.getUpdatedAt());
             
             return ResponseEntity.ok(ApiResponse.success(response, "구독이 완료되었습니다."));
             
@@ -76,6 +92,7 @@ public class NewsletterSubscriptionController extends BaseController {
      * 뉴스레터 구독 취소
      */
     @PostMapping("/unsubscribe")
+    @Transactional
     public ResponseEntity<ApiResponse<Map<String, Object>>> unsubscribe(
             @Valid @RequestBody Map<String, Object> request,
             HttpServletRequest httpRequest) {
@@ -93,8 +110,15 @@ public class NewsletterSubscriptionController extends BaseController {
                     .body(ApiResponse.error("SUBSCRIPTION_NOT_FOUND", "구독 정보를 찾을 수 없습니다."));
             }
             
-            subscription.get().setIsActive(false);
-            subscriptionRepository.save(subscription.get());
+            // Repository의 효율적인 업데이트 메서드 사용
+            int updatedRows = subscriptionRepository.updateSubscriptionStatus(userId, category, false);
+            
+            if (updatedRows == 0) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("SUBSCRIPTION_NOT_FOUND", "구독 정보를 찾을 수 없습니다."));
+            }
+            
+            log.info("뉴스레터 구독 취소 완료: userId={}, category={}, updatedRows={}", userId, category, updatedRows);
             
             Map<String, Object> response = new HashMap<>();
             response.put("category", category);
@@ -113,6 +137,7 @@ public class NewsletterSubscriptionController extends BaseController {
      * 뉴스레터 구독 취소 (ID로)
      */
     @DeleteMapping("/{subscriptionId}")
+    @Transactional
     public ResponseEntity<ApiResponse<Map<String, Object>>> unsubscribeById(
             @PathVariable Long subscriptionId,
             HttpServletRequest httpRequest) {
@@ -129,8 +154,15 @@ public class NewsletterSubscriptionController extends BaseController {
                     .body(ApiResponse.error("SUBSCRIPTION_NOT_FOUND", "구독 정보를 찾을 수 없습니다."));
             }
             
-            subscription.get().setIsActive(false);
-            subscriptionRepository.save(subscription.get());
+            // Repository의 효율적인 업데이트 메서드 사용
+            int updatedRows = subscriptionRepository.updateSubscriptionStatusById(subscriptionId, userId, false);
+            
+            if (updatedRows == 0) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("SUBSCRIPTION_NOT_FOUND", "구독 정보를 찾을 수 없습니다."));
+            }
+            
+            log.info("뉴스레터 구독 취소 완료: userId={}, subscriptionId={}, updatedRows={}", userId, subscriptionId, updatedRows);
             
             Map<String, Object> response = new HashMap<>();
             response.put("subscriptionId", subscriptionId);
@@ -149,6 +181,7 @@ public class NewsletterSubscriptionController extends BaseController {
      * 구독 상태 변경
      */
     @PutMapping("/{subscriptionId}/status")
+    @Transactional
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateSubscriptionStatus(
             @PathVariable Long subscriptionId,
             @Valid @RequestBody Map<String, Object> request,
@@ -167,12 +200,26 @@ public class NewsletterSubscriptionController extends BaseController {
                     .body(ApiResponse.error("SUBSCRIPTION_NOT_FOUND", "구독 정보를 찾을 수 없습니다."));
             }
             
-            subscription.get().setIsActive(isActive);
-            subscriptionRepository.save(subscription.get());
+            // Repository의 효율적인 업데이트 메서드 사용
+            int updatedRows = subscriptionRepository.updateSubscriptionStatusById(subscriptionId, userId, isActive);
+            
+            if (updatedRows == 0) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("SUBSCRIPTION_NOT_FOUND", "구독 정보를 찾을 수 없습니다."));
+            }
+            
+            // 업데이트된 구독 정보 다시 조회
+            Optional<UserNewsletterSubscription> updatedSubscription = subscriptionRepository.findById(subscriptionId);
+            
+            log.info("구독 상태 변경 완료: userId={}, subscriptionId={}, isActive={}, updatedRows={}", 
+                    userId, subscriptionId, isActive, updatedRows);
             
             Map<String, Object> response = new HashMap<>();
             response.put("subscriptionId", subscriptionId);
             response.put("isActive", isActive);
+            if (updatedSubscription.isPresent()) {
+                response.put("updatedAt", updatedSubscription.get().getUpdatedAt());
+            }
             
             return ResponseEntity.ok(ApiResponse.success(response, "구독 상태가 변경되었습니다."));
             
@@ -257,6 +304,7 @@ public class NewsletterSubscriptionController extends BaseController {
      * 구독 정보 업데이트
      */
     @PutMapping("/{subscriptionId}")
+    @Transactional
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateSubscription(
             @PathVariable Long subscriptionId,
             @Valid @RequestBody Map<String, Object> request,
@@ -265,7 +313,7 @@ public class NewsletterSubscriptionController extends BaseController {
         try {
             Long userId = super.extractUserIdFromToken(httpRequest);
             
-            log.info("구독 정보 업데이트 요청: userId={}, subscriptionId={}", userId, subscriptionId);
+            log.info("구독 정보 업데이트 요청: userId={}, subscriptionId={}, request={}", userId, subscriptionId, request);
             
             Optional<UserNewsletterSubscription> subscription = subscriptionRepository.findById(subscriptionId);
             
@@ -277,10 +325,21 @@ public class NewsletterSubscriptionController extends BaseController {
             // 업데이트 가능한 필드들
             if (request.containsKey("isActive")) {
                 Boolean isActive = (Boolean) request.get("isActive");
-                subscription.get().setIsActive(isActive);
+                
+                // Repository의 효율적인 업데이트 메서드 사용
+                int updatedRows = subscriptionRepository.updateSubscriptionStatusById(subscriptionId, userId, isActive);
+                
+                if (updatedRows == 0) {
+                    return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("SUBSCRIPTION_NOT_FOUND", "구독 정보를 찾을 수 없습니다."));
+                }
+                
+                log.info("구독 정보 업데이트 완료: userId={}, subscriptionId={}, isActive={}, updatedRows={}", 
+                        userId, subscriptionId, isActive, updatedRows);
+                
+                // 업데이트된 구독 정보 다시 조회
+                subscription = subscriptionRepository.findById(subscriptionId);
             }
-            
-            subscriptionRepository.save(subscription.get());
             
             Map<String, Object> response = new HashMap<>();
             response.put("subscriptionId", subscriptionId);

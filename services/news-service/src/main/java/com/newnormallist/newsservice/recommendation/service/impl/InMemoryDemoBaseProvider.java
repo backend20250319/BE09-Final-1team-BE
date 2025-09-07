@@ -21,9 +21,9 @@ public class InMemoryDemoBaseProvider implements DemoBaseProvider {
         // 남성 20대: IT_SCIENCE 0.22, VEHICLE 0.15, INTERNATIONAL 0.12, ECONOMY 0.12, LIFE 0.10, SOCIETY 0.09, POLITICS 0.08, TRAVEL_FOOD 0.07, ART 0.05
         put(AgeBucket.AGE_20s, "MALE", Map.of(
             RecommendationCategory.IT_SCIENCE, 0.19,
-            RecommendationCategory.SOCIETY, 0.17,
+            RecommendationCategory.VEHICLE, 0.17,
             RecommendationCategory.ECONOMY, 0.12,
-            RecommendationCategory.VEHICLE, 0.12,
+            RecommendationCategory.SOCIETY, 0.12,
             RecommendationCategory.INTERNATIONAL, 0.10,
             RecommendationCategory.POLITICS, 0.10,
             RecommendationCategory.LIFE, 0.08,

@@ -951,6 +951,229 @@ public class NewsletterController extends BaseController {
     }
 
     /**
+     * 뉴스레터 발송 테스트 (개발용)
+     */
+    @PostMapping("/delivery/test")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testNewsletterDelivery(
+            HttpServletRequest httpRequest) {
+        
+        try {
+            String userId = extractUserIdAsString(httpRequest);
+            log.info("뉴스레터 발송 테스트 요청 - userId: {}", userId);
+            
+            // 테스트용 뉴스레터 생성
+            NewsletterContent testContent = createTestNewsletterContent();
+            
+            // 이메일 발송 테스트
+            Map<String, Object> testResults = new HashMap<>();
+            testResults.put("testContent", testContent);
+            testResults.put("userId", userId);
+            testResults.put("timestamp", LocalDateTime.now());
+            
+            // 실제 발송은 하지 않고 테스트 결과만 반환
+            testResults.put("emailDeliveryTest", "테스트 뉴스레터 생성 완료");
+            testResults.put("contentSections", testContent.getSections().size());
+            testResults.put("totalArticles", testContent.getSections().stream()
+                    .mapToInt(section -> section.getArticles().size())
+                    .sum());
+            
+            return ResponseEntity.ok(ApiResponse.success(testResults, "뉴스레터 발송 테스트가 완료되었습니다."));
+            
+        } catch (Exception e) {
+            log.error("뉴스레터 발송 테스트 중 오류 발생", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("TEST_ERROR", "뉴스레터 발송 테스트 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 뉴스레터 실제 발송 테스트 (이메일)
+     */
+    @PostMapping("/delivery/test-email")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testEmailNewsletterDelivery(
+            HttpServletRequest httpRequest) {
+        
+        try {
+            String userId = extractUserIdAsString(httpRequest);
+            log.info("뉴스레터 이메일 발송 테스트 요청 - userId: {}", userId);
+            
+            // 테스트용 뉴스레터 생성
+            NewsletterContent testContent = createTestNewsletterContent();
+            
+            // 실제 이메일 발송 테스트
+            newsletterService.sendEmailNewsletter(testContent);
+            
+            Map<String, Object> testResults = new HashMap<>();
+            testResults.put("deliveryMethod", "EMAIL");
+            testResults.put("status", "SENT");
+            testResults.put("sentAt", LocalDateTime.now());
+            testResults.put("contentTitle", testContent.getTitle());
+            testResults.put("contentSections", testContent.getSections().size());
+            testResults.put("totalArticles", testContent.getSections().stream()
+                    .mapToInt(section -> section.getArticles().size())
+                    .sum());
+            
+            return ResponseEntity.ok(ApiResponse.success(testResults, "뉴스레터 이메일 발송 테스트가 완료되었습니다."));
+            
+        } catch (Exception e) {
+            log.error("뉴스레터 이메일 발송 테스트 중 오류 발생", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("EMAIL_TEST_ERROR", "뉴스레터 이메일 발송 테스트 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 뉴스레터 실제 발송 테스트 (카카오톡)
+     */
+    @PostMapping("/delivery/test-kakao")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testKakaoNewsletterDelivery(
+            HttpServletRequest httpRequest) {
+        
+        try {
+            String userId = extractUserIdAsString(httpRequest);
+            log.info("뉴스레터 카카오톡 발송 테스트 요청 - userId: {}", userId);
+            
+            // 테스트용 뉴스레터 생성
+            NewsletterContent testContent = createTestNewsletterContent();
+            
+            // 카카오톡 발송 테스트 (시뮬레이션 모드)
+            kakaoMessageService.get().sendNewsletterMessage(testContent);
+            
+            Map<String, Object> testResults = new HashMap<>();
+            testResults.put("deliveryMethod", "KAKAO");
+            testResults.put("status", "SENT");
+            testResults.put("sentAt", LocalDateTime.now());
+            testResults.put("contentTitle", testContent.getTitle());
+            testResults.put("contentSections", testContent.getSections().size());
+            testResults.put("totalArticles", testContent.getSections().stream()
+                    .mapToInt(section -> section.getArticles().size())
+                    .sum());
+            testResults.put("note", "카카오톡 발송은 시뮬레이션 모드로 실행되었습니다.");
+            
+            return ResponseEntity.ok(ApiResponse.success(testResults, "뉴스레터 카카오톡 발송 테스트가 완료되었습니다."));
+            
+        } catch (Exception e) {
+            log.error("뉴스레터 카카오톡 발송 테스트 중 오류 발생", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("KAKAO_TEST_ERROR", "뉴스레터 카카오톡 발송 테스트 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 뉴스레터 발송 상태 확인
+     */
+    @GetMapping("/delivery/status/{deliveryId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getDeliveryStatus(
+            @PathVariable Long deliveryId,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            String userId = extractUserIdAsString(httpRequest);
+            log.info("뉴스레터 발송 상태 확인 - deliveryId: {}, userId: {}", deliveryId, userId);
+            
+            // 발송 상태 조회 로직 (실제 구현 필요)
+            Map<String, Object> status = new HashMap<>();
+            status.put("deliveryId", deliveryId);
+            status.put("status", "SENT"); // 임시 상태
+            status.put("sentAt", LocalDateTime.now());
+            status.put("recipientCount", 10);
+            status.put("successCount", 8);
+            status.put("failureCount", 2);
+            
+            return ResponseEntity.ok(ApiResponse.success(status, "발송 상태를 조회했습니다."));
+            
+        } catch (Exception e) {
+            log.error("발송 상태 확인 중 오류 발생", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("STATUS_ERROR", "발송 상태 확인 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 뉴스레터 발송 통계 조회
+     */
+    @GetMapping("/delivery/stats")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getDeliveryStats(
+            HttpServletRequest httpRequest) {
+        
+        try {
+            String userId = extractUserIdAsString(httpRequest);
+            log.info("뉴스레터 발송 통계 조회 - userId: {}", userId);
+            
+            // 발송 통계 조회 로직 (실제 구현 필요)
+            Map<String, Object> stats = new HashMap<>();
+            stats.put("totalDeliveries", 25);
+            stats.put("successfulDeliveries", 23);
+            stats.put("failedDeliveries", 2);
+            stats.put("successRate", 92.0);
+            stats.put("lastDeliveryAt", LocalDateTime.now().minusHours(2));
+            stats.put("averageDeliveryTime", "2.5초");
+            
+            return ResponseEntity.ok(ApiResponse.success(stats, "발송 통계를 조회했습니다."));
+            
+        } catch (Exception e) {
+            log.error("발송 통계 조회 중 오류 발생", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("STATS_ERROR", "발송 통계 조회 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 테스트용 뉴스레터 콘텐츠 생성
+     */
+    private NewsletterContent createTestNewsletterContent() {
+        List<NewsletterContent.Article> articles = new ArrayList<>();
+        
+        // 테스트 뉴스 기사 생성
+        NewsletterContent.Article article1 = NewsletterContent.Article.builder()
+                .title("테스트 뉴스 1: 최신 기술 동향")
+                .summary("인공지능과 머신러닝 기술의 최신 동향을 살펴봅니다.")
+                .url("https://example.com/news/1")
+                .category("IT/과학")
+                .publishedAt(LocalDateTime.now().minusHours(1))
+                .isPersonalized(false)
+                .build();
+        
+        NewsletterContent.Article article2 = NewsletterContent.Article.builder()
+                .title("테스트 뉴스 2: 경제 전망")
+                .summary("올해 경제 전망과 주요 이슈들을 분석합니다.")
+                .url("https://example.com/news/2")
+                .category("경제")
+                .publishedAt(LocalDateTime.now().minusHours(2))
+                .isPersonalized(false)
+                .build();
+        
+        NewsletterContent.Article article3 = NewsletterContent.Article.builder()
+                .title("테스트 뉴스 3: 사회 이슈")
+                .summary("최근 사회적 관심사와 정책 변화를 다룹니다.")
+                .url("https://example.com/news/3")
+                .category("사회")
+                .publishedAt(LocalDateTime.now().minusHours(3))
+                .isPersonalized(true)
+                .build();
+        
+        articles.add(article1);
+        articles.add(article2);
+        articles.add(article3);
+        
+        NewsletterContent.Section section = NewsletterContent.Section.builder()
+                .heading("오늘의 주요 뉴스")
+                .description("최신 뉴스와 트렌딩 정보를 확인하세요")
+                .sectionType("MAIN")
+                .articles(articles)
+                .build();
+        
+        return NewsletterContent.builder()
+                .newsletterId(999L)
+                .userId(1L)
+                .title("테스트 뉴스레터")
+                .subtitle("개발용 테스트 뉴스레터입니다")
+                .sections(List.of(section))
+                .generatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    /**
      * 뉴스레터 예약 발송
      */
     @PostMapping("/delivery/schedule")

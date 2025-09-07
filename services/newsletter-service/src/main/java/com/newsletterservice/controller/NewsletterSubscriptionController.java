@@ -57,13 +57,10 @@ public class NewsletterSubscriptionController extends BaseController {
             }
             
             // 새 구독 생성
-            LocalDateTime now = LocalDateTime.now();
             UserNewsletterSubscription subscription = UserNewsletterSubscription.builder()
                     .userId(userId)
                     .category(category)
                     .isActive(true)
-                    .subscribedAt(now)
-                    .updatedAt(now)
                     .build();
             
             subscriptionRepository.save(subscription);
@@ -193,6 +190,13 @@ public class NewsletterSubscriptionController extends BaseController {
             
             log.info("구독 상태 변경 요청: userId={}, subscriptionId={}, isActive={}", userId, subscriptionId, isActive);
             
+            // 업데이트 전 구독 정보 로그
+            Optional<UserNewsletterSubscription> beforeUpdate = subscriptionRepository.findById(subscriptionId);
+            if (beforeUpdate.isPresent()) {
+                log.info("상태 변경 전 구독 정보: subscriptionId={}, isActive={}, updatedAt={}", 
+                        subscriptionId, beforeUpdate.get().getIsActive(), beforeUpdate.get().getUpdatedAt());
+            }
+            
             Optional<UserNewsletterSubscription> subscription = subscriptionRepository.findById(subscriptionId);
             
             if (subscription.isEmpty() || !subscription.get().getUserId().equals(userId)) {
@@ -210,6 +214,11 @@ public class NewsletterSubscriptionController extends BaseController {
             
             // 업데이트된 구독 정보 다시 조회
             Optional<UserNewsletterSubscription> updatedSubscription = subscriptionRepository.findById(subscriptionId);
+            
+            if (updatedSubscription.isPresent()) {
+                log.info("상태 변경 후 구독 정보: subscriptionId={}, isActive={}, updatedAt={}", 
+                        subscriptionId, updatedSubscription.get().getIsActive(), updatedSubscription.get().getUpdatedAt());
+            }
             
             log.info("구독 상태 변경 완료: userId={}, subscriptionId={}, isActive={}, updatedRows={}", 
                     userId, subscriptionId, isActive, updatedRows);
@@ -315,6 +324,13 @@ public class NewsletterSubscriptionController extends BaseController {
             
             log.info("구독 정보 업데이트 요청: userId={}, subscriptionId={}, request={}", userId, subscriptionId, request);
             
+            // 업데이트 전 구독 정보 로그
+            Optional<UserNewsletterSubscription> beforeUpdate = subscriptionRepository.findById(subscriptionId);
+            if (beforeUpdate.isPresent()) {
+                log.info("업데이트 전 구독 정보: subscriptionId={}, isActive={}, updatedAt={}", 
+                        subscriptionId, beforeUpdate.get().getIsActive(), beforeUpdate.get().getUpdatedAt());
+            }
+            
             Optional<UserNewsletterSubscription> subscription = subscriptionRepository.findById(subscriptionId);
             
             if (subscription.isEmpty() || !subscription.get().getUserId().equals(userId)) {
@@ -339,6 +355,11 @@ public class NewsletterSubscriptionController extends BaseController {
                 
                 // 업데이트된 구독 정보 다시 조회
                 subscription = subscriptionRepository.findById(subscriptionId);
+                
+                if (subscription.isPresent()) {
+                    log.info("업데이트 후 구독 정보: subscriptionId={}, isActive={}, updatedAt={}", 
+                            subscriptionId, subscription.get().getIsActive(), subscription.get().getUpdatedAt());
+                }
             }
             
             Map<String, Object> response = new HashMap<>();

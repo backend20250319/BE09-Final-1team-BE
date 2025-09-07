@@ -42,7 +42,7 @@ public interface UserNewsletterSubscriptionRepository extends JpaRepository<User
     /**
      * 구독 상태 업데이트
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Transactional
     @Query("UPDATE UserNewsletterSubscription s SET s.isActive = :isActive, s.updatedAt = CURRENT_TIMESTAMP WHERE s.userId = :userId AND s.category = :category")
     int updateSubscriptionStatus(@Param("userId") Long userId, @Param("category") String category, @Param("isActive") Boolean isActive);
@@ -50,7 +50,7 @@ public interface UserNewsletterSubscriptionRepository extends JpaRepository<User
     /**
      * 구독 ID로 상태 업데이트
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Transactional
     @Query("UPDATE UserNewsletterSubscription s SET s.isActive = :isActive, s.updatedAt = CURRENT_TIMESTAMP WHERE s.id = :subscriptionId AND s.userId = :userId")
     int updateSubscriptionStatusById(@Param("subscriptionId") Long subscriptionId, @Param("userId") Long userId, @Param("isActive") Boolean isActive);

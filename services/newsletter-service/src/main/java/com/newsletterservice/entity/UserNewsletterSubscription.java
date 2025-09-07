@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -39,8 +38,7 @@ public class UserNewsletterSubscription {
     @Column(name = "subscribed_at", nullable = false, updatable = false)
     private LocalDateTime subscribedAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at", nullable = false, updatable = true)
     private LocalDateTime updatedAt;
 
     @Column(name = "frequency", length = 20)
@@ -82,5 +80,27 @@ public class UserNewsletterSubscription {
      */
     public void deactivateSubscription() {
         this.isActive = false;
+    }
+
+    /**
+     * 엔티티 업데이트 전에 updatedAt 필드를 현재 시간으로 설정
+     */
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 엔티티 생성 전에 subscribedAt과 updatedAt 필드를 현재 시간으로 설정
+     */
+    @PrePersist
+    public void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        if (this.subscribedAt == null) {
+            this.subscribedAt = now;
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = now;
+        }
     }
 }

@@ -138,18 +138,240 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
     @Override
     public String generatePreviewHtml(Long id) {
         try {
-            // 실제 구현에서는 뉴스레터 내용을 기반으로 HTML을 생성해야 하지만,
-            // 현재는 임시로 기본 HTML을 반환
-            return "<html><body><h1>뉴스레터 미리보기</h1><p>뉴스레터 내용이 여기에 표시됩니다.</p></body></html>";
+            log.info("뉴스레터 미리보기 HTML 생성 시작: id={}", id);
+            
+            // 뉴스 데이터 조회
+            List<NewsResponse> latestNews = getLatestNewsForPreview();
+            List<NewsResponse> trendingNews = getTrendingNewsForPreview();
+            List<NewsResponse> categoryNews = getCategoryNewsForPreview();
+            
+            // HTML 템플릿 생성
+            StringBuilder html = new StringBuilder();
+            html.append("<!DOCTYPE html>\n");
+            html.append("<html lang='ko'>\n");
+            html.append("<head>\n");
+            html.append("    <meta charset='UTF-8'>\n");
+            html.append("    <meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
+            html.append("    <title>뉴스레터 미리보기</title>\n");
+            html.append("    <style>\n");
+            html.append("        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }\n");
+            html.append("        .container { max-width: 800px; margin: 0 auto; background-color: white; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }\n");
+            html.append("        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; text-align: center; }\n");
+            html.append("        .header h1 { margin: 0; font-size: 32px; font-weight: 300; }\n");
+            html.append("        .header p { margin: 10px 0 0 0; font-size: 16px; opacity: 0.9; }\n");
+            html.append("        .content { padding: 40px; }\n");
+            html.append("        .section { margin-bottom: 40px; }\n");
+            html.append("        .section-title { font-size: 24px; color: #333; margin-bottom: 20px; border-bottom: 3px solid #667eea; padding-bottom: 10px; }\n");
+            html.append("        .news-item { border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 20px; background-color: #fafafa; transition: all 0.3s ease; }\n");
+            html.append("        .news-item:hover { border-color: #667eea; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); transform: translateY(-2px); }\n");
+            html.append("        .news-title { font-size: 18px; font-weight: 600; color: #333; margin: 0 0 10px 0; }\n");
+            html.append("        .news-title a { color: #333; text-decoration: none; }\n");
+            html.append("        .news-title a:hover { color: #667eea; }\n");
+            html.append("        .news-summary { color: #666; font-size: 16px; line-height: 1.6; margin-bottom: 15px; }\n");
+            html.append("        .news-meta { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: #999; }\n");
+            html.append("        .news-category { background-color: #667eea; color: white; padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: bold; }\n");
+            html.append("        .news-date { color: #999; }\n");
+            html.append("        .footer { background-color: #f8f9fa; padding: 30px; text-align: center; color: #666; font-size: 14px; }\n");
+            html.append("        .preview-badge { position: absolute; top: 20px; right: 20px; background-color: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: bold; }\n");
+            html.append("    </style>\n");
+            html.append("</head>\n");
+            html.append("<body>\n");
+            html.append("    <div class='container'>\n");
+            html.append("        <div class='header'>\n");
+            html.append("            <div class='preview-badge'>미리보기</div>\n");
+            html.append("            <h1>뉴스레터 미리보기</h1>\n");
+            html.append("            <p>최신 뉴스와 트렌딩 정보를 확인하세요</p>\n");
+            html.append("        </div>\n");
+            html.append("        <div class='content'>\n");
+            
+            // 최신 뉴스 섹션
+            if (!latestNews.isEmpty()) {
+                html.append("            <div class='section'>\n");
+                html.append("                <h2 class='section-title'>📰 최신 뉴스</h2>\n");
+                for (NewsResponse news : latestNews) {
+                    html.append("                <div class='news-item'>\n");
+                    html.append("                    <h3 class='news-title'><a href='#'>").append(escapeHtml(news.getTitle())).append("</a></h3>\n");
+                    html.append("                    <p class='news-summary'>").append(escapeHtml(news.getSummary())).append("</p>\n");
+                    html.append("                    <div class='news-meta'>\n");
+                    html.append("                        <span class='news-category'>").append(escapeHtml(news.getCategory())).append("</span>\n");
+                    html.append("                        <span class='news-date'>").append(news.getPublishedAt()).append("</span>\n");
+                    html.append("                    </div>\n");
+                    html.append("                </div>\n");
+                }
+                html.append("            </div>\n");
+            }
+            
+            // 트렌딩 뉴스 섹션
+            if (!trendingNews.isEmpty()) {
+                html.append("            <div class='section'>\n");
+                html.append("                <h2 class='section-title'>🔥 트렌딩 뉴스</h2>\n");
+                for (NewsResponse news : trendingNews) {
+                    html.append("                <div class='news-item'>\n");
+                    html.append("                    <h3 class='news-title'><a href='#'>").append(escapeHtml(news.getTitle())).append("</a></h3>\n");
+                    html.append("                    <p class='news-summary'>").append(escapeHtml(news.getSummary())).append("</p>\n");
+                    html.append("                    <div class='news-meta'>\n");
+                    html.append("                        <span class='news-category'>").append(escapeHtml(news.getCategory())).append("</span>\n");
+                    html.append("                        <span class='news-date'>").append(news.getPublishedAt()).append("</span>\n");
+                    html.append("                    </div>\n");
+                    html.append("                </div>\n");
+                }
+                html.append("            </div>\n");
+            }
+            
+            // 카테고리별 뉴스 섹션
+            if (!categoryNews.isEmpty()) {
+                html.append("            <div class='section'>\n");
+                html.append("                <h2 class='section-title'>📋 카테고리별 뉴스</h2>\n");
+                for (NewsResponse news : categoryNews) {
+                    html.append("                <div class='news-item'>\n");
+                    html.append("                    <h3 class='news-title'><a href='#'>").append(escapeHtml(news.getTitle())).append("</a></h3>\n");
+                    html.append("                    <p class='news-summary'>").append(escapeHtml(news.getSummary())).append("</p>\n");
+                    html.append("                    <div class='news-meta'>\n");
+                    html.append("                        <span class='news-category'>").append(escapeHtml(news.getCategory())).append("</span>\n");
+                    html.append("                        <span class='news-date'>").append(news.getPublishedAt()).append("</span>\n");
+                    html.append("                    </div>\n");
+                    html.append("                </div>\n");
+                }
+                html.append("            </div>\n");
+            }
+            
+            html.append("        </div>\n");
+            html.append("        <div class='footer'>\n");
+            html.append("            <p>이 뉴스레터는 미리보기입니다. 실제 구독 시 더 많은 뉴스와 개인화된 콘텐츠를 받아보실 수 있습니다.</p>\n");
+            html.append("        </div>\n");
+            html.append("    </div>\n");
+            html.append("</body>\n");
+            html.append("</html>");
+            
+            log.info("뉴스레터 미리보기 HTML 생성 완료: id={}, 뉴스 수={}", id, latestNews.size() + trendingNews.size() + categoryNews.size());
+            return html.toString();
+            
         } catch (Exception e) {
             log.error("뉴스레터 미리보기 HTML 생성 실패: id={}", id, e);
-            throw new NewsletterException("뉴스레터 미리보기 생성에 실패했습니다.", "PREVIEW_GENERATION_ERROR");
+            return generateErrorPreviewHtml("뉴스레터 미리보기 생성 실패", "뉴스 데이터를 불러오는 중 오류가 발생했습니다.");
         }
     }
 
     @Override
     public Map<String, Object> getPersonalizationInfo(Long userId) {
         return buildPersonalizationInfo(userId);
+    }
+
+    /**
+     * 미리보기용 최신 뉴스 조회
+     */
+    private List<NewsResponse> getLatestNewsForPreview() {
+        try {
+            log.info("미리보기용 최신 뉴스 조회 시작");
+            ApiResponse<Page<NewsResponse>> response = newsServiceClient.getLatestNews(null, 5);
+            
+            if (response.isSuccess() && response.getData() != null) {
+                List<NewsResponse> news = response.getData().getContent();
+                log.info("미리보기용 최신 뉴스 조회 완료: {}개", news.size());
+                return news;
+            } else {
+                log.warn("미리보기용 최신 뉴스 조회 실패: {}", response.getMessage());
+                return new ArrayList<>();
+            }
+        } catch (Exception e) {
+            log.error("미리보기용 최신 뉴스 조회 중 오류 발생", e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 미리보기용 트렌딩 뉴스 조회
+     */
+    private List<NewsResponse> getTrendingNewsForPreview() {
+        try {
+            log.info("미리보기용 트렌딩 뉴스 조회 시작");
+            ApiResponse<Page<NewsResponse>> response = newsServiceClient.getTrendingNews(24, 5);
+            
+            if (response.isSuccess() && response.getData() != null) {
+                List<NewsResponse> news = response.getData().getContent();
+                log.info("미리보기용 트렌딩 뉴스 조회 완료: {}개", news.size());
+                return news;
+            } else {
+                log.warn("미리보기용 트렌딩 뉴스 조회 실패: {}", response.getMessage());
+                return new ArrayList<>();
+            }
+        } catch (Exception e) {
+            log.error("미리보기용 트렌딩 뉴스 조회 중 오류 발생", e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 미리보기용 카테고리별 뉴스 조회
+     */
+    private List<NewsResponse> getCategoryNewsForPreview() {
+        try {
+            log.info("미리보기용 카테고리별 뉴스 조회 시작");
+            List<NewsResponse> allCategoryNews = new ArrayList<>();
+            
+            // 주요 카테고리들에서 뉴스 조회
+            String[] categories = {"정치", "경제", "사회", "IT/과학"};
+            
+            for (String category : categories) {
+                try {
+                    String englishCategory = convertToEnglishCategory(category);
+                    ApiResponse<Page<NewsResponse>> response = newsServiceClient.getNewsByCategory(englishCategory, 0, 2);
+                    
+                    if (response.isSuccess() && response.getData() != null) {
+                        List<NewsResponse> news = response.getData().getContent();
+                        allCategoryNews.addAll(news);
+                    }
+                } catch (Exception e) {
+                    log.warn("카테고리 {} 뉴스 조회 실패", category, e);
+                }
+            }
+            
+            log.info("미리보기용 카테고리별 뉴스 조회 완료: {}개", allCategoryNews.size());
+            return allCategoryNews;
+        } catch (Exception e) {
+            log.error("미리보기용 카테고리별 뉴스 조회 중 오류 발생", e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * HTML 이스케이프 처리
+     */
+    private String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                  .replace("<", "&lt;")
+                  .replace(">", "&gt;")
+                  .replace("\"", "&quot;")
+                  .replace("'", "&#39;");
+    }
+
+    /**
+     * 에러 미리보기 HTML 생성
+     */
+    private String generateErrorPreviewHtml(String title, String message) {
+        StringBuilder html = new StringBuilder();
+        html.append("<!DOCTYPE html>\n");
+        html.append("<html lang='ko'>\n");
+        html.append("<head>\n");
+        html.append("    <meta charset='UTF-8'>\n");
+        html.append("    <meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
+        html.append("    <title>").append(escapeHtml(title)).append("</title>\n");
+        html.append("    <style>\n");
+        html.append("        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; }\n");
+        html.append("        .error-container { max-width: 600px; background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; }\n");
+        html.append("        .error-title { color: #e74c3c; font-size: 24px; margin-bottom: 20px; }\n");
+        html.append("        .error-message { color: #666; font-size: 16px; line-height: 1.6; }\n");
+        html.append("    </style>\n");
+        html.append("</head>\n");
+        html.append("<body>\n");
+        html.append("    <div class='error-container'>\n");
+        html.append("        <h1 class='error-title'>").append(escapeHtml(title)).append("</h1>\n");
+        html.append("        <p class='error-message'>").append(escapeHtml(message)).append("</p>\n");
+        html.append("    </div>\n");
+        html.append("</body>\n");
+        html.append("</html>");
+        return html.toString();
     }
 
     @Override

@@ -25,6 +25,9 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
             "/api/news/summary",
             "/api/news/summary/**",
             "/api/news/*/summary",
+            "/api/trending/**",  // 트렌딩 API는 인증 필터 건너뛰기
+            "/api/categories/**", // 카테고리 API는 인증 필터 건너뛰기
+            "/api/search/**",    // 검색 API는 인증 필터 건너뛰기
             "/swagger-ui/**", "/v3/api-docs/**",
             "/actuator/**", "/health", "/error"
     };
@@ -33,9 +36,23 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
+        // 건너뛸 경로인지 확인
+        String requestPath = request.getRequestURI();
+        for (String skipPath : SKIP) {
+            if (PATH.match(skipPath, requestPath)) {
+                log.debug("인증 필터 건너뛰기: {}", requestPath);
+                filterChain.doFilter(request, response);
+                return;
+            }
+        }
+
         // API Gateway가 전달한 헤더 읽기
         String userId = request.getHeader("X-User-Id");
         String userRole = request.getHeader("X-User-Role");
+        
+        // 서비스간 통신 헤더 확인
+        String serviceName = request.getHeader("X-Service-Name");
+        String serviceCall = request.getHeader("X-Service-Call");
 
         if (userId != null && userRole != null) {
             log.info("✅ [News-Service] Authenticating user ID: {}, Role: {}", userId, userRole);
@@ -46,6 +63,17 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
                     userId,
                     null,
                     Collections.singletonList(new SimpleGrantedAuthority(userRole))
+            );
+
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        } else if (serviceName != null && "true".equals(serviceCall)) {
+            log.info("✅ [News-Service] Service-to-service call from: {}", serviceName);
+            
+            // 서비스간 통신을 위한 인증 객체 생성
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                    "service-" + serviceName,
+                    null,
+                    Collections.singletonList(new SimpleGrantedAuthority("SERVICE"))
             );
 
             SecurityContextHolder.getContext().setAuthentication(authentication);

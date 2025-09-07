@@ -22,7 +22,7 @@ public interface UserServiceClient {
      * @param userId 사용자 ID
      * @return MyPageResponse 사용자 정보
      */
-    @GetMapping("/api/users/mypage")
+    @GetMapping("/api/users/{userId}")
     MyPageResponse getUserInfo(@PathVariable("userId") Long userId);
 
     /**
@@ -54,6 +54,16 @@ public interface UserServiceClient {
      * @param userId 사용자 ID
      * @return Map<카테고리, 선호도점수> 관심사 점수 맵
      */
+    @GetMapping("/api/users/{userId}/interests/score-map")
+    Map<String, Double> getUserInterestScoreMap(@PathVariable("userId") Long userId);
+
+    /**
+     * 사용자의 카카오 토큰 조회
+     * @param userId 사용자 ID
+     * @return 카카오 액세스 토큰
+     */
+    @GetMapping("/api/auth/tokens/kakao/{userId}")
+    String getKakaoToken(@PathVariable("userId") String userId);
     @GetMapping("/api/users/{userId}/interest-scores")
     Map<String, Double> getInterestScores(@PathVariable("userId") Long userId);
 

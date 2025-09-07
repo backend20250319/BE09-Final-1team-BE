@@ -1,5 +1,6 @@
 package com.newsletterservice.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.newsletterservice.common.exception.NewsletterException;
 import com.newsletterservice.dto.KakaoFriend;
 import com.newsletterservice.dto.KakaoTokenInfo;
@@ -17,6 +18,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +29,7 @@ public class KakaoApiService {
 
     @Qualifier("kakaoWebClient")
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
 
     @Value("${kakao.app-key:your-app-key}")
     private String kakaoAppKey;
@@ -174,6 +177,9 @@ public class KakaoApiService {
                     throw new NewsletterException("친구 API 사용 권한이 없습니다.", "KAKAO_FRIEND_PERMISSION_ERROR");
                 } else if (errorBody.contains("KOE007")) {
                     throw new NewsletterException("메시지 API 사용 권한이 없습니다.", "KAKAO_MESSAGE_PERMISSION_ERROR");
+                } else if (errorBody.contains("-402")) {
+                    // -402 에러: insufficient scopes - 추가 동의 필요
+                    throw new NewsletterException("추가 동의가 필요합니다.", "KAKAO_INSUFFICIENT_SCOPES", errorBody);
                 } else {
                     throw new NewsletterException("API 사용 권한이 없습니다.", "KAKAO_FORBIDDEN");
                 }
@@ -325,6 +331,229 @@ public class KakaoApiService {
         } catch (Exception e) {
             log.error("카카오 연결 해제 실패", e);
             throw new NewsletterException("카카오 연결 해제에 실패했습니다.", "KAKAO_UNLINK_ERROR");
+        }
+    }
+
+    /**
+     * 카카오톡 메시지 전송 권한 확인
+     * GET https://kapi.kakao.com/v2/user/scopes
+     */
+    public boolean hasTalkMessagePermission(String accessToken) {
+        try {
+            Map<String, Object> response = webClient
+                .get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/v2/user/scopes")
+                    .queryParam("scopes", "[\"talk_message\"]")
+                    .build())
+                .header("Authorization", "Bearer " + accessToken)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .timeout(Duration.ofSeconds(30))
+                .block();
+
+            if (response != null && response.containsKey("scopes")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> scopes = (List<Map<String, Object>>) response.get("scopes");
+                
+                return scopes.stream()
+                    .anyMatch(scope -> "talk_message".equals(scope.get("id")) && 
+                             Boolean.TRUE.equals(scope.get("agreed")));
+            }
+            
+            return false;
+
+        } catch (WebClientResponseException e) {
+            log.error("카카오톡 메시지 권한 확인 실패: statusCode={}, body={}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            // 권한 확인 실패 시 false 반환 (안전한 기본값)
+            return false;
+        } catch (Exception e) {
+            log.error("카카오톡 메시지 권한 확인 실패", e);
+            return false;
+        }
+    }
+
+    /**
+     * 사용자 동의항목 조회
+     * GET https://kapi.kakao.com/v2/user/scopes
+     */
+    public Map<String, Object> getUserScopes(String accessToken) {
+        try {
+            Map<String, Object> response = webClient
+                .get()
+                .uri("/v2/user/scopes")
+                .header("Authorization", "Bearer " + accessToken)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .timeout(Duration.ofSeconds(30))
+                .block();
+
+            log.info("카카오 사용자 동의항목 조회 성공");
+            return response;
+
+        } catch (WebClientResponseException e) {
+            log.error("카카오 사용자 동의항목 조회 실패: statusCode={}, body={}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            handleKakaoApiError(e);
+            return null;
+        } catch (Exception e) {
+            log.error("카카오 사용자 동의항목 조회 실패", e);
+            throw new NewsletterException("카카오 사용자 동의항목 조회에 실패했습니다.", "KAKAO_SCOPES_ERROR");
+        }
+    }
+
+    /**
+     * 특정 동의항목 조회
+     * GET https://kapi.kakao.com/v2/user/scopes?scopes=["scope1","scope2"]
+     */
+    public Map<String, Object> getUserScopes(String accessToken, List<String> scopes) {
+        try {
+            Map<String, Object> response = webClient
+                .get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/v2/user/scopes")
+                    .queryParam("scopes", "[" + String.join(",", scopes.stream().map(s -> "\"" + s + "\"").toList()) + "]")
+                    .build())
+                .header("Authorization", "Bearer " + accessToken)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .timeout(Duration.ofSeconds(30))
+                .block();
+
+            log.info("카카오 특정 동의항목 조회 성공: scopes={}", scopes);
+            return response;
+
+        } catch (WebClientResponseException e) {
+            log.error("카카오 특정 동의항목 조회 실패: statusCode={}, body={}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            handleKakaoApiError(e);
+            return null;
+        } catch (Exception e) {
+            log.error("카카오 특정 동의항목 조회 실패", e);
+            throw new NewsletterException("카카오 특정 동의항목 조회에 실패했습니다.", "KAKAO_SCOPES_ERROR");
+        }
+    }
+
+    /**
+     * 동의 필요 여부 확인
+     * 동의항목 동의 내역 조회 API 응답에서 agreed=false인 항목들을 찾아 반환
+     */
+    public List<String> getRequiredConsentScopes(String accessToken, List<String> requiredScopes) {
+        try {
+            Map<String, Object> scopesResponse = getUserScopes(accessToken, requiredScopes);
+            if (scopesResponse == null || !scopesResponse.containsKey("scopes")) {
+                return requiredScopes; // 조회 실패 시 모든 스코프를 필요로 간주
+            }
+
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> scopes = (List<Map<String, Object>>) scopesResponse.get("scopes");
+            
+            return scopes.stream()
+                .filter(scope -> !Boolean.TRUE.equals(scope.get("agreed")))
+                .map(scope -> (String) scope.get("id"))
+                .toList();
+
+        } catch (Exception e) {
+            log.error("동의 필요 스코프 확인 실패", e);
+            return requiredScopes; // 에러 시 모든 스코프를 필요로 간주
+        }
+    }
+
+    /**
+     * 추가 동의 URL 생성
+     * https://kauth.kakao.com/oauth/authorize?client_id={REST_API_KEY}&redirect_uri={REDIRECT_URI}&response_type=code&scope={SCOPE}
+     */
+    public String generateAdditionalConsentUrl(String accessToken, List<String> scopes) {
+        try {
+            // 현재 사용자 정보 조회
+            KakaoUserInfo userInfo = getUserInfo(accessToken);
+            if (userInfo == null) {
+                throw new NewsletterException("사용자 정보를 조회할 수 없습니다.", "KAKAO_USER_INFO_ERROR");
+            }
+
+            // 실제로 동의가 필요한 스코프만 필터링
+            List<String> requiredScopes = getRequiredConsentScopes(accessToken, scopes);
+            if (requiredScopes.isEmpty()) {
+                log.info("추가 동의가 필요한 스코프가 없습니다: userId={}", userInfo.getId());
+                return null; // 모든 스코프에 이미 동의함
+            }
+
+            // OpenID Connect 활성화 앱의 경우 openid 스코프 추가
+            List<String> finalScopes = new ArrayList<>(requiredScopes);
+            if (!finalScopes.contains("openid")) {
+                finalScopes.add("openid");
+            }
+
+            // 추가 동의 URL 생성
+            String scopeParam = String.join(",", finalScopes);
+            String consentUrl = String.format(
+                "https://kauth.kakao.com/oauth/authorize?client_id=%s&redirect_uri=%s&response_type=code&scope=%s",
+                kakaoAppKey,
+                "https://your-app-domain.com/auth/kakao/callback", // 실제 리다이렉트 URI로 변경 필요
+                scopeParam
+            );
+
+            log.info("카카오 추가 동의 URL 생성 성공: userId={}, requiredScopes={}", userInfo.getId(), requiredScopes);
+            return consentUrl;
+
+        } catch (Exception e) {
+            log.error("카카오 추가 동의 URL 생성 실패", e);
+            throw new NewsletterException("카카오 추가 동의 URL 생성에 실패했습니다.", "KAKAO_CONSENT_URL_ERROR");
+        }
+    }
+
+    /**
+     * -402 에러 응답에서 required_scopes 추출
+     */
+    public List<String> extractRequiredScopesFromError(String errorResponse) {
+        try {
+            // JSON 파싱하여 required_scopes 추출
+            @SuppressWarnings("unchecked")
+            Map<String, Object> errorMap = objectMapper.readValue(errorResponse, Map.class);
+            
+            @SuppressWarnings("unchecked")
+            List<String> requiredScopes = (List<String>) errorMap.get("required_scopes");
+            
+            return requiredScopes != null ? requiredScopes : List.of();
+            
+        } catch (Exception e) {
+            log.error("에러 응답에서 required_scopes 추출 실패", e);
+            return List.of();
+        }
+    }
+
+    /**
+     * 동의항목 철회
+     * POST https://kapi.kakao.com/v1/user/revoke/scopes
+     */
+    public Map<String, Object> revokeScopes(String accessToken, List<String> scopes) {
+        try {
+            MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+            scopes.forEach(scope -> params.add("scopes", scope));
+
+            Map<String, Object> response = webClient
+                .post()
+                .uri("/v1/user/revoke/scopes")
+                .header("Authorization", "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .bodyValue(params)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .timeout(Duration.ofSeconds(30))
+                .block();
+
+            log.info("카카오 동의항목 철회 성공: scopes={}", scopes);
+            return response;
+
+        } catch (WebClientResponseException e) {
+            log.error("카카오 동의항목 철회 실패: statusCode={}, body={}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            handleKakaoApiError(e);
+            return null;
+        } catch (Exception e) {
+            log.error("카카오 동의항목 철회 실패", e);
+            throw new NewsletterException("카카오 동의항목 철회에 실패했습니다.", "KAKAO_SCOPE_REVOKE_ERROR");
         }
     }
 }

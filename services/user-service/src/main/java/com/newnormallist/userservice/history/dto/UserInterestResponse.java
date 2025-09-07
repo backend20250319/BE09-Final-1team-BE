@@ -1,19 +1,21 @@
 package com.newnormallist.userservice.history.dto;
 
-import com.newnormallist.userservice.user.entity.NewsCategory;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Data;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 import java.util.Map;
 
-@Getter
+@Data
 @Builder
+@NoArgsConstructor
 @AllArgsConstructor
 public class UserInterestResponse {
-    private final Long userId;
-    private final List<NewsCategory> topInterests;
-    private final Map<NewsCategory, Double> interestScores;
-    private final String interestSummary;
+    private Long userId;
+    private List<String> topInterests;
+    private Map<String, Double> interestScores;
+    private String analysisSummary;
 }

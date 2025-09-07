@@ -3,6 +3,7 @@ package com.newsletterservice.service;
 import com.newsletterservice.client.UserServiceClient;
 import com.newsletterservice.client.NewsServiceClient;
 import com.newsletterservice.client.dto.NewsResponse;
+import com.newsletterservice.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -92,8 +93,9 @@ public class PersonalizedRecommendationService {
             if (categoryLimit > 0) {
                 try {
                     // 카테고리별 뉴스 조회
-                    Page<NewsResponse> categoryNewsPage = newsServiceClient.getNewsByCategory(
+                    ApiResponse<Page<NewsResponse>> categoryNewsResponse = newsServiceClient.getNewsByCategory(
                         category, 0, categoryLimit * 2); // 여분 확보
+                    Page<NewsResponse> categoryNewsPage = categoryNewsResponse.getData();
                     
                     List<NewsResponse> categoryNews = categoryNewsPage.getContent().stream()
                         .filter(news -> !readNewsIds.contains(news.getNewsId())) // 중복 제거
@@ -149,8 +151,9 @@ public class PersonalizedRecommendationService {
             int categoryLimit = Math.max(1, (int) Math.ceil(limit * ratio));
             
             try {
-                Page<NewsResponse> categoryNewsPage = newsServiceClient.getNewsByCategory(
+                ApiResponse<Page<NewsResponse>> categoryNewsResponse = newsServiceClient.getNewsByCategory(
                     category, 0, categoryLimit * 2);
+                Page<NewsResponse> categoryNewsPage = categoryNewsResponse.getData();
                 
                 List<NewsResponse> categoryNews = categoryNewsPage.getContent().stream()
                     .filter(news -> !readNewsIds.contains(news.getNewsId()))
@@ -181,7 +184,8 @@ public class PersonalizedRecommendationService {
     private List<NewsResponse> getTrendingNewsForNewUser(Set<Long> readNewsIds, int limit) {
         try {
             // 트렌딩 뉴스 조회
-            Page<NewsResponse> trendingPage = newsServiceClient.getTrendingNews(24, limit * 2);
+            ApiResponse<Page<NewsResponse>> trendingResponse = newsServiceClient.getTrendingNews(24, limit * 2);
+            Page<NewsResponse> trendingPage = trendingResponse.getData();
             
             return trendingPage.getContent().stream()
                 .filter(news -> !readNewsIds.contains(news.getNewsId()))
@@ -193,7 +197,8 @@ public class PersonalizedRecommendationService {
             
             // 폴백: 인기 뉴스
             try {
-                Page<NewsResponse> popularPage = newsServiceClient.getPopularNews(limit);
+                ApiResponse<Page<NewsResponse>> popularResponse = newsServiceClient.getPopularNews(limit);
+                Page<NewsResponse> popularPage = popularResponse.getData();
                 return popularPage.getContent().stream()
                     .filter(news -> !readNewsIds.contains(news.getNewsId()))
                     .limit(limit)
@@ -265,8 +270,9 @@ public class PersonalizedRecommendationService {
             score += (0.4 * (1.0 - rank * 0.2)); // 순위에 따른 차등 점수
         }
         
-        // 2. 인기도 점수 (30%)
-        score += calculatePopularityScore(news) * 0.3;
+        // 2. 인기도 점수 (30%) - 조회수와 공유수를 기반으로 계산
+        double popularityScore = calculatePopularityScore(news);
+        score += popularityScore * 0.3;
         
         // 3. 최신성 점수 (20%)
         score += calculateRecencyScore(news) * 0.2;
@@ -283,43 +289,15 @@ public class PersonalizedRecommendationService {
         return score;
     }
 
-    /**
-     * 인기도 점수 계산 (0~1)
-     */
-    private double calculatePopularityScore(NewsResponse news) {
-        // 뉴스 조회수 기반 (실제로는 news-service에서 제공되어야 함)
-        // 현재는 간단한 더미 로직
-        return 0.5; // TODO: 실제 인기도 지표 연동
-    }
 
-    /**
-     * 최신성 점수 계산 (0~1)
-     */
-    private double calculateRecencyScore(NewsResponse news) {
-        if (news.getPublishedAt() == null) {
-            return 0.5;
-        }
-        
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime publishedAt = news.getPublishedAt();
-        
-        long hoursOld = ChronoUnit.HOURS.between(publishedAt, now);
-        
-        // 24시간 이내: 1.0, 그 이후 지수적 감소
-        if (hoursOld <= 24) {
-            return 1.0 - (hoursOld / 24.0) * 0.3; // 24시간 후 0.7
-        } else {
-            return Math.max(0.1, 0.7 * Math.exp(-(hoursOld - 24) / 72.0)); // 3일 반감기
-        }
-    }
 
     /**
      * 사용자별 최적 뉴스레터 빈도 결정
      */
     public String getOptimalNewsletterFrequency(Long userId) {
         try {
-            ResponseEntity<String> response = userServiceClient.getOptimalNewsletterFrequency(userId);
-            return response.getBody() != null ? response.getBody() : "WEEKLY";
+            ApiResponse<String> response = userServiceClient.getOptimalNewsletterFrequency(userId);
+            return response.getData() != null ? response.getData() : "WEEKLY";
             
         } catch (Exception e) {
             log.error("최적 뉴스레터 빈도 계산 실패: userId={}", userId, e);
@@ -425,4 +403,54 @@ public class PersonalizedRecommendationService {
             }
         }
     }
+
+    /**
+     * 뉴스의 인기도 점수 계산
+     * 
+     * @param news 뉴스 정보
+     * @return 인기도 점수 (0.0 ~ 1.0)
+     */
+    private double calculatePopularityScore(NewsResponse news) {
+        if (news == null) {
+            return 0.0;
+        }
+
+        // 조회수와 공유수를 기반으로 인기도 점수 계산
+        long viewCount = news.getViewCount() != null ? news.getViewCount() : 0;
+        long shareCount = news.getShareCount() != null ? news.getShareCount() : 0;
+        
+        // 로그 스케일링을 사용하여 점수 정규화
+        double viewScore = Math.log10(Math.max(viewCount, 1)) / 6.0; // 최대 1M 조회수 기준
+        double shareScore = Math.log10(Math.max(shareCount, 1)) / 4.0; // 최대 10K 공유수 기준
+        
+        // 가중 평균 (조회수 70%, 공유수 30%)
+        double popularityScore = (viewScore * 0.7) + (shareScore * 0.3);
+        
+        return Math.min(popularityScore, 1.0); // 최대 1.0으로 제한
+    }
+
+    /**
+     * 뉴스의 최신성 점수 계산
+     * 
+     * @param news 뉴스 정보
+     * @return 최신성 점수 (0.0 ~ 1.0)
+     */
+    private double calculateRecencyScore(NewsResponse news) {
+        if (news == null || news.getPublishedAt() == null) {
+            return 0.0;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime publishedAt = news.getPublishedAt();
+        
+        // 발행 시간으로부터 경과된 시간 (시간 단위)
+        long hoursElapsed = ChronoUnit.HOURS.between(publishedAt, now);
+        
+        // 시간이 지날수록 점수 감소 (지수적 감소)
+        // 1시간: 1.0, 6시간: 0.5, 24시간: 0.1, 72시간: 0.01
+        double recencyScore = Math.exp(-hoursElapsed / 8.0); // 반감기 8시간
+        
+        return Math.min(recencyScore, 1.0); // 최대 1.0으로 제한
+    }
+
 }

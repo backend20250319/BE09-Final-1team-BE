@@ -20,6 +20,7 @@ import java.time.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.*;
+import java.util.Optional;
 
 /**
  * 뉴스레터 서비스 - 주요 기능만 담당 (SRP 준수)
@@ -37,7 +38,7 @@ public class NewsletterService {
     private final NewsletterContentService contentService;
     private final NewsletterDeliveryService deliveryService;
     private final NewsletterAnalyticsService analyticsService;
-    private final EmailService emailService;
+    private final Optional<EmailService> emailService;
     
     private final NewsServiceClient newsServiceClient;
     private final UserServiceClient userServiceClient;
@@ -145,6 +146,7 @@ public class NewsletterService {
             if (response != null && response.getData() != null) {
                 return response.getData().stream()
                         .map(TrendingKeywordDto::getKeyword)
+                        .filter(this::isValidKeywordForNewsletter)
                         .collect(Collectors.toList());
             }
         } catch (Exception e) {
@@ -160,6 +162,7 @@ public class NewsletterService {
             if (response != null && response.getData() != null) {
                 return response.getData().stream()
                         .map(TrendingKeywordDto::getKeyword)
+                        .filter(this::isValidKeywordForNewsletter)
                         .collect(Collectors.toList());
             }
         } catch (Exception e) {
@@ -168,6 +171,40 @@ public class NewsletterService {
         return new ArrayList<>();
     }
 
+
+    /**
+     * Newsletter Service에서 사용할 키워드 유효성 검사 (추가 안전장치)
+     */
+    private boolean isValidKeywordForNewsletter(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return false;
+        }
+        
+        // 1. 최소 길이 체크
+        if (keyword.length() < 2) {
+            return false;
+        }
+        
+        // 2. 추가적인 의미없는 단어들 필터링
+        String[] additionalStopWords = {
+            "없습니다", "추출할", "내용을", "영화의", "기사의", "뉴스의",
+            "관련", "대한", "위해", "통해", "있는", "같은", "이런", "그런",
+            "하는", "되는", "이되는", "되는", "되는", "되는", "되는"
+        };
+        
+        for (String stopWord : additionalStopWords) {
+            if (keyword.contains(stopWord)) {
+                return false;
+            }
+        }
+        
+        // 3. 특수문자나 숫자만으로 구성된 키워드 제외
+        if (keyword.matches("^[^가-힣A-Za-z]*$")) {
+            return false;
+        }
+        
+        return true;
+    }
 
     // ========================================
     // 7. 카테고리 및 통계 관리 (위임)
@@ -249,6 +286,11 @@ public class NewsletterService {
      * @param newsletterId 뉴스레터 ID
      */
     public void sendPersonalizedEmailNewsletter(Long userId, Long newsletterId) {
+        if (emailService.isEmpty()) {
+            log.warn("EmailService가 사용할 수 없습니다. 이메일 뉴스레터 전송을 건너뜁니다.");
+            return;
+        }
+        
         try {
             log.info("개인화된 이메일 뉴스레터 전송: userId={}, newsletterId={}", userId, newsletterId);
 
@@ -256,7 +298,7 @@ public class NewsletterService {
             NewsletterContent content = contentService.buildPersonalizedContent(userId, newsletterId);
             
             // 이메일 템플릿 생성
-            EmailTemplate template = emailService.createNewsletterTemplate(content);
+            EmailTemplate template = emailService.get().createNewsletterTemplate(content);
             
             // 사용자 이메일 주소 조회 (user-service에서)
             List<String> userEmails = getUserEmailAddress(userId);
@@ -267,7 +309,7 @@ public class NewsletterService {
             }
 
             // 이메일 전송
-            emailService.sendBulkEmail(userEmails, template);
+            emailService.get().sendBulkEmail(userEmails, template);
             
             log.info("개인화된 이메일 뉴스레터 전송 완료: userId={}, newsletterId={}", userId, newsletterId);
 
@@ -284,7 +326,11 @@ public class NewsletterService {
      * @param content 테스트 내용
      */
     public void sendTestEmail(String to, String subject, String content) {
-        emailService.sendTestEmail(to, subject, content);
+        if (emailService.isEmpty()) {
+            log.warn("EmailService가 사용할 수 없습니다. 테스트 이메일 전송을 건너뜁니다.");
+            return;
+        }
+        emailService.get().sendTestEmail(to, subject, content);
     }
 
     /**
@@ -332,11 +378,16 @@ public class NewsletterService {
      * @param content 뉴스레터 콘텐츠
      */
     public void sendEmailNewsletter(NewsletterContent content) {
+        if (emailService.isEmpty()) {
+            log.warn("EmailService가 사용할 수 없습니다. 이메일 뉴스레터 전송을 건너뜁니다.");
+            return;
+        }
+        
         try {
             log.info("이메일 뉴스레터 전송: newsletterId={}", content.getNewsletterId());
             
             // 이메일 템플릿 생성
-            EmailTemplate template = emailService.createNewsletterTemplate(content);
+            EmailTemplate template = emailService.get().createNewsletterTemplate(content);
             
             // 구독자 이메일 목록 조회 (user-service에서)
             List<String> userEmails = getEmailNewsletterSubscribers();
@@ -347,7 +398,7 @@ public class NewsletterService {
             }
 
             // 이메일 전송
-            emailService.sendBulkEmail(userEmails, template);
+            emailService.get().sendBulkEmail(userEmails, template);
             
             log.info("이메일 뉴스레터 전송 완료: newsletterId={}, recipientCount={}", 
                     content.getNewsletterId(), userEmails.size());

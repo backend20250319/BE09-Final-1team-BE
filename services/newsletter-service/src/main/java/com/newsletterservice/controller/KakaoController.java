@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +23,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Kakao API", description = "카카오 로그인, 친구목록, 메시지 API")
+@ConditionalOnProperty(name = "kakao.api.enabled", havingValue = "true", matchIfMissing = false)
 public class KakaoController {
 
     private final KakaoApiService kakaoApiService;

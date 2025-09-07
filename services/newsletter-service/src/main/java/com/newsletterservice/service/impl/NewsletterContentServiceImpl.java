@@ -197,6 +197,7 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
             result.put("articles", newsList);
             result.put("trendingKeywords", trendingKeywords.stream()
                     .map(TrendingKeywordDto::getKeyword)
+                    .filter(this::isValidKeywordForNewsletter)
                     .collect(Collectors.toList()));
             
             return result;
@@ -448,6 +449,39 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
         }
     }
 
+    /**
+     * Newsletter Service에서 사용할 키워드 유효성 검사 (추가 안전장치)
+     */
+    private boolean isValidKeywordForNewsletter(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return false;
+        }
+        
+        // 1. 최소 길이 체크
+        if (keyword.length() < 2) {
+            return false;
+        }
+        
+        // 2. 추가적인 의미없는 단어들 필터링
+        String[] additionalStopWords = {
+            "없습니다", "추출할", "내용을", "영화의", "기사의", "뉴스의",
+            "관련", "대한", "위해", "통해", "있는", "같은", "이런", "그런",
+            "하는", "되는", "이되는"
+        };
+        
+        for (String stopWord : additionalStopWords) {
+            if (keyword.contains(stopWord)) {
+                return false;
+            }
+        }
+        
+        // 3. 특수문자나 숫자만으로 구성된 키워드 제외
+        if (keyword.matches("^[^가-힣A-Za-z]*$")) {
+            return false;
+        }
+        
+        return true;
+    }
 
     private List<NewsResponse> fetchDefaultNews() {
         try {

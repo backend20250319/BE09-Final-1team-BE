@@ -1015,7 +1015,7 @@ public class NewsServiceImpl implements NewsService {
     }
     
     /**
-     * 텍스트에서 키워드 추출
+     * 텍스트에서 키워드 추출 - 개선된 필터링 로직
      */
     private List<String> extractKeywordsFromText(String text) {
         if (text == null || text.trim().isEmpty()) {
@@ -1035,44 +1035,8 @@ public class NewsServiceImpl implements NewsService {
             // 2. 특수문자 제거 (한글, 영문, 숫자만 남김)
             String cleanedWord = word.replaceAll("[^가-힣0-9A-Za-z]", "");
             
-            // 3. 더 관대한 키워드 필터링 조건
-            if (cleanedWord.length() >= 2 && 
-                !STOPWORDS.contains(cleanedWord) &&
-                !cleanedWord.equals("있다") && 
-                !cleanedWord.equals("없다") && 
-                !cleanedWord.equals("하다") && 
-                !cleanedWord.equals("되다") && 
-                !cleanedWord.equals("이다") &&
-                !cleanedWord.equals("것") &&
-                !cleanedWord.equals("수") &&
-                !cleanedWord.equals("등") &&
-                !cleanedWord.equals("및") &&
-                !cleanedWord.equals("또는") &&
-                !cleanedWord.equals("그리고") &&
-                !cleanedWord.equals("이번") &&
-                !cleanedWord.equals("지난") &&
-                !cleanedWord.equals("현재") &&
-                !cleanedWord.equals("최대") &&
-                !cleanedWord.equals("최소") &&
-                !cleanedWord.equals("현장") &&
-                !cleanedWord.equals("관련") &&
-                !cleanedWord.equals("기자") &&
-                !cleanedWord.equals("사진") &&
-                !cleanedWord.equals("영상") &&
-                !cleanedWord.equals("단독") &&
-                !cleanedWord.equals("인터뷰") &&
-                !cleanedWord.equals("종합") &&
-                !cleanedWord.equals("오늘") &&
-                !cleanedWord.equals("내일") &&
-                !cleanedWord.equals("정부") &&
-                !cleanedWord.equals("대통령") &&
-                !cleanedWord.equals("국회") &&
-                !cleanedWord.equals("한국") &&
-                !cleanedWord.equals("대한민국") &&
-                !cleanedWord.equals("뉴스") &&
-                !cleanedWord.equals("기사") &&
-                !cleanedWord.equals("외신")) {
-                
+            // 3. 개선된 키워드 필터링 조건
+            if (isValidKeyword(cleanedWord)) {
                 keywords.add(cleanedWord);
                 log.debug("추출된 키워드: '{}' (원본: '{}')", cleanedWord, word);
             }
@@ -1080,6 +1044,69 @@ public class NewsServiceImpl implements NewsService {
         
         log.debug("텍스트에서 추출된 키워드 수: {}", keywords.size());
         return keywords;
+    }
+    
+    /**
+     * 키워드 유효성 검사 - 체계적인 필터링
+     */
+    private boolean isValidKeyword(String word) {
+        if (word == null || word.length() < 2) {
+            return false;
+        }
+        
+        // 1. 불용어 목록에 포함된 단어 제외
+        if (STOPWORDS.contains(word)) {
+            return false;
+        }
+        
+        // 2. 숫자만으로 구성된 단어 제외 (연도, 날짜 등)
+        if (word.matches("^\\d+$")) {
+            return false;
+        }
+        
+        // 3. 특수 패턴 제외
+        if (word.matches(".*[#@$%^&*()].*")) {
+            return false;
+        }
+        
+        // 4. 너무 짧은 영문 단어 제외 (2글자 이하)
+        if (word.matches("^[A-Za-z]{1,2}$")) {
+            return false;
+        }
+        
+        // 5. 반복 문자 패턴 제외 (예: "ㅋㅋㅋ", "ㅎㅎㅎ")
+        if (word.matches("(.)\\1{2,}")) {
+            return false;
+        }
+        
+        // 6. 의미없는 조합어 제외
+        if (isMeaninglessCombination(word)) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 의미없는 조합어 판별
+     */
+    private boolean isMeaninglessCombination(String word) {
+        // 의미없는 조합어 패턴들
+        String[] meaninglessPatterns = {
+            "영화의", "기사의", "뉴스의", "사진의", "영상의", "내용의", "정보의",
+            "추출할", "분석할", "조사할", "확인할", "검토할", "검증할",
+            "관련된", "대한", "위한", "통한", "통해", "대해", "관해",
+            "있는", "없는", "같은", "다른", "이런", "그런", "저런",
+            "하는", "되는", "되는", "이되는", "되는", "되는", "되는"
+        };
+        
+        for (String pattern : meaninglessPatterns) {
+            if (word.contains(pattern)) {
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     /**
@@ -1147,12 +1174,33 @@ public class NewsServiceImpl implements NewsService {
                 .collect(Collectors.toList());
     }
     
-    // 너무 일반적인 단어는 제외
+    // 확장된 불용어 목록 - 의미없는 단어들을 체계적으로 필터링
     private static final Set<String> STOPWORDS = Set.of(
-        "속보", "영상", "단독", "인터뷰", "기자", "사진", "종합", "오늘", "내일",
-        "정부", "대통령", "국회", "한국", "대한민국", "뉴스", "기사", "외신",
-        "관련", "이번", "지난", "현재", "최대", "최소", "현장", "및", "또는", "그리고",
-        "있다", "없다", "하다", "되다", "이다"
+            // 뉴스 관련 일반 용어
+            "속보", "영상", "단독", "인터뷰", "기자", "사진", "종합", "뉴스", "기사", "외신",
+            "현장", "보도", "취재", "논평", "사설", "칼럼", "특집", "기획", "리포트",
+            
+            // 시간 관련
+            "오늘", "내일", "어제", "이번", "지난", "현재", "최근", "곧", "이제",
+            "년", "월", "일", "시", "분", "초", "주", "달", "년도",
+            
+            // 일반적인 조사/어미
+            "것", "수", "등", "및", "또는", "그리고", "하지만", "그러나", "따라서",
+            "있다", "없다", "하다", "되다", "이다", "아니다", "같다", "다르다",
+            "위해", "통해", "대해", "관해", "대한", "관련", "위한", "통한",
+            
+            // 정부/기관 관련
+            "정부", "대통령", "국회", "한국", "대한민국", "국가", "정부기관", "공공기관",
+            "시청", "구청", "군청", "도청", "청", "부", "처", "청", "원",
+            
+            // 일반적인 형용사/부사
+            "최대", "최소", "매우", "정말", "진짜", "완전", "엄청", "너무", "아주",
+            "많이", "조금", "약간", "좀", "더", "가장", "제일", "특히", "특별히",
+            
+            // 기타 의미없는 단어들
+            "내용", "정보", "자료", "데이터", "결과", "상황", "문제", "이슈", "사건",
+            "분석", "전망", "동향", "소식", "업데이트", "변화", "발전", "진전",
+            "영향", "효과", "원인", "이유", "목적", "방법", "과정"
     );
     
     private KeywordSubscriptionDto convertToKeywordSubscriptionDto(KeywordSubscription subscription) {
@@ -1563,59 +1611,6 @@ public class NewsServiceImpl implements NewsService {
         }
     }
 
-    // ========================================
-    // 이메일 발송 관련 메서드들
-    // ========================================
-
-    /**
-     * 이메일 발송 구현
-     * 주의: 이 메서드는 newsletter-service에서 구현되어야 하며, 
-     * 여기서는 참고용으로만 제공됩니다.
-     */
-    /*
-    @Autowired
-    private EmailService emailService;
-
-    private void sendByEmail(NewsletterDelivery delivery) {
-        try {
-            NewsletterContent content = contentService.buildPersonalizedContent(
-                delivery.getUserId(), delivery.getNewsletterId());
-            
-            // 사용자 이메일 주소 조회
-            User user = userService.getUser(delivery.getUserId());
-            if (!StringUtils.hasText(user.getEmail())) {
-                throw new IllegalStateException("사용자 이메일이 없습니다: " + delivery.getUserId());
-            }
-            
-            // HTML 콘텐츠 렌더링
-            String htmlContent = emailRenderer.renderToHtml(content);
-            
-            // 이메일 템플릿 생성
-            EmailTemplate template = EmailTemplate.builder()
-                    .subject(content.getTitle())
-                    .htmlContent(htmlContent)
-                    .textContent(emailRenderer.renderToText(content)) // 텍스트 버전도 제공
-                    .build();
-            
-            // 이메일 발송
-            emailService.sendEmail(user.getEmail(), template);
-            
-            // 발송 상태 업데이트
-            delivery.markAsDelivered();
-            newsletterDeliveryRepository.save(delivery);
-            
-            log.info("이메일 발송 완료: userId={}, newsletterId={}, email={}", 
-                delivery.getUserId(), delivery.getNewsletterId(), user.getEmail());
-                
-        } catch (Exception e) {
-            // 발송 실패 상태 업데이트
-            delivery.markAsFailed(e.getMessage());
-            newsletterDeliveryRepository.save(delivery);
-            
-            throw new RuntimeException("이메일 발송 실패: userId=" + delivery.getUserId(), e);
-        }
-    }
-    */
 
     // ========================================
     // 헬퍼 메서드들

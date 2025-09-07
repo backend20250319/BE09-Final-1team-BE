@@ -5,6 +5,7 @@ import com.newsletterservice.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import java.util.Optional;
 
 /**
  * 다중 채널 알림 통합 서비스
@@ -15,7 +16,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class NotificationService {
     
-    private final KakaoMessageService kakaoMessageService;
+    private final Optional<KakaoMessageService> kakaoMessageService;
     private final UserServiceClient userServiceClient;
     // private final EmailService emailService; // 이메일 서비스 (향후 구현)
     
@@ -39,16 +40,20 @@ public class NotificationService {
         }
         
         // 2. 카카오톡 전송 (선택적)
-        try {
-            String accessToken = getUserKakaoToken(userId);
-            if (accessToken != null) {
-                kakaoMessageService.sendNewsletterMessage(accessToken, title, content, url);
-                log.info("카카오톡 알림 전송 성공: userId={}", userId);
-            } else {
-                log.info("사용자의 카카오 토큰이 없습니다: userId={}", userId);
+        if (kakaoMessageService.isPresent()) {
+            try {
+                String accessToken = getUserKakaoToken(userId);
+                if (accessToken != null) {
+                    kakaoMessageService.get().sendNewsletterMessage(accessToken, title, content, url);
+                    log.info("카카오톡 알림 전송 성공: userId={}", userId);
+                } else {
+                    log.info("사용자의 카카오 토큰이 없습니다: userId={}", userId);
+                }
+            } catch (Exception e) {
+                log.warn("카카오톡 전송 실패: userId={}", userId, e);
             }
-        } catch (Exception e) {
-            log.warn("카카오톡 전송 실패: userId={}", userId, e);
+        } else {
+            log.info("KakaoMessageService가 사용할 수 없습니다. 카카오톡 전송을 건너뜁니다.");
         }
         
         log.info("다중 채널 알림 전송 완료: userId={}", userId);

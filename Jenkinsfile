@@ -123,55 +123,50 @@ pipeline {
             }
         }
 
-        stage('Deploy to EKS') {
-            when { expression { !buildResults.succeeded.isEmpty() } }
-            steps {
-                script {
-                    withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
-                        echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
+        // ▼▼▼ [수정] 'Deploy to EKS' 스테이지가 아래와 같이 변경됩니다. ▼▼▼
+                stage('Update Manifests and Push') {
+                    when { expression { !buildResults.succeeded.isEmpty() } }
+                    steps {
+                        script {
+                            echo "Updating manifests for successfully built services: ${buildResults.succeeded.join(', ')}"
 
-                        bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
+                            // 1. Manifest 레포지토리 클론
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: '*/main']],
+                                doGenerateSubmoduleConfigurations: false,
+                                extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'manifests-repo']],
+                                submoduleCfg: [],
+                                userRemoteConfigs: [[credentialsId: GIT_CREDENTIALS_ID, url: MANIFEST_REPO_URL]]
+                            ])
 
-                        // ▼▼▼ [수정] checkout 스텝을 사용하여 dir 파라미터 문제를 해결합니다. ▼▼▼
-                        checkout([
-                            $class: 'GitSCM',
-                            branches: [[name: '*/main']], // '*/master' 등 브랜치 이름
-                            doGenerateSubmoduleConfigurations: false,
-                            extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'manifests-repo']],
-                            submoduleCfg: [],
-                            userRemoteConfigs: [[credentialsId: GIT_CREDENTIALS_ID, url: MANIFEST_REPO_URL]]
-                        ])
+                            // 2. 빌드 성공한 서비스들의 YAML 파일 이미지 태그 업데이트
+                            dir('manifests-repo') {
+                                buildResults.succeeded.each { serviceName ->
+                                    echo "--- Updating manifest for ${serviceName} ---"
+                                    def fullTag = "${serviceName}-${IMAGE_TAG}"
+                                    def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
+                                    def serviceManifestFile = "k8s-${serviceName}.yml"
 
-                        def deploymentOrder = [
-                            'config-server', 'discovery-service', 'gateway-service', 'user-service',
-                            'news-service', 'flaskapi', 'dedup-service', 'crawler-service',
-                            'newsletter-service', 'tooltip-service'
-                        ]
+                                    bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
+                                }
 
-                        echo "Applying global and prerequisite manifests..."
-                        bat "kubectl apply -f manifests-repo\\k8s-namespace.yml"
-                        bat "kubectl apply -f manifests-repo\\k8s-flaskapi-configmap.yml"
-                        bat "for %%i in (manifests-repo\\k8s-*-spc.yml) do kubectl apply -f %%i"
-
-                        deploymentOrder.each { serviceName ->
-                            if (buildResults.succeeded.contains(serviceName)) {
-                                echo "--- Starting deployment for ${serviceName} (in order) ---"
-                                def fullTag = "${serviceName}-${IMAGE_TAG}"
-                                def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
-                                def serviceManifestFile = "manifests-repo\\k8s-${serviceName}.yml"
-
-                                bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
-
-                                bat "kubectl apply -f ${serviceManifestFile}"
+                                // 3. 변경된 내용을 Manifest 레포지토리에 Commit & Push
+                                echo "Pushing updated manifests to Git repository..."
+                                withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
+                                    bat """
+                                        set GIT_SSH_COMMAND=ssh -i %GIT_KEY% -o StrictHostKeyChecking=no
+                                        git config --global user.email "jenkins@example.com"
+                                        git config --global user.name "Jenkins CI"
+                                        git add .
+                                        git commit -m "Deploy: Update image tags for services - ${buildResults.succeeded.join(', ')} (Build #${env.BUILD_NUMBER})"
+                                        git push origin main
+                                    """
+                                }
                             }
                         }
-
-                        echo "Applying ingress manifest..."
-                        bat "kubectl apply -f manifests-repo\\k8s-ingress.yml"
                     }
                 }
-            }
-        }
     }
 
     post {

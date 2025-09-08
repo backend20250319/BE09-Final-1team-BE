@@ -48,3 +48,16 @@ spring:
         registration:
           kakao:
             redirect-uri: http://localhost:8085/api/auth/login/oauth2/code/kakao
+
+# 메일 설정 (개발 환경용)
+  mail:
+    host: localhost
+    port: 1025
+    username: 
+    password: 
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false

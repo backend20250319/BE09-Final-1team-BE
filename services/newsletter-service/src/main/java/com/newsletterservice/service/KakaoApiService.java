@@ -336,7 +336,7 @@ public class KakaoApiService {
 
     /**
      * 카카오톡 메시지 전송 권한 확인
-     * GET https://kapi.kakao.com/v2/user/scopes
+     * 확GET https://kapi.kakao.com/v2/user/scopes
      */
     public boolean hasTalkMessagePermission(String accessToken) {
         try {

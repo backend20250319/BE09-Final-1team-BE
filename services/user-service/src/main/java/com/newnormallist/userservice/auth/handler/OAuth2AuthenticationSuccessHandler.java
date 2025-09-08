@@ -3,12 +3,14 @@ package com.newnormallist.userservice.auth.handler;
 import com.newnormallist.userservice.auth.dto.GoogleUserInfo;
 import com.newnormallist.userservice.auth.dto.KakaoUserInfo;
 import com.newnormallist.userservice.auth.dto.OAuth2UserInfo;
+import com.newnormallist.userservice.auth.entity.RefreshToken;
 import com.newnormallist.userservice.auth.jwt.JwtTokenProvider;
 import com.newnormallist.userservice.auth.repository.CookieOAuth2AuthorizationRequestRepository;
 import com.newnormallist.userservice.auth.repository.RefreshTokenRepository;
 import com.newnormallist.userservice.common.util.CookieUtil;
 import com.newnormallist.userservice.user.entity.User;
 import com.newnormallist.userservice.user.repository.UserRepository;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import org.springframework.security.oauth2.client.authentication.OAuth2Authentic
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 @Slf4j

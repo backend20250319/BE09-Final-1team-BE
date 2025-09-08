@@ -356,4 +356,92 @@ public class KakaoController {
         var response = kakaoApiService.unlink(token);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+    
+    /**
+     * 피드 A형 템플릿으로 개인화된 뉴스레터 전송
+     */
+    @PostMapping("/send/feed-a/personalized/{userId}")
+    @Operation(summary = "피드 A형 개인화 뉴스레터 전송", description = "사용자의 관심사를 반영한 피드 A형 뉴스레터를 전송합니다.")
+    public ResponseEntity<ApiResponse<Object>> sendPersonalizedFeedA(
+            @Parameter(description = "사용자 ID") @PathVariable Long userId,
+            @Parameter(description = "카카오 액세스 토큰") @RequestHeader("Authorization") String accessToken) {
+        
+        String token = accessToken.replace("Bearer ", "");
+        kakaoMessageService.sendFeedAMessage(userId, token);
+        
+        return ResponseEntity.ok(ApiResponse.success("피드 A형 개인화 뉴스레터 전송 완료"));
+    }
+    
+    /**
+     * 피드 B형 템플릿으로 개인화된 뉴스레터 전송
+     */
+    @PostMapping("/send/feed-b/personalized/{userId}")
+    @Operation(summary = "피드 B형 개인화 뉴스레터 전송", description = "사용자의 관심사를 반영한 피드 B형 뉴스레터를 전송합니다.")
+    public ResponseEntity<ApiResponse<Object>> sendPersonalizedFeedB(
+            @Parameter(description = "사용자 ID") @PathVariable Long userId,
+            @Parameter(description = "카카오 액세스 토큰") @RequestHeader("Authorization") String accessToken) {
+        
+        String token = accessToken.replace("Bearer ", "");
+        kakaoMessageService.sendFeedBMessage(userId, token);
+        
+        return ResponseEntity.ok(ApiResponse.success("피드 B형 개인화 뉴스레터 전송 완료"));
+    }
+    
+    /**
+     * 피드 A형 템플릿으로 카테고리별 뉴스레터 전송
+     */
+    @PostMapping("/send/feed-a/category/{category}")
+    @Operation(summary = "피드 A형 카테고리별 뉴스레터 전송", description = "특정 카테고리의 뉴스로 구성된 피드 A형 뉴스레터를 전송합니다.")
+    public ResponseEntity<ApiResponse<Object>> sendCategoryFeedA(
+            @Parameter(description = "카테고리명") @PathVariable String category,
+            @Parameter(description = "카카오 액세스 토큰") @RequestHeader("Authorization") String accessToken) {
+        
+        String token = accessToken.replace("Bearer ", "");
+        kakaoMessageService.sendCategoryFeedAMessage(category, token);
+        
+        return ResponseEntity.ok(ApiResponse.success("피드 A형 카테고리별 뉴스레터 전송 완료"));
+    }
+    
+    /**
+     * 피드 B형 템플릿으로 카테고리별 뉴스레터 전송
+     */
+    @PostMapping("/send/feed-b/category/{category}")
+    @Operation(summary = "피드 B형 카테고리별 뉴스레터 전송", description = "특정 카테고리의 뉴스로 구성된 피드 B형 뉴스레터를 전송합니다.")
+    public ResponseEntity<ApiResponse<Object>> sendCategoryFeedB(
+            @Parameter(description = "카테고리명") @PathVariable String category,
+            @Parameter(description = "카카오 액세스 토큰") @RequestHeader("Authorization") String accessToken) {
+        
+        String token = accessToken.replace("Bearer ", "");
+        kakaoMessageService.sendCategoryFeedBMessage(category, token);
+        
+        return ResponseEntity.ok(ApiResponse.success("피드 B형 카테고리별 뉴스레터 전송 완료"));
+    }
+    
+    /**
+     * 피드 A형 템플릿으로 트렌딩 뉴스레터 전송
+     */
+    @PostMapping("/send/feed-a/trending")
+    @Operation(summary = "피드 A형 트렌딩 뉴스레터 전송", description = "트렌딩 뉴스로 구성된 피드 A형 뉴스레터를 전송합니다.")
+    public ResponseEntity<ApiResponse<Object>> sendTrendingFeedA(
+            @Parameter(description = "카카오 액세스 토큰") @RequestHeader("Authorization") String accessToken) {
+        
+        String token = accessToken.replace("Bearer ", "");
+        kakaoMessageService.sendTrendingFeedAMessage(token);
+        
+        return ResponseEntity.ok(ApiResponse.success("피드 A형 트렌딩 뉴스레터 전송 완료"));
+    }
+    
+    /**
+     * 피드 B형 템플릿으로 트렌딩 뉴스레터 전송
+     */
+    @PostMapping("/send/feed-b/trending")
+    @Operation(summary = "피드 B형 트렌딩 뉴스레터 전송", description = "트렌딩 뉴스로 구성된 피드 B형 뉴스레터를 전송합니다.")
+    public ResponseEntity<ApiResponse<Object>> sendTrendingFeedB(
+            @Parameter(description = "카카오 액세스 토큰") @RequestHeader("Authorization") String accessToken) {
+        
+        String token = accessToken.replace("Bearer ", "");
+        kakaoMessageService.sendTrendingFeedBMessage(token);
+        
+        return ResponseEntity.ok(ApiResponse.success("피드 B형 트렌딩 뉴스레터 전송 완료"));
+    }
 }

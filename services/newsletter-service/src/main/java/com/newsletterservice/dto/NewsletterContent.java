@@ -15,6 +15,7 @@ public class NewsletterContent {
     private Long userId;
     private Boolean personalized;
     private String title;
+    private String subtitle;
     private String featuredImageUrl;
     private LocalDateTime generatedAt;
     private List<Section> sections;
@@ -80,5 +81,6 @@ public class NewsletterContent {
         private Long shareCount;
         private Double personalizedScore;
         private Double trendScore;
+        private Boolean isPersonalized;
     }
 }

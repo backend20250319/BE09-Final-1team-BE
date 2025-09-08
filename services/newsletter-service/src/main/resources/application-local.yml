@@ -2,8 +2,8 @@
 spring:
   config:
     # Config Server의 주소를 localhost로 변경
-    # import: configserver:http://192.168.0.38:8888
-    import: optional:configserver:http://localhost:8888
+     import: configserver:http://192.168.0.38:8888
+#    import: optional:configserver:http://localhost:8888
     # import: configserver:http://dev.macacolabs.site:8888  #  다른 와이파이에서도 config와 연결 가능
   retry:
     enabled: true
@@ -45,6 +45,8 @@ kakao:
   templates:
     newsletter: ${KAKAO_TEMPLATE_ID:123798}
     welcome: 2
+    feed-a: ${KAKAO_FEED_A_TEMPLATE_ID:123799}
+    feed-b: ${KAKAO_FEED_B_TEMPLATE_ID:123800}
 
 # 웹 푸시 알림 설정 (비활성화)
 webpush:

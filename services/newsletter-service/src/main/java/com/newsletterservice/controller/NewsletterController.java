@@ -1705,5 +1705,109 @@ public class NewsletterController extends BaseController {
             default -> "기타 뉴스";
         };
     }
+    
+    // ========================================
+    // 피드 B형 뉴스레터 관련 엔드포인트
+    // ========================================
+    
+    /**
+     * 피드 B형 개인화 뉴스레터 전송
+     */
+    @PostMapping("/send/feed-b/personalized/{userId}")
+    public ResponseEntity<ApiResponse<Object>> sendPersonalizedFeedBNewsletter(
+            @PathVariable Long userId,
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        
+        try {
+            log.info("피드 B형 개인화 뉴스레터 전송 요청: userId={}", userId);
+            
+            // 액세스 토큰 추출
+            String accessToken = extractAccessToken(authorization);
+            if (accessToken == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("액세스 토큰이 필요합니다.", "MISSING_ACCESS_TOKEN"));
+            }
+            
+            // 피드 B형 뉴스레터 전송
+            newsletterService.sendPersonalizedFeedBNewsletter(userId, accessToken);
+            
+            return ResponseEntity.ok(ApiResponse.success("피드 B형 개인화 뉴스레터 전송 완료"));
+            
+        } catch (Exception e) {
+            log.error("피드 B형 개인화 뉴스레터 전송 실패: userId={}", userId, e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("피드 B형 개인화 뉴스레터 전송 실패: " + e.getMessage(), "SEND_ERROR"));
+        }
+    }
+    
+    /**
+     * 피드 B형 카테고리별 뉴스레터 전송
+     */
+    @PostMapping("/send/feed-b/category/{category}")
+    public ResponseEntity<ApiResponse<Object>> sendCategoryFeedBNewsletter(
+            @PathVariable String category,
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        
+        try {
+            log.info("피드 B형 카테고리별 뉴스레터 전송 요청: category={}", category);
+            
+            // 액세스 토큰 추출
+            String accessToken = extractAccessToken(authorization);
+            if (accessToken == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("액세스 토큰이 필요합니다.", "MISSING_ACCESS_TOKEN"));
+            }
+            
+            // 피드 B형 뉴스레터 전송
+            newsletterService.sendCategoryFeedBNewsletter(category, accessToken);
+            
+            return ResponseEntity.ok(ApiResponse.success("피드 B형 카테고리별 뉴스레터 전송 완료"));
+            
+        } catch (Exception e) {
+            log.error("피드 B형 카테고리별 뉴스레터 전송 실패: category={}", category, e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("피드 B형 카테고리별 뉴스레터 전송 실패: " + e.getMessage(), "SEND_ERROR"));
+        }
+    }
+    
+    /**
+     * 피드 B형 트렌딩 뉴스레터 전송
+     */
+    @PostMapping("/send/feed-b/trending")
+    public ResponseEntity<ApiResponse<Object>> sendTrendingFeedBNewsletter(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        
+        try {
+            log.info("피드 B형 트렌딩 뉴스레터 전송 요청");
+            
+            // 액세스 토큰 추출
+            String accessToken = extractAccessToken(authorization);
+            if (accessToken == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("액세스 토큰이 필요합니다.", "MISSING_ACCESS_TOKEN"));
+            }
+            
+            // 피드 B형 뉴스레터 전송
+            newsletterService.sendTrendingFeedBNewsletter(accessToken);
+            
+            return ResponseEntity.ok(ApiResponse.success("피드 B형 트렌딩 뉴스레터 전송 완료"));
+            
+        } catch (Exception e) {
+            log.error("피드 B형 트렌딩 뉴스레터 전송 실패", e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("피드 B형 트렌딩 뉴스레터 전송 실패: " + e.getMessage(), "SEND_ERROR"));
+        }
+    }
+    
+    
+    /**
+     * 액세스 토큰 추출 헬퍼 메서드
+     */
+    private String extractAccessToken(String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            return null;
+        }
+        return authorization.substring(7);
+    }
 }
 

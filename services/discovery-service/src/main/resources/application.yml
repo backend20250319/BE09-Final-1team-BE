@@ -1,3 +1,4 @@
+# Eureka Discovery Service 내부 전용 설정 파일
 server:
   port: 8761
 

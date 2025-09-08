@@ -23,7 +23,7 @@ public class RefreshToken {
   @Column(nullable = false)
   private String tokenValue;
 
-  // 생성자
+  // 생성자로 필수 필드 초기화
   public RefreshToken(User user, String tokenValue) {
     this.user = user;
     this.tokenValue = tokenValue;

@@ -39,7 +39,7 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
 
             try {
 
-                // ✅ [수정 2] Spring Security의 hasRole()과 연동을 위해 "ROLE_" 접두사 추가
+                // Spring Security의 hasRole()과 연동을 위해 "ROLE_" 접두사 추가
                 SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + userRole);
 
                 // 인증 토큰 생성

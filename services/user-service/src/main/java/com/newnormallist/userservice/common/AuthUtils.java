@@ -16,7 +16,7 @@ public class AuthUtils {
      * 
      * @param userIdStr 사용자 ID 문자열
      * @return 변환된 사용자 ID
-     * @throws IllegalArgumentException 인증되지 않은 사용자인 경우
+     * @throws IllegalArgumentException 인증되지 않은 사용자인 경우 예외 발생
      */
     public static Long parseUserId(String userIdStr) {
         if (userIdStr == null || ANONYMOUS_USER.equals(userIdStr)) {

@@ -132,11 +132,15 @@ pipeline {
 
                         bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
-                        // ▼▼▼ [수정] bat git clone 대신 Jenkins의 git 스텝을 사용합니다. ▼▼▼
-                        git url: MANIFEST_REPO_URL,
-                            credentialsId: GIT_CREDENTIALS_ID,
-                            branch: 'main', // 또는 'master' 등 기본 브랜치 이름
-                            dir: 'manifests-repo'
+                        // ▼▼▼ [수정] checkout 스텝을 사용하여 dir 파라미터 문제를 해결합니다. ▼▼▼
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: '*/main']], // '*/master' 등 브랜치 이름
+                            doGenerateSubmoduleConfigurations: false,
+                            extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'manifests-repo']],
+                            submoduleCfg: [],
+                            userRemoteConfigs: [[credentialsId: GIT_CREDENTIALS_ID, url: MANIFEST_REPO_URL]]
+                        ])
 
                         def deploymentOrder = [
                             'config-server', 'discovery-service', 'gateway-service', 'user-service',

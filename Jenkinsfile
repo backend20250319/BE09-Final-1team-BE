@@ -7,6 +7,11 @@ def changedServicePaths = []
 pipeline {
     agent any
 
+    tools {
+        // 필요한 도구 설정 (예: JDK, Maven 등)
+        jdk 'jdk17'
+    }
+
     environment {
         // AWS 설정
         AWS_DEFAULT_REGION = 'ap-northeast-2'

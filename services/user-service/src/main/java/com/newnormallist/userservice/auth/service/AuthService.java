@@ -42,7 +42,7 @@ public class AuthService {
         // 1. 사용자 조회 및 비밀번호 검증
         User user = userRepository.findByEmail(loginRequestDto.getEmail())
                 .filter(u -> passwordEncoder.matches(loginRequestDto.getPassword(), u.getPassword()))
-                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND)); // 로그인 실패 시 USER_NOT_FOUND 사
+                .orElseThrow(() -> new UserException(ErrorCode.INVALID_CREDENTIALS)); // 보안상 아이디 비밀번호 일치 여부 상관없이 같은 에러 메시지 반환
         // 2. 사용자 인증 후 토큰 생성 및 저장하는 메소드 호출
         return issueTokensAndBuildResponse(user, loginRequestDto.getDeviceId());
     }

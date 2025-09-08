@@ -10,7 +10,7 @@ public enum ErrorCode {
     // User 관련 에러
     EMAIL_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "U001", "이미 존재하는 이메일입니다."),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "U002", "사용자를 찾을 수 없습니다."),
-    INVALID_PASSWORD(HttpStatus.BAD_REQUEST, "U003", "비밀번호가 올바르지 않습니다."),
+    INVALID_CREDENTIALS(HttpStatus.BAD_REQUEST, "U003", "아이디나 비밀번호가 올바르지 않습니다."),
     CURRENT_PASSWORD_REQUIRED(HttpStatus.BAD_REQUEST, "U004", "현재 비밀번호를 입력해주세요."),
     CURRENT_PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "U005", "현재 비밀번호가 일치하지 않습니다."),
     INVALID_CATEGORY(HttpStatus.BAD_REQUEST, "U006", "유효하지 않은 카테고리입니다."),

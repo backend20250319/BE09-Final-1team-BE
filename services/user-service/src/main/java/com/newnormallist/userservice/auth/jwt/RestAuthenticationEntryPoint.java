@@ -11,7 +11,7 @@ import java.io.IOException;
 
 @Component
 public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
-
+    // 인증되지 않은 사용자가 보호된 리소스에 접근할 때 호출되는 메서드
     @Override
     public void commence(HttpServletRequest request,
                          HttpServletResponse response,

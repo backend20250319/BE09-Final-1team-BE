@@ -188,7 +188,6 @@ pipeline {
             }
         }
     }
-}
 
 // 공통 빌드/푸시 함수 (Windows / 단일 ECR 리포지토리 용)
 def buildAndPush(String serviceName, String servicePath, String fullTag) {

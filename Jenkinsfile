@@ -38,10 +38,8 @@ pipeline {
                     echo "Detecting changed services on Windows..."
                     def changedServices = new HashSet<String>()
 
-                    // ▼▼▼ [오류 수정 1] 명령어 출력 결과에서 불필요한 라인을 필터링하는 로직 추가 ▼▼▼
                     def servicePathsOutput = bat(returnStdout: true, script: 'dir /s /b Dockerfile').trim()
                     def allServicePaths = servicePathsOutput.split('\r\n').findAll { line ->
-                        // 유효한 경로인지(드라이브 문자로 시작하는지) 확인하고, 프롬프트 라인을 제거합니다.
                         line.matches("^[a-zA-Z]:.*") && !line.contains('>') && line.trim() != ''
                     }.collect { it.replace('\\Dockerfile', '') }
 
@@ -88,26 +86,34 @@ pipeline {
                     changedServicePaths.each { servicePath ->
                         def currentService = servicePath
                         parallelStages["Build & Push ${currentService}"] = {
-                            // ▼▼▼ [오류 수정 2 & 3] buildAndPush 함수 호출을 try-catch로 감싸고,
-                            // buildAndPush 함수 자체는 오류를 던지도록 변경 (더 명확한 오류 전파) ▼▼▼
+                            // ▼▼▼ [오류 수정] synchronized를 제거하고, 결과를 return 하도록 변경 ▼▼▼
+                            def result = [:]
+                            def serviceName = currentService.split('\\\\').last()
                             try {
-                                def serviceName = currentService.split('\\\\').last()
                                 def fullTag = "${serviceName}-${IMAGE_TAG}"
                                 buildAndPush(serviceName, currentService, fullTag)
-
-                                // 동기화 문제를 피하기 위해 synchronized 블록 사용
-                                synchronized(buildResults) {
-                                    buildResults.succeeded.add(serviceName)
-                                }
+                                result = [service: serviceName, status: 'SUCCESS']
                             } catch (e) {
                                 echo "ERROR in parallel stage for ${currentService}: ${e.getMessage()}"
-                                synchronized(buildResults) {
-                                    buildResults.failed.add(currentService.split('\\\\').last())
-                                }
+                                result = [service: serviceName, status: 'FAILURE']
+                            }
+                            return result // 각 병렬 작업의 결과를 반환
+                        }
+                    }
+
+                    // 모든 병렬 작업이 끝난 후, 반환된 결과들을 취합
+                    def stageResults = parallel parallelStages
+
+                    // 결과를 순차적으로 buildResults에 저장 (더 이상 동시성 문제 없음)
+                    stageResults.each { stageName, result ->
+                        if (result != null) {
+                            if (result.status == 'SUCCESS') {
+                                buildResults.succeeded.add(result.service)
+                            } else {
+                                buildResults.failed.add(result.service)
                             }
                         }
                     }
-                    parallel parallelStages
 
                     if (!buildResults.failed.isEmpty()) {
                         error("One or more services failed to build: ${buildResults.failed.join(', ')}")
@@ -119,14 +125,14 @@ pipeline {
         stage('Deploy to EKS') {
             when { expression { !buildResults.succeeded.isEmpty() } }
             steps {
-                // (이하 동일)
                 script {
                     echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
 
                     bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
                     withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
-                        bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
+                        // ▼▼▼ [개선] git clone 시 SSH key를 사용하도록 수정 ▼▼▼
+                        bat "set GIT_SSH_COMMAND=ssh -i %GIT_KEY% -o StrictHostKeyChecking=no && git clone ${MANIFEST_REPO_URL} manifests-repo"
                     }
 
                     def deploymentOrder = [
@@ -162,7 +168,6 @@ pipeline {
 
     post {
         always {
-            // (이하 동일)
             script {
                 echo '--- Summary ---'
                 if (!buildResults.succeeded.isEmpty()) {
@@ -185,7 +190,6 @@ pipeline {
 
 // 공통 빌드/푸시 함수 (Windows / 단일 ECR 리포지토리 용)
 def buildAndPush(String serviceName, String servicePath, String fullTag) {
-    // 이 함수는 이제 오류 발생 시 직접 예외를 던집니다.
     def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
 
     echo "Building ${serviceName} from path ${servicePath}..."
@@ -202,3 +206,4 @@ def buildAndPush(String serviceName, String servicePath, String fullTag) {
         bat "docker push ${image}"
     }
 }
+

@@ -1,4 +1,4 @@
-# Spring Boot Newsletter Service 전용 설정
+# Spring Boot Newsletter Service 내부 전용 설정
 spring:
   application:
     name: newsletter-service

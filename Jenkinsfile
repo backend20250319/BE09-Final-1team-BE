@@ -124,48 +124,49 @@ pipeline {
         }
 
         // ▼▼▼ [수정] 'Deploy to EKS' 스테이지가 아래와 같이 변경됩니다. ▼▼▼
-                stage('Update Manifests and Push') {
-                            when { expression { !buildResults.succeeded.isEmpty() } }
-                            steps {
-                                script {
-                                    echo "Updating manifests for successfully built services: ${buildResults.succeeded.join(', ')}"
+            stage('Update Manifests and Push') {
+            when { expression { !buildResults.succeeded.isEmpty() } }
+            steps {
+                script {
+                    echo "Updating manifests for successfully built services: ${buildResults.succeeded.join(', ')}"
 
-                                    checkout([
-                                        $class: 'GitSCM',
-                                        branches: [[name: '*/main']],
-                                        doGenerateSubmoduleConfigurations: false,
-                                        extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'manifests-repo']],
-                                        submoduleCfg: [],
-                                        userRemoteConfigs: [[credentialsId: GIT_CREDENTIALS_ID, url: MANIFEST_REPO_URL]]
-                                    ])
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: '*/main']],
+                        doGenerateSubmoduleConfigurations: false,
+                        extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'manifests-repo']],
+                        submoduleCfg: [],
+                        userRemoteConfigs: [[credentialsId: GIT_CREDENTIALS_ID, url: MANIFEST_REPO_URL]]
+                    ])
 
-                                    dir('manifests-repo') {
-                                        buildResults.succeeded.each { serviceName ->
-                                            echo "--- Updating manifest for ${serviceName} ---"
-                                            def fullTag = "${serviceName}-${IMAGE_TAG}"
-                                            def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
-                                            def serviceManifestFile = "k8s-${serviceName}.yml"
+                    dir('manifests-repo') {
+                        buildResults.succeeded.each { serviceName ->
+                            echo "--- Updating manifest for ${serviceName} ---"
+                            def fullTag = "${serviceName}-${IMAGE_TAG}"
+                            def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
+                            def serviceManifestFile = "k8s-${serviceName}.yml"
 
-                                            bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
-                                        }
+                            bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
+                        }
 
-                                         echo "Pushing updated manifests to Git repository..."
-                                         // ▼▼▼ [수정] withCredentials 대신 sshagent를 사용하여 git push 인증을 처리합니다. ▼▼▼
-                                         sshagent (credentials: [GIT_CREDENTIALS_ID]) {
-                                             bat """
-                                                 git config --global user.email "jenkins@example.com"
-                                                 git config --global user.name "Jenkins CI"
-                                                 git checkout main
-                                                 git add .
-                                                 git commit -m "Deploy: Update image tags for services - ${buildResults.succeeded.join(', ')} (Build #${env.BUILD_NUMBER})"
-                                                 git push origin HEAD:main
-                                             """
-                                         }
-                                     }
-                                 }
-                             }
-                         }
-                     }
+                        echo "Pushing updated manifests to Git repository..."
+                        // ▼▼▼ [최종 수정] sshagent 대신 withCredentials와 GIT_SSH_COMMAND를 사용합니다. ▼▼▼
+                        withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
+                            bat """
+                                set GIT_SSH_COMMAND=ssh -i "%GIT_KEY%" -o StrictHostKeyChecking=no
+                                git config --global user.email "jenkins@example.com"
+                                git config --global user.name "Jenkins CI"
+                                git checkout main
+                                git add .
+                                git commit -m "Deploy: Update image tags for services - ${buildResults.succeeded.join(', ')} (Build #${env.BUILD_NUMBER})"
+                                git push origin HEAD:main
+                                """
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     post {

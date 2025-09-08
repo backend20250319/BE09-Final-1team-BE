@@ -20,6 +20,8 @@ public class NewsletterContent {
     private LocalDateTime generatedAt;
     private List<Section> sections;
     private Map<String, Object> personalizationInfo;
+    private String type; // 뉴스레터 타입 (DAILY, WEEKLY, MONTHLY, BREAKING)
+    private String category; // 카테고리
     
     public boolean isPersonalized() {
         return personalized != null && personalized;
@@ -48,6 +50,46 @@ public class NewsletterContent {
         
         summary.append(articleCount).append("개의 기사");
         return summary.toString();
+    }
+    
+    /**
+     * 뉴스레터 ID 반환 (newsletterId 사용)
+     */
+    public Long getId() {
+        return newsletterId;
+    }
+    
+    /**
+     * 뉴스레터 내용 생성 (sections 기반)
+     */
+    public String getContent() {
+        if (sections == null || sections.isEmpty()) {
+            return title != null ? title : "";
+        }
+        
+        StringBuilder content = new StringBuilder();
+        content.append(title != null ? title : "뉴스레터");
+        
+        for (Section section : sections) {
+            if (section.getTitle() != null) {
+                content.append("\n\n").append(section.getTitle());
+            }
+            if (section.getDescription() != null) {
+                content.append("\n").append(section.getDescription());
+            }
+            if (section.getArticles() != null) {
+                for (Article article : section.getArticles()) {
+                    if (article.getTitle() != null) {
+                        content.append("\n- ").append(article.getTitle());
+                    }
+                    if (article.getSummary() != null) {
+                        content.append("\n  ").append(article.getSummary());
+                    }
+                }
+            }
+        }
+        
+        return content.toString();
     }
     
     @Data

@@ -22,7 +22,7 @@ spring:
             - id: newsletter-service-route
               uri: lb://NEWSLETTER-SERVICE
               predicates:
-                - Path=/api/newsletter/**, /api/kakao/**, /newsletter-api-docs/*
+                - Path=/api/newsletter/**, /api/newsletters/**, /api/kakao/**, /newsletter-api-docs/*
           globalcors:
             cors-configurations:
               '[/**]':

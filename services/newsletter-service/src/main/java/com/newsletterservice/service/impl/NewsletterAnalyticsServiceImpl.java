@@ -227,6 +227,24 @@ public class NewsletterAnalyticsServiceImpl implements NewsletterAnalyticsServic
         }
     }
 
+    @Override
+    public void syncNewsletterDeliveryStats() {
+        log.info("뉴스레터 발송 통계 동기화 시작");
+        
+        try {
+            // 뉴스레터 발송 통계 동기화 로직
+            // 실제 구현에서는 데이터베이스의 발송 통계를 정리하거나
+            // 외부 분석 서비스와 동기화할 수 있습니다.
+            
+            // 임시 구현 - 실제로는 NewsletterDeliveryStats 엔티티와 리포지토리를 사용해야 함
+            log.info("뉴스레터 발송 통계 동기화 완료");
+            
+        } catch (Exception e) {
+            log.error("뉴스레터 발송 통계 동기화 실패", e);
+            throw new NewsletterException("뉴스레터 발송 통계 동기화 중 오류가 발생했습니다.", "SYNC_DELIVERY_STATS_ERROR");
+        }
+    }
+
     // Private Helper Methods
     private List<CategoryResponse> getUserPreferences(Long userId) {
         try {

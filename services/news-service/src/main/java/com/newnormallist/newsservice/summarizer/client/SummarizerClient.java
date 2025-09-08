@@ -55,8 +55,6 @@ public class SummarizerClient {
 
         this.rt = builder
                 .requestFactory(() -> rf)
-                .setConnectTimeout(Duration.ofMillis(connectTimeoutMs))
-                .setReadTimeout(Duration.ofMillis(readTimeoutMs))
                 .build();
 
         log.info("[SummarizerClient] baseUrl={} connectTimeoutMs={} readTimeoutMs={}",

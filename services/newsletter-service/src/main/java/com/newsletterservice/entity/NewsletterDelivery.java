@@ -72,6 +72,9 @@ public class NewsletterDelivery {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage; // 에러 메시지
 
+    @Column(name = "personalized_content", columnDefinition = "TEXT")
+    private String personalizedContent; // 개인화된 콘텐츠
+
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

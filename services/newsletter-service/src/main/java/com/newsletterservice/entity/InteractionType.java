@@ -5,7 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
 public enum InteractionType {
     VIEW("조회"),
     CLICK("클릭"),
@@ -14,4 +13,8 @@ public enum InteractionType {
     BOOKMARK("북마크");
 
     private final String description;
+    
+    InteractionType(String description) {
+        this.description = description;
+    }
 }

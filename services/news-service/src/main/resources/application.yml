@@ -1,5 +1,5 @@
 # Spring Boot 기반 news-service application.yml
-# 서버 포트 설정
+# 서버 포트 설정 및 Spring Cloud Config 서버 설정 포함
 server:
   port: 8082
 

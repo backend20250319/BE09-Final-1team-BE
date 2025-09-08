@@ -1,5 +1,4 @@
-# news-service 내부 application.yml 파일
-# 서버 포트 설정 및 Spring Cloud Config 서버 설정 포함
+# news-service 내부 전용 설정 파일
 server:
   port: 8082
 

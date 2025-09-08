@@ -214,3 +214,4 @@ def buildAndPush(String serviceName, String servicePath, String fullTag) {
         bat "docker push ${image}"
     }
 }
+

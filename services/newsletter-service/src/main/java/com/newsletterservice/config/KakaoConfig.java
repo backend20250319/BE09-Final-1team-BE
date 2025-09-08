@@ -1,5 +1,6 @@
 package com.newsletterservice.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.annotation.EnableRetry;
@@ -13,7 +14,7 @@ import org.springframework.web.client.RestTemplate;
 public class KakaoConfig {
     
     @Bean
-    public RestTemplate kakaoRestTemplate() {
+    public RestTemplate restTemplate() {
         RestTemplate restTemplate = new RestTemplate();
         
         // 타임아웃 설정
@@ -23,5 +24,10 @@ public class KakaoConfig {
         });
         
         return restTemplate;
+    }
+    
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
     }
 }

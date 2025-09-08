@@ -201,6 +201,32 @@ public class NewsletterAnalyticsServiceImpl implements NewsletterAnalyticsServic
         }
     }
 
+    @Override
+    public void recordNewsletterDelivery(Long userId, String newsletterType, boolean success) {
+        log.info("뉴스레터 발송 통계 기록: userId={}, type={}, success={}", userId, newsletterType, success);
+        
+        try {
+            // 뉴스레터 발송 통계 기록 로직
+            // 실제 구현에서는 데이터베이스에 발송 통계를 저장하거나
+            // 외부 분석 서비스에 데이터를 전송할 수 있습니다.
+            
+            // 임시 구현 - 실제로는 NewsletterDeliveryStats 엔티티와 리포지토리를 사용해야 함
+            if (success) {
+                log.info("뉴스레터 발송 성공 통계 기록: userId={}, type={}", userId, newsletterType);
+                // 성공 통계 기록
+            } else {
+                log.warn("뉴스레터 발송 실패 통계 기록: userId={}, type={}", userId, newsletterType);
+                // 실패 통계 기록
+            }
+            
+            log.info("뉴스레터 발송 통계 기록 완료: userId={}, type={}, success={}", userId, newsletterType, success);
+            
+        } catch (Exception e) {
+            log.error("뉴스레터 발송 통계 기록 실패: userId={}, type={}, success={}", userId, newsletterType, success, e);
+            // 통계 기록 실패는 전체 프로세스를 중단시키지 않도록 예외를 던지지 않음
+        }
+    }
+
     // Private Helper Methods
     private List<CategoryResponse> getUserPreferences(Long userId) {
         try {

@@ -59,12 +59,13 @@ spring:
             token-uri: https://kauth.kakao.com/oauth/token
             user-info-uri: https://kapi.kakao.com/v2/user/me
             user-name-attribute: id
+
+# 카카오 API 설정
+kakao:
+  client-id: ${KAKAO_CLIENT_ID:8944645f178eb64e30fca4c7f3c41f3a}
+  client-secret: ${KAKAO_CLIENT_SECRET:h93D4ZAW0v6EciwrtycOQliq3a8UF36X}
+
 oauth2:
   redirect:
     frontend-callback-url: http://localhost:3000/auth/oauth/kakao # 프론트엔드 리다이렉트 URL (개발/테스트용)
     frontend-additional-info-url: http://localhost:3000/auth/oauth/additional-info # 추가 정보 입력 페이지 URL (개발/테스트용)
-
-# 카카오 API 설정
-kakao:
-  client-id: ${KAKAO_CLIENT_ID:your-client-id}
-  client-secret: ${KAKAO_CLIENT_SECRET:your-client-secret}

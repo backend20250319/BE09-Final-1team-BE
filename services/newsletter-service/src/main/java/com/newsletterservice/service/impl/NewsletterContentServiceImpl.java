@@ -1045,4 +1045,34 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
             </html>
             """, title, title, message, suggestion);
     }
+    
+    /**
+     * 한국어 카테고리를 영어 카테고리로 변환
+     */
+    private String convertToEnglishCategory(String koreanCategory) {
+        switch (koreanCategory) {
+            case "정치":
+                return "politics";
+            case "경제":
+                return "economy";
+            case "사회":
+                return "society";
+            case "IT/과학":
+                return "technology";
+            case "스포츠":
+                return "sports";
+            case "연예":
+                return "entertainment";
+            case "문화":
+                return "culture";
+            case "국제":
+                return "international";
+            case "생활":
+                return "lifestyle";
+            case "건강":
+                return "health";
+            default:
+                return "general";
+        }
+    }
 }

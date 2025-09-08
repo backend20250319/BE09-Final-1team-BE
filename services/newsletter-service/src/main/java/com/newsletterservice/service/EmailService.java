@@ -2,7 +2,6 @@ package com.newsletterservice.service;
 
 import com.newsletterservice.dto.EmailTemplate;
 import com.newsletterservice.dto.NewsletterContent;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -13,17 +12,21 @@ import org.springframework.util.StringUtils;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 이메일 전송 서비스
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 @ConditionalOnBean(JavaMailSender.class)
 public class EmailService {
     
-    private final JavaMailSender mailSender;
+    private final Optional<JavaMailSender> mailSender;
+    
+    public EmailService(Optional<JavaMailSender> mailSender) {
+        this.mailSender = mailSender;
+    }
     
     /**
      * 이메일 전송
@@ -37,29 +40,34 @@ public class EmailService {
             return;
         }
         
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            
-            helper.setTo(to);
-            helper.setSubject(template.getSubject());
-            
-            if (StringUtils.hasText(template.getHtmlContent())) {
-                helper.setText(template.getHtmlContent(), true);
-            } else if (StringUtils.hasText(template.getTextContent())) {
-                helper.setText(template.getTextContent(), false);
-            } else {
-                log.warn("이메일 내용이 없습니다: to={}", to);
-                return;
-            }
-            
-            mailSender.send(message);
-            log.info("이메일 전송 완료: to={}, subject={}", to, template.getSubject());
-            
-        } catch (MessagingException e) {
-            log.error("이메일 전송 실패: to={}, subject={}", to, template.getSubject(), e);
-            throw new RuntimeException("이메일 전송에 실패했습니다.", e);
-        }
+        mailSender.ifPresentOrElse(
+            sender -> {
+                try {
+                    MimeMessage message = sender.createMimeMessage();
+                    MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+                    
+                    helper.setTo(to);
+                    helper.setSubject(template.getSubject());
+                    
+                    if (StringUtils.hasText(template.getHtmlContent())) {
+                        helper.setText(template.getHtmlContent(), true);
+                    } else if (StringUtils.hasText(template.getTextContent())) {
+                        helper.setText(template.getTextContent(), false);
+                    } else {
+                        log.warn("이메일 내용이 없습니다: to={}", to);
+                        return;
+                    }
+                    
+                    sender.send(message);
+                    log.info("이메일 전송 완료: to={}, subject={}", to, template.getSubject());
+                    
+                } catch (MessagingException e) {
+                    log.error("이메일 전송 실패: to={}, subject={}", to, template.getSubject(), e);
+                    throw new RuntimeException("이메일 전송에 실패했습니다.", e);
+                }
+            },
+            () -> log.warn("JavaMailSender가 설정되지 않았습니다. 이메일 전송을 건너뜁니다. to={}", to)
+        );
     }
 
     /**

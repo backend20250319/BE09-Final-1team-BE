@@ -39,6 +39,8 @@ public class NewsletterService {
     private final NewsletterDeliveryService deliveryService;
     private final NewsletterAnalyticsService analyticsService;
     private final Optional<EmailService> emailService;
+    private final FeedTemplateService feedTemplateService;
+    private final Optional<KakaoMessageService> kakaoMessageService;
     
     private final NewsServiceClient newsServiceClient;
     private final UserServiceClient userServiceClient;
@@ -470,5 +472,132 @@ public class NewsletterService {
                 "정치", "경제", "사회", "생활", "세계", 
                 "IT/과학", "자동차/교통", "여행/음식", "예술"
         );
+    }
+    
+    // ========================================
+    // 5. 피드 B형 뉴스레터 전송 기능
+    // ========================================
+    
+    /**
+     * 피드 B형 개인화 뉴스레터 전송
+     */
+    public void sendPersonalizedFeedBNewsletter(Long userId, String accessToken) {
+        if (kakaoMessageService.isEmpty()) {
+            log.warn("KakaoMessageService가 사용할 수 없습니다. 피드 B형 개인화 뉴스레터 전송을 건너뜁니다.");
+            return;
+        }
+        
+        try {
+            log.info("피드 B형 개인화 뉴스레터 전송 시작: userId={}", userId);
+            
+            // 피드 B형 템플릿 생성 및 전송
+            kakaoMessageService.get().sendFeedBMessage(userId, accessToken);
+            
+            // 전송 기록 저장
+            analyticsService.recordNewsletterDelivery(userId, "FEED_B_PERSONALIZED", true);
+            
+            log.info("피드 B형 개인화 뉴스레터 전송 완료: userId={}", userId);
+            
+        } catch (Exception e) {
+            log.error("피드 B형 개인화 뉴스레터 전송 실패: userId={}", userId, e);
+            analyticsService.recordNewsletterDelivery(userId, "FEED_B_PERSONALIZED", false);
+            throw new NewsletterException("피드 B형 개인화 뉴스레터 전송에 실패했습니다.", "FEED_B_PERSONALIZED_SEND_ERROR");
+        }
+    }
+    
+    /**
+     * 피드 B형 카테고리별 뉴스레터 전송
+     */
+    public void sendCategoryFeedBNewsletter(String category, String accessToken) {
+        if (kakaoMessageService.isEmpty()) {
+            log.warn("KakaoMessageService가 사용할 수 없습니다. 피드 B형 카테고리별 뉴스레터 전송을 건너뜁니다.");
+            return;
+        }
+        
+        try {
+            log.info("피드 B형 카테고리별 뉴스레터 전송 시작: category={}", category);
+            
+            // 피드 B형 템플릿 생성 및 전송
+            kakaoMessageService.get().sendCategoryFeedBMessage(category, accessToken);
+            
+            log.info("피드 B형 카테고리별 뉴스레터 전송 완료: category={}", category);
+            
+        } catch (Exception e) {
+            log.error("피드 B형 카테고리별 뉴스레터 전송 실패: category={}", category, e);
+            throw new NewsletterException("피드 B형 카테고리별 뉴스레터 전송에 실패했습니다.", "FEED_B_CATEGORY_SEND_ERROR");
+        }
+    }
+    
+    /**
+     * 피드 B형 트렌딩 뉴스레터 전송
+     */
+    public void sendTrendingFeedBNewsletter(String accessToken) {
+        if (kakaoMessageService.isEmpty()) {
+            log.warn("KakaoMessageService가 사용할 수 없습니다. 피드 B형 트렌딩 뉴스레터 전송을 건너뜁니다.");
+            return;
+        }
+        
+        try {
+            log.info("피드 B형 트렌딩 뉴스레터 전송 시작");
+            
+            // 피드 B형 템플릿 생성 및 전송
+            kakaoMessageService.get().sendTrendingFeedBMessage(accessToken);
+            
+            log.info("피드 B형 트렌딩 뉴스레터 전송 완료");
+            
+        } catch (Exception e) {
+            log.error("피드 B형 트렌딩 뉴스레터 전송 실패", e);
+            throw new NewsletterException("피드 B형 트렌딩 뉴스레터 전송에 실패했습니다.", "FEED_B_TRENDING_SEND_ERROR");
+        }
+    }
+    
+    /**
+     * 피드 B형 뉴스레터 미리보기 생성
+     */
+    public Map<String, Object> createFeedBPreview(String type, String param) {
+        try {
+            log.info("피드 B형 뉴스레터 미리보기 생성: type={}, param={}", type, param);
+            
+            FeedTemplate feedTemplate;
+            
+            switch (type.toLowerCase()) {
+                case "personalized":
+                    Long userId = Long.valueOf(param);
+                    feedTemplate = feedTemplateService.createPersonalizedFeedTemplate(
+                            userId, FeedTemplate.FeedType.FEED_B);
+                    break;
+                case "category":
+                    feedTemplate = feedTemplateService.createCategoryFeedTemplate(
+                            param, FeedTemplate.FeedType.FEED_B);
+                    break;
+                case "trending":
+                    feedTemplate = feedTemplateService.createTrendingFeedTemplate(
+                            FeedTemplate.FeedType.FEED_B);
+                    break;
+                default:
+                    feedTemplate = feedTemplateService.createTrendingFeedTemplate(
+                            FeedTemplate.FeedType.FEED_B);
+            }
+            
+            Map<String, Object> previewData = new HashMap<>();
+            previewData.put("success", true);
+            previewData.put("type", type);
+            previewData.put("param", param);
+            previewData.put("feedType", feedTemplate.getFeedType().name());
+            previewData.put("template", feedTemplate);
+            previewData.put("kakaoArgs", feedTemplate.toKakaoTemplateArgs());
+            previewData.put("timestamp", System.currentTimeMillis());
+            
+            log.info("피드 B형 뉴스레터 미리보기 생성 완료: type={}, param={}", type, param);
+            return previewData;
+            
+        } catch (Exception e) {
+            log.error("피드 B형 뉴스레터 미리보기 생성 실패: type={}, param={}", type, param, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "미리보기 생성 실패");
+            errorResponse.put("timestamp", System.currentTimeMillis());
+            return errorResponse;
+        }
     }
 }

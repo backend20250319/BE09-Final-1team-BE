@@ -6,45 +6,55 @@ import com.newsletterservice.client.UserServiceClient;
 import com.newsletterservice.client.dto.UserResponse;
 import com.newsletterservice.common.exception.NewsletterException;
 import com.newsletterservice.dto.*;
-import com.newsletterservice.dto.NotificationType;
-import com.newsletterservice.client.dto.NewsResponse;
 import org.springframework.util.StringUtils;
 import com.newsletterservice.exception.KakaoMessageException;
 import com.newsletterservice.model.PushMessage;
 import com.newsletterservice.model.PushSubscription;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.*;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
-@ConditionalOnBean(EmailService.class)
 public class KakaoMessageService {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final KakaoApiService kakaoApiService;
     private final UserServiceClient userServiceClient;
-    private final EmailService emailService;
+    @Lazy
+    private final Optional<EmailService> emailService;
     private final WebPushService webPushService;
     private final PermissionEmailTemplateService permissionEmailTemplateService;
     private final UserService userService;
+    private final FeedTemplateService feedTemplateService;
+    
+    public KakaoMessageService(RestTemplate restTemplate, ObjectMapper objectMapper, 
+                              KakaoApiService kakaoApiService, UserServiceClient userServiceClient,
+                              @Lazy Optional<EmailService> emailService, WebPushService webPushService,
+                              PermissionEmailTemplateService permissionEmailTemplateService,
+                              UserService userService, FeedTemplateService feedTemplateService) {
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
+        this.kakaoApiService = kakaoApiService;
+        this.userServiceClient = userServiceClient;
+        this.emailService = emailService;
+        this.webPushService = webPushService;
+        this.permissionEmailTemplateService = permissionEmailTemplateService;
+        this.userService = userService;
+        this.feedTemplateService = feedTemplateService;
+    }
     
     @Value("${kakao.api.talk.memo.url:https://kapi.kakao.com/v2/api/talk/memo/send}")
     private String kakaoApiUrl;
@@ -57,6 +67,12 @@ public class KakaoMessageService {
     
     @Value("${kakao.templates.newsletter:123798}")
     private Long newsletterTemplateId;
+    
+    @Value("${kakao.templates.feed-a:123799}")
+    private Long feedATemplateId;
+    
+    @Value("${kakao.templates.feed-b:123800}")
+    private Long feedBTemplateId;
 
     /**
      * 뉴스레터 콘텐츠로 카카오톡 메시지 전송 (기존 호환성 유지)
@@ -114,11 +130,6 @@ public class KakaoMessageService {
     }
 
     
-    @Retryable(
-        value = {RestClientException.class}, 
-        maxAttempts = 3, 
-        backoff = @Backoff(delay = 1000, multiplier = 2)
-    )
     public void sendMessage(String accessToken, Long templateId, Map<String, Object> templateArgs) {
         if (!messageEnabled) {
             log.info("카카오 메시지 기능이 비활성화되어 있습니다.");
@@ -296,11 +307,6 @@ public class KakaoMessageService {
     }
     
    
-    @Retryable(
-        value = {RestClientException.class}, 
-        maxAttempts = 3, 
-        backoff = @Backoff(delay = 1000, multiplier = 2)
-    )
     public void sendMessageToFriends(String accessToken, Long templateId, 
                                    List<String> receiverUuids, Map<String, Object> templateArgs) {
         if (!messageEnabled) {
@@ -511,12 +517,14 @@ public class KakaoMessageService {
             
             // 이메일로 권한 설정 안내
             if (StringUtils.hasText(user.getEmail())) {
-                EmailTemplate emailTemplate = EmailTemplate.builder()
-                        .subject("카카오톡 알림 권한 설정 안내")
-                        .htmlContent(permissionEmailTemplateService.generatePermissionEmailHtml(user))
-                        .build();
-                
-                emailService.sendEmail(user.getEmail(), emailTemplate);
+                emailService.ifPresent(service -> {
+                    EmailTemplate emailTemplate = EmailTemplate.builder()
+                            .subject("카카오톡 알림 권한 설정 안내")
+                            .htmlContent(permissionEmailTemplateService.generatePermissionEmailHtml(user))
+                            .build();
+                    
+                    service.sendEmail(user.getEmail(), emailTemplate);
+                });
             }
 
             // 앱 내 알림 기능은 제거되었습니다.
@@ -537,6 +545,198 @@ public class KakaoMessageService {
 
         } catch (Exception e) {
             log.error("권한 필요 알림 전송 실패: userId={}", userId, e);
+        }
+    }
+    
+    /**
+     * 피드 A형 템플릿으로 뉴스레터 전송
+     */
+    public void sendFeedAMessage(Long userId, String accessToken) {
+        try {
+            log.info("피드 A형 뉴스레터 전송 시작: userId={}", userId);
+            
+            // 개인화된 피드 A형 템플릿 생성
+            FeedTemplate feedTemplate = feedTemplateService.createPersonalizedFeedTemplate(
+                    userId, FeedTemplate.FeedType.FEED_A);
+            
+            // 카카오톡 API용 템플릿 변수 생성
+            Map<String, Object> templateArgs = feedTemplate.toKakaoTemplateArgs();
+            
+            // 개발/테스트 환경에서는 시뮬레이션
+            if (!messageEnabled) {
+                log.info("카카오 메시지 기능이 비활성화되어 있습니다. 시뮬레이션 모드로 실행합니다.");
+                simulateMessageSending(templateArgs);
+                return;
+            }
+            
+            // 카카오톡 메시지 전송
+            sendMessage(accessToken, feedATemplateId, templateArgs);
+            
+            log.info("피드 A형 뉴스레터 전송 완료: userId={}", userId);
+            
+        } catch (Exception e) {
+            log.error("피드 A형 뉴스레터 전송 실패: userId={}", userId, e);
+            throw new NewsletterException("피드 A형 뉴스레터 전송에 실패했습니다.", "FEED_A_SEND_ERROR");
+        }
+    }
+    
+    /**
+     * 피드 B형 템플릿으로 뉴스레터 전송
+     */
+    public void sendFeedBMessage(Long userId, String accessToken) {
+        try {
+            log.info("피드 B형 뉴스레터 전송 시작: userId={}", userId);
+            
+            // 개인화된 피드 B형 템플릿 생성
+            FeedTemplate feedTemplate = feedTemplateService.createPersonalizedFeedTemplate(
+                    userId, FeedTemplate.FeedType.FEED_B);
+            
+            // 카카오톡 API용 템플릿 변수 생성
+            Map<String, Object> templateArgs = feedTemplate.toKakaoTemplateArgs();
+            
+            // 개발/테스트 환경에서는 시뮬레이션
+            if (!messageEnabled) {
+                log.info("카카오 메시지 기능이 비활성화되어 있습니다. 시뮬레이션 모드로 실행합니다.");
+                simulateMessageSending(templateArgs);
+                return;
+            }
+            
+            // 카카오톡 메시지 전송
+            sendMessage(accessToken, feedBTemplateId, templateArgs);
+            
+            log.info("피드 B형 뉴스레터 전송 완료: userId={}", userId);
+            
+        } catch (Exception e) {
+            log.error("피드 B형 뉴스레터 전송 실패: userId={}", userId, e);
+            throw new NewsletterException("피드 B형 뉴스레터 전송에 실패했습니다.", "FEED_B_SEND_ERROR");
+        }
+    }
+    
+    /**
+     * 카테고리별 피드 A형 템플릿으로 뉴스레터 전송
+     */
+    public void sendCategoryFeedAMessage(String category, String accessToken) {
+        try {
+            log.info("카테고리별 피드 A형 뉴스레터 전송 시작: category={}", category);
+            
+            // 카테고리별 피드 A형 템플릿 생성
+            FeedTemplate feedTemplate = feedTemplateService.createCategoryFeedTemplate(
+                    category, FeedTemplate.FeedType.FEED_A);
+            
+            // 카카오톡 API용 템플릿 변수 생성
+            Map<String, Object> templateArgs = feedTemplate.toKakaoTemplateArgs();
+            
+            // 개발/테스트 환경에서는 시뮬레이션
+            if (!messageEnabled) {
+                log.info("카카오 메시지 기능이 비활성화되어 있습니다. 시뮬레이션 모드로 실행합니다.");
+                simulateMessageSending(templateArgs);
+                return;
+            }
+            
+            // 카카오톡 메시지 전송
+            sendMessage(accessToken, feedATemplateId, templateArgs);
+            
+            log.info("카테고리별 피드 A형 뉴스레터 전송 완료: category={}", category);
+            
+        } catch (Exception e) {
+            log.error("카테고리별 피드 A형 뉴스레터 전송 실패: category={}", category, e);
+            throw new NewsletterException("카테고리별 피드 A형 뉴스레터 전송에 실패했습니다.", "CATEGORY_FEED_A_SEND_ERROR");
+        }
+    }
+    
+    /**
+     * 카테고리별 피드 B형 템플릿으로 뉴스레터 전송
+     */
+    public void sendCategoryFeedBMessage(String category, String accessToken) {
+        try {
+            log.info("카테고리별 피드 B형 뉴스레터 전송 시작: category={}", category);
+            
+            // 카테고리별 피드 B형 템플릿 생성
+            FeedTemplate feedTemplate = feedTemplateService.createCategoryFeedTemplate(
+                    category, FeedTemplate.FeedType.FEED_B);
+            
+            // 카카오톡 API용 템플릿 변수 생성
+            Map<String, Object> templateArgs = feedTemplate.toKakaoTemplateArgs();
+            
+            // 개발/테스트 환경에서는 시뮬레이션
+            if (!messageEnabled) {
+                log.info("카카오 메시지 기능이 비활성화되어 있습니다. 시뮬레이션 모드로 실행합니다.");
+                simulateMessageSending(templateArgs);
+                return;
+            }
+            
+            // 카카오톡 메시지 전송
+            sendMessage(accessToken, feedBTemplateId, templateArgs);
+            
+            log.info("카테고리별 피드 B형 뉴스레터 전송 완료: category={}", category);
+            
+        } catch (Exception e) {
+            log.error("카테고리별 피드 B형 뉴스레터 전송 실패: category={}", category, e);
+            throw new NewsletterException("카테고리별 피드 B형 뉴스레터 전송에 실패했습니다.", "CATEGORY_FEED_B_SEND_ERROR");
+        }
+    }
+    
+    /**
+     * 트렌딩 뉴스 피드 A형 템플릿으로 뉴스레터 전송
+     */
+    public void sendTrendingFeedAMessage(String accessToken) {
+        try {
+            log.info("트렌딩 뉴스 피드 A형 뉴스레터 전송 시작");
+            
+            // 트렌딩 뉴스 피드 A형 템플릿 생성
+            FeedTemplate feedTemplate = feedTemplateService.createTrendingFeedTemplate(
+                    FeedTemplate.FeedType.FEED_A);
+            
+            // 카카오톡 API용 템플릿 변수 생성
+            Map<String, Object> templateArgs = feedTemplate.toKakaoTemplateArgs();
+            
+            // 개발/테스트 환경에서는 시뮬레이션
+            if (!messageEnabled) {
+                log.info("카카오 메시지 기능이 비활성화되어 있습니다. 시뮬레이션 모드로 실행합니다.");
+                simulateMessageSending(templateArgs);
+                return;
+            }
+            
+            // 카카오톡 메시지 전송
+            sendMessage(accessToken, feedATemplateId, templateArgs);
+            
+            log.info("트렌딩 뉴스 피드 A형 뉴스레터 전송 완료");
+            
+        } catch (Exception e) {
+            log.error("트렌딩 뉴스 피드 A형 뉴스레터 전송 실패", e);
+            throw new NewsletterException("트렌딩 뉴스 피드 A형 뉴스레터 전송에 실패했습니다.", "TRENDING_FEED_A_SEND_ERROR");
+        }
+    }
+    
+    /**
+     * 트렌딩 뉴스 피드 B형 템플릿으로 뉴스레터 전송
+     */
+    public void sendTrendingFeedBMessage(String accessToken) {
+        try {
+            log.info("트렌딩 뉴스 피드 B형 뉴스레터 전송 시작");
+            
+            // 트렌딩 뉴스 피드 B형 템플릿 생성
+            FeedTemplate feedTemplate = feedTemplateService.createTrendingFeedTemplate(
+                    FeedTemplate.FeedType.FEED_B);
+            
+            // 카카오톡 API용 템플릿 변수 생성
+            Map<String, Object> templateArgs = feedTemplate.toKakaoTemplateArgs();
+            
+            // 개발/테스트 환경에서는 시뮬레이션
+            if (!messageEnabled) {
+                log.info("카카오 메시지 기능이 비활성화되어 있습니다. 시뮬레이션 모드로 실행합니다.");
+                simulateMessageSending(templateArgs);
+                return;
+            }
+            
+            // 카카오톡 메시지 전송
+            sendMessage(accessToken, feedBTemplateId, templateArgs);
+            
+            log.info("트렌딩 뉴스 피드 B형 뉴스레터 전송 완료");
+            
+        } catch (Exception e) {
+            log.error("트렌딩 뉴스 피드 B형 뉴스레터 전송 실패", e);
+            throw new NewsletterException("트렌딩 뉴스 피드 B형 뉴스레터 전송에 실패했습니다.", "TRENDING_FEED_B_SEND_ERROR");
         }
     }
 }

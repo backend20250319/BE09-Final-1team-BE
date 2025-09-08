@@ -42,4 +42,9 @@ public interface NewsletterAnalyticsService {
      * 카테고리별 구독자 수 동기화
      */
     void syncCategorySubscriberCounts();
+    
+    /**
+     * 뉴스레터 발송 통계 기록
+     */
+    void recordNewsletterDelivery(Long userId, String newsletterType, boolean success);
 }

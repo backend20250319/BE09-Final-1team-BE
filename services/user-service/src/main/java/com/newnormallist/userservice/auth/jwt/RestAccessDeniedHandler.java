@@ -11,7 +11,7 @@ import java.io.IOException;
 
 @Component
 public class RestAccessDeniedHandler implements AccessDeniedHandler {
-
+    // 권한이 없는 사용자가 보호된 리소스에 접근할 때 호출되는 메서드
     @Override
     public void handle(HttpServletRequest request,
                        HttpServletResponse response,

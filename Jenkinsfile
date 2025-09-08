@@ -7,27 +7,22 @@ def changedServicePaths = []
 pipeline {
     agent any
 
-    tools {
-        // 필요한 도구 설정 (예: JDK, Maven 등)
-        jdk 'jdk17'
-    }
-
     environment {
         // AWS 설정
         AWS_DEFAULT_REGION = 'ap-northeast-2'
         AWS_ACCOUNT_ID = '883467884806'
         ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
-        
+
         // 단일 ECR 리포지토리 이름
         UNIFIED_ECR_REPO = 'be09-final-1team-be'
-        
+
         // Jenkins Credentials ID
         AWS_CREDENTIALS_ID = 'aws-credentials'
         GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key'
 
         // Kubernetes Manifests 리포지토리 정보
         MANIFEST_REPO_URL = 'git@github.com:backend20250319/BE09-Final-1team-k8s-manifests.git'
-        
+
         // EKS 설정
         EKS_CLUSTER_NAME = 'BE09-Final-1team-BE-cluster'
         EKS_NAMESPACE = 'msa-namespace'
@@ -42,10 +37,14 @@ pipeline {
                 script {
                     echo "Detecting changed services on Windows..."
                     def changedServices = new HashSet<String>()
-                    
+
+                    // ▼▼▼ [오류 수정 1] 명령어 출력 결과에서 불필요한 라인을 필터링하는 로직 추가 ▼▼▼
                     def servicePathsOutput = bat(returnStdout: true, script: 'dir /s /b Dockerfile').trim()
-                    def allServicePaths = servicePathsOutput.split('\r\n').findAll { line -> !line.startsWith('>') && line.trim() != '' }.collect { it.replace('\\Dockerfile', '') }
-                    
+                    def allServicePaths = servicePathsOutput.split('\r\n').findAll { line ->
+                        // 유효한 경로인지(드라이브 문자로 시작하는지) 확인하고, 프롬프트 라인을 제거합니다.
+                        line.matches("^[a-zA-Z]:.*") && !line.contains('>') && line.trim() != ''
+                    }.collect { it.replace('\\Dockerfile', '') }
+
                     def workspacePath = env.WORKSPACE
                     def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
                     echo "Found all relative service paths: ${relativeServicePaths}"
@@ -73,7 +72,7 @@ pipeline {
                         currentBuild.result = 'NOT_BUILT'
                         return
                     }
-                    
+
                     echo "Services to be built: ${changedServices.toList()}"
                     changedServicePaths = changedServices.toList()
                 }
@@ -89,15 +88,22 @@ pipeline {
                     changedServicePaths.each { servicePath ->
                         def currentService = servicePath
                         parallelStages["Build & Push ${currentService}"] = {
+                            // ▼▼▼ [오류 수정 2 & 3] buildAndPush 함수 호출을 try-catch로 감싸고,
+                            // buildAndPush 함수 자체는 오류를 던지도록 변경 (더 명확한 오류 전파) ▼▼▼
                             try {
                                 def serviceName = currentService.split('\\\\').last()
-                                // ▼▼▼ [오류 수정] fullTag를 사용하도록 수정했습니다. ▼▼▼
                                 def fullTag = "${serviceName}-${IMAGE_TAG}"
                                 buildAndPush(serviceName, currentService, fullTag)
-                                buildResults.succeeded.add(serviceName)
+
+                                // 동기화 문제를 피하기 위해 synchronized 블록 사용
+                                synchronized(buildResults) {
+                                    buildResults.succeeded.add(serviceName)
+                                }
                             } catch (e) {
-                                echo "ERROR during build or push for ${currentService}: ${e.toString()}"
-                                buildResults.failed.add(currentService.split('\\\\').last())
+                                echo "ERROR in parallel stage for ${currentService}: ${e.getMessage()}"
+                                synchronized(buildResults) {
+                                    buildResults.failed.add(currentService.split('\\\\').last())
+                                }
                             }
                         }
                     }
@@ -113,33 +119,27 @@ pipeline {
         stage('Deploy to EKS') {
             when { expression { !buildResults.succeeded.isEmpty() } }
             steps {
+                // (이하 동일)
                 script {
                     echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
-                    
+
                     bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
                     withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
                         bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
                     }
 
-                    // 1. 서비스 의존성에 따른 배포 순서 정의
                     def deploymentOrder = [
                         'config-server', 'discovery-service', 'gateway-service', 'user-service',
                         'news-service', 'flaskapi', 'dedup-service', 'crawler-service',
                         'newsletter-service', 'tooltip-service'
                     ]
-                    
-                    // ▼▼▼ [리팩토링] Secret 생성 블록을 제거하고, ConfigMap과 SPC 배포 로직으로 교체 ▼▼▼
-                    
-                    // 2. 전역 및 사전 설정(Namespace, ConfigMap, SPC)을 먼저 적용
+
                     echo "Applying global and prerequisite manifests..."
                     bat "kubectl apply -f manifests-repo\\k8s-namespace.yml"
                     bat "kubectl apply -f manifests-repo\\k8s-flaskapi-configmap.yml"
-                    
-                    // 모든 SecretProviderClass 파일들을 적용
                     bat "for %%i in (manifests-repo\\k8s-*-spc.yml) do kubectl apply -f %%i"
 
-                    // 3. 정의된 순서대로, 빌드된 서비스만 골라서 배포
                     deploymentOrder.each { serviceName ->
                         if (buildResults.succeeded.contains(serviceName)) {
                             echo "--- Starting deployment for ${serviceName} (in order) ---"
@@ -147,24 +147,22 @@ pipeline {
                             def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
                             def serviceManifestFile = "manifests-repo\\k8s-${serviceName}.yml"
 
-                            // YAML 파일 내의 image 태그를 교체
                             bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
-                            
-                            // 수정된 서비스 YAML 파일을 클러스터에 적용
+
                             bat "kubectl apply -f ${serviceManifestFile}"
                         }
                     }
 
-                    // 4. 마지막으로 Ingress 설정을 적용
                     echo "Applying ingress manifest..."
                     bat "kubectl apply -f manifests-repo\\k8s-ingress.yml"
                 }
             }
         }
     }
-    
+
     post {
         always {
+            // (이하 동일)
             script {
                 echo '--- Summary ---'
                 if (!buildResults.succeeded.isEmpty()) {
@@ -177,7 +175,7 @@ pipeline {
                     echo "- No services were built as no changes were detected."
                 }
                 echo '---------------'
-                
+
                 cleanWs()
                 bat "if exist manifests-repo ( rmdir /s /q manifests-repo )"
             }
@@ -187,8 +185,9 @@ pipeline {
 
 // 공통 빌드/푸시 함수 (Windows / 단일 ECR 리포지토리 용)
 def buildAndPush(String serviceName, String servicePath, String fullTag) {
+    // 이 함수는 이제 오류 발생 시 직접 예외를 던집니다.
     def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
-    
+
     echo "Building ${serviceName} from path ${servicePath}..."
     dir(servicePath) {
         if (fileExists('gradlew.bat')) {

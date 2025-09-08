@@ -1,4 +1,4 @@
-// Jenkinsfile: AWS Secrets Manager 연동 및 모든 오류 수정 최종 버전
+// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (post 블록 위치 수정)
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]
@@ -90,14 +90,14 @@ pipeline {
                     changedServicePaths.each { servicePath ->
                         def currentService = servicePath
                         parallelStages["Build & Push ${currentService}"] = {
-                            def result = [:]
+                        def result = [:]
                             def serviceName = currentService.split('\\\\').last()
                             try {
-                                def fullTag = "${serviceName}-${IMAGE_TAG}"
+                            def fullTag = "${serviceName}-${IMAGE_TAG}"
                                 buildAndPush(serviceName, currentService, fullTag)
                                 result = [service: serviceName, status: 'SUCCESS']
                             } catch (e) {
-                                echo "ERROR in parallel stage for ${currentService}: ${e.getMessage()}"
+                            echo "ERROR in parallel stage for ${currentService}: ${e.getMessage()}"
                                 result = [service: serviceName, status: 'FAILURE']
                             }
                             return result
@@ -108,10 +108,10 @@ pipeline {
 
                     stageResults.each { stageName, result ->
                         if (result != null) {
-                            if (result.status == 'SUCCESS') {
-                                buildResults.succeeded.add(result.service)
+                        if (result.status == 'SUCCESS') {
+                            buildResults.succeeded.add(result.service)
                             } else {
-                                buildResults.failed.add(result.service)
+                            buildResults.failed.add(result.service)
                             }
                         }
                     }
@@ -123,8 +123,7 @@ pipeline {
             }
         }
 
-        // ▼▼▼ [수정] 'Deploy to EKS' 스테이지가 아래와 같이 변경됩니다. ▼▼▼
-            stage('Update Manifests and Push') {
+        stage('Update Manifests and Push') {
             when { expression { !buildResults.succeeded.isEmpty() } }
             steps {
                 script {
@@ -150,7 +149,6 @@ pipeline {
                         }
 
                         echo "Pushing updated manifests to Git repository..."
-                        // ▼▼▼ [최종 수정] sshagent 대신 withCredentials와 GIT_SSH_COMMAND를 사용합니다. ▼▼▼
                         withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
                             bat """
                                 set GIT_SSH_COMMAND=ssh -i "%GIT_KEY%" -o StrictHostKeyChecking=no
@@ -160,8 +158,7 @@ pipeline {
                                 git add .
                                 git commit -m "Deploy: Update image tags for services - ${buildResults.succeeded.join(', ')} (Build #${env.BUILD_NUMBER})"
                                 git push origin HEAD:main
-                                """
-                            }
+                            """
                         }
                     }
                 }
@@ -169,6 +166,7 @@ pipeline {
         }
     }
 
+    // ▼▼▼ [최종 수정] post 블록을 stages 블록과 같은 레벨로, pipeline 블록 안으로 이동시켰습니다. ▼▼▼
     post {
         always {
             script {
@@ -189,6 +187,7 @@ pipeline {
             }
         }
     }
+}
 
 // 공통 빌드/푸시 함수 (Windows / 단일 ECR 리포지토리 용)
 def buildAndPush(String serviceName, String servicePath, String fullTag) {

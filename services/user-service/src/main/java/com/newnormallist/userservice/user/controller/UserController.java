@@ -1,7 +1,11 @@
 package com.newnormallist.userservice.user.controller;
 
 import com.newnormallist.userservice.common.ApiResult;
+import com.newnormallist.userservice.common.AuthUtils;
 import com.newnormallist.userservice.history.dto.ReadHistoryResponse;
+import com.newnormallist.userservice.history.dto.UserBehaviorAnalysis;
+import com.newnormallist.userservice.history.dto.CategoryPreferenceResponse;
+import com.newnormallist.userservice.history.dto.UserInterestResponse;
 import com.newnormallist.userservice.user.dto.*;
 import com.newnormallist.userservice.user.entity.UserStatus;
 import com.newnormallist.userservice.user.service.UserService;
@@ -63,6 +67,27 @@ public class UserController {
     }
 
     /**
+     * 특정 사용자 정보 조회 API (내부 서비스용)
+     */
+    @Operation(
+            summary = "사용자 정보 조회",
+            description = "특정 사용자의 정보를 조회합니다. (내부 서비스용)",
+            operationId = "getUserById"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "사용자 정보 조회 성공"),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    })
+    @GetMapping("/{userId}")
+    public ResponseEntity<ApiResult<MyPageResponse>> getUserById(
+            @Parameter(description = "사용자 ID", example = "1")
+            @PathVariable Long userId
+    ) {
+        MyPageResponse userResponse = userService.getMyPage(userId);
+        return ResponseEntity.ok(ApiResult.success(userResponse));
+    }
+
+    /**
      * 마이페이지 (내 정보) 조회 API
      */
     @Operation(
@@ -79,9 +104,13 @@ public class UserController {
     public ResponseEntity<ApiResult<MyPageResponse>> getMyPage(
             @Parameter(hidden = true) @AuthenticationPrincipal String userIdStr
     ) {
-        Long userId = Long.parseLong(userIdStr);
-        MyPageResponse myPageResponse = userService.getMyPage(userId);
-        return ResponseEntity.ok(ApiResult.success(myPageResponse));
+        try {
+            Long userId = AuthUtils.parseUserId(userIdStr);
+            MyPageResponse myPageResponse = userService.getMyPage(userId);
+            return ResponseEntity.ok(ApiResult.success(myPageResponse));
+        } catch (IllegalArgumentException e) {
+            return AuthUtils.unauthorizedResponse();
+        }
     }
 
     /**
@@ -104,9 +133,13 @@ public class UserController {
             @Parameter(hidden = true) @AuthenticationPrincipal String userIdStr,
             @Valid @RequestBody UserUpdateRequest userUpdateRequest
     ) {
-        Long userId = Long.parseLong(userIdStr);
-        userService.updateMyPage(userId, userUpdateRequest);
-        return ResponseEntity.ok(ApiResult.success("마이페이지 정보가 성공적으로 수정되었습니다."));
+        try {
+            Long userId = AuthUtils.parseUserId(userIdStr);
+            userService.updateMyPage(userId, userUpdateRequest);
+            return ResponseEntity.ok(ApiResult.success("마이페이지 정보가 성공적으로 수정되었습니다."));
+        } catch (IllegalArgumentException e) {
+            return AuthUtils.unauthorizedResponse();
+        }
     }
 
     /**
@@ -126,9 +159,13 @@ public class UserController {
     public ResponseEntity<ApiResult<String>> deleteUser(
             @Parameter(hidden = true) @AuthenticationPrincipal String userIdStr
     ) {
-        Long userId = Long.parseLong(userIdStr);
-        userService.deleteUser(userId);
-        return ResponseEntity.ok(ApiResult.success("회원 탈퇴가 성공적으로 완료되었습니다."));
+        try {
+            Long userId = AuthUtils.parseUserId(userIdStr);
+            userService.deleteUser(userId);
+            return ResponseEntity.ok(ApiResult.success("회원 탈퇴가 성공적으로 완료되었습니다."));
+        } catch (IllegalArgumentException e) {
+            return AuthUtils.unauthorizedResponse();
+        }
     }
 
     /**
@@ -147,6 +184,111 @@ public class UserController {
     public ResponseEntity<ApiResult<List<CategoryResponse>>> getNewsCategories() {
         List<CategoryResponse> categories = userService.getNewsCategories();
         return ResponseEntity.ok(ApiResult.success(categories));
+    }
+
+    /**
+     * 사용자 행동 분석 조회 API (내부 서비스용)
+     */
+    @Operation(
+            summary = "사용자 행동 분석 조회",
+            description = "특정 사용자의 행동 분석 결과를 조회합니다. (내부 서비스용)",
+            operationId = "getUserBehaviorAnalysis"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "행동 분석 조회 성공"),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    })
+    @GetMapping("/{userId}/behavior-analysis")
+    public ResponseEntity<ApiResult<UserBehaviorAnalysis>> getUserBehaviorAnalysis(
+            @Parameter(description = "사용자 ID", example = "1")
+            @PathVariable Long userId
+    ) {
+        UserBehaviorAnalysis analysis = userService.getUserBehaviorAnalysis(userId);
+        return ResponseEntity.ok(ApiResult.success(analysis));
+    }
+
+    /**
+     * 사용자 카테고리 선호도 조회 API (내부 서비스용)
+     */
+    @Operation(
+            summary = "사용자 카테고리 선호도 조회",
+            description = "특정 사용자의 카테고리 선호도를 조회합니다. (내부 서비스용)",
+            operationId = "getCategoryPreferences"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "카테고리 선호도 조회 성공"),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    })
+    @GetMapping("/{userId}/category-preferences")
+    public ResponseEntity<ApiResult<CategoryPreferenceResponse>> getCategoryPreferences(
+            @Parameter(description = "사용자 ID", example = "1")
+            @PathVariable Long userId
+    ) {
+        CategoryPreferenceResponse preferences = userService.getCategoryPreferences(userId);
+        return ResponseEntity.ok(ApiResult.success(preferences));
+    }
+
+    /**
+     * 사용자 관심사 분석 조회 API (내부 서비스용)
+     */
+    @Operation(
+            summary = "사용자 관심사 분석 조회",
+            description = "특정 사용자의 관심사 분석 결과를 조회합니다. (내부 서비스용)",
+            operationId = "getUserInterests"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "관심사 분석 조회 성공"),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    })
+    @GetMapping("/{userId}/interests")
+    public ResponseEntity<ApiResult<UserInterestResponse>> getUserInterests(
+            @Parameter(description = "사용자 ID", example = "1")
+            @PathVariable Long userId
+    ) {
+        UserInterestResponse interests = userService.getUserInterests(userId);
+        return ResponseEntity.ok(ApiResult.success(interests));
+    }
+
+    /**
+     * 사용자 관심사 점수 맵 조회 API (내부 서비스용)
+     */
+    @Operation(
+            summary = "사용자 관심사 점수 맵 조회",
+            description = "특정 사용자의 관심사 점수 맵을 조회합니다. (내부 서비스용)",
+            operationId = "getInterestScores"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "관심사 점수 맵 조회 성공"),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    })
+    @GetMapping("/{userId}/interest-scores")
+    public ResponseEntity<ApiResult<Map<String, Double>>> getInterestScores(
+            @Parameter(description = "사용자 ID", example = "1")
+            @PathVariable Long userId
+    ) {
+        Map<String, Double> scores = userService.getInterestScores(userId);
+        return ResponseEntity.ok(ApiResult.success(scores));
+    }
+
+    /**
+     * 사용자 상위 관심사 목록 조회 API (내부 서비스용)
+     */
+    @Operation(
+            summary = "사용자 상위 관심사 목록 조회",
+            description = "특정 사용자의 상위 관심사 목록을 조회합니다. (내부 서비스용)",
+            operationId = "getTopInterests"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "상위 관심사 목록 조회 성공"),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    })
+    @GetMapping("/{userId}/top-interests")
+    public ResponseEntity<ApiResult<List<String>>> getTopInterests(
+            @Parameter(description = "사용자 ID", example = "1")
+            @PathVariable Long userId
+    ) {
+        List<String> topInterests = userService.getTopInterests(userId);
+        return ResponseEntity.ok(ApiResult.success(topInterests));
     }
 
     /**
@@ -224,5 +366,23 @@ public class UserController {
     ) {
         int deleted = userService.adminPurgeDeleted(before);
         return ResponseEntity.ok(ApiResult.success(Map.of("deleted", deleted, "before", before.toString())));
+    }
+
+    /**
+     * 앱 내 알림을 허용한 사용자 목록 조회 API (내부 서비스용)
+     */
+    @Hidden // 내부 서비스용 API
+    @Operation(
+            summary = "앱 내 알림 허용 사용자 목록 조회",
+            description = "앱 내 알림을 허용한 사용자 ID 목록을 조회합니다. (내부 서비스용)",
+            operationId = "getInAppNotificationEnabledUsers"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "앱 내 알림 허용 사용자 목록 조회 성공")
+    })
+    @GetMapping("/in-app-notification-enabled")
+    public ResponseEntity<ApiResult<List<Long>>> getInAppNotificationEnabledUsers() {
+        List<Long> enabledUsers = userService.getInAppNotificationEnabledUsers();
+        return ResponseEntity.ok(ApiResult.success(enabledUsers));
     }
 }

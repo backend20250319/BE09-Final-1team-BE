@@ -127,15 +127,16 @@ pipeline {
             when { expression { !buildResults.succeeded.isEmpty() } }
             steps {
                 script {
-                    // ▼▼▼ [수정] AWS 관련 모든 명령을 withCredentials 블록으로 감쌌습니다. ▼▼▼
                     withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
                         echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
 
                         bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
-                        withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
-                            bat "set GIT_SSH_COMMAND=ssh -i %GIT_KEY% -o StrictHostKeyChecking=no && git clone ${MANIFEST_REPO_URL} manifests-repo"
-                        }
+                        // ▼▼▼ [수정] bat git clone 대신 Jenkins의 git 스텝을 사용합니다. ▼▼▼
+                        git url: MANIFEST_REPO_URL,
+                            credentialsId: GIT_CREDENTIALS_ID,
+                            branch: 'main', // 또는 'master' 등 기본 브랜치 이름
+                            dir: 'manifests-repo'
 
                         def deploymentOrder = [
                             'config-server', 'discovery-service', 'gateway-service', 'user-service',

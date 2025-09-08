@@ -41,7 +41,7 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         } else if (registrationId.equals("kakao")) {
             userInfo = new KakaoUserInfo(oAuth2User.getAttributes());
         } else {
-            // 지원하지 않는 OAuth2 공급자일 경우 예외 처리
+            // 지원하지 않는 OAuth2 공급자일 경우 예외 발생
             throw new OAuth2AuthenticationException("지원하지 않는 OAuth2 공급자입니다: " + registrationId);
         }
         // 4. User 엔티티로 저장 또는 업데이트

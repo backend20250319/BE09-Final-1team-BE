@@ -1,3 +1,6 @@
+# PyTorch CPU 버전 설치를 위한 추가 인덱스
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 # FastAPI 및 웹 프레임워크
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
@@ -6,7 +9,7 @@ pydantic-settings==2.6.1
 
 # 머신러닝 및 NLP - 안정적인 버전
 sentence-transformers==2.7.0
-torch==2.5.1+cpu  # CPU 전용 버전 (Docker 최적화)
+torch==2.5.1
 transformers==4.44.0
 konlpy==0.6.0
 scikit-learn==1.4.2

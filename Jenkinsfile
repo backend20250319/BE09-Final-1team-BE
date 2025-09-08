@@ -8,7 +8,7 @@ pipeline {
     agent any
 
     tools {
-            jdk 'jdk17'
+        jdk 'jdk17'
     }
 
     environment {
@@ -90,7 +90,6 @@ pipeline {
                     changedServicePaths.each { servicePath ->
                         def currentService = servicePath
                         parallelStages["Build & Push ${currentService}"] = {
-                            // ▼▼▼ [오류 수정] synchronized를 제거하고, 결과를 return 하도록 변경 ▼▼▼
                             def result = [:]
                             def serviceName = currentService.split('\\\\').last()
                             try {
@@ -101,14 +100,12 @@ pipeline {
                                 echo "ERROR in parallel stage for ${currentService}: ${e.getMessage()}"
                                 result = [service: serviceName, status: 'FAILURE']
                             }
-                            return result // 각 병렬 작업의 결과를 반환
+                            return result
                         }
                     }
 
-                    // 모든 병렬 작업이 끝난 후, 반환된 결과들을 취합
                     def stageResults = parallel parallelStages
 
-                    // 결과를 순차적으로 buildResults에 저장 (더 이상 동시성 문제 없음)
                     stageResults.each { stageName, result ->
                         if (result != null) {
                             if (result.status == 'SUCCESS') {
@@ -130,41 +127,43 @@ pipeline {
             when { expression { !buildResults.succeeded.isEmpty() } }
             steps {
                 script {
-                    echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
+                    // ▼▼▼ [수정] AWS 관련 모든 명령을 withCredentials 블록으로 감쌌습니다. ▼▼▼
+                    withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
+                        echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
 
-                    bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
+                        bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
-                    withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
-                        // ▼▼▼ [개선] git clone 시 SSH key를 사용하도록 수정 ▼▼▼
-                        bat "set GIT_SSH_COMMAND=ssh -i %GIT_KEY% -o StrictHostKeyChecking=no && git clone ${MANIFEST_REPO_URL} manifests-repo"
-                    }
-
-                    def deploymentOrder = [
-                        'config-server', 'discovery-service', 'gateway-service', 'user-service',
-                        'news-service', 'flaskapi', 'dedup-service', 'crawler-service',
-                        'newsletter-service', 'tooltip-service'
-                    ]
-
-                    echo "Applying global and prerequisite manifests..."
-                    bat "kubectl apply -f manifests-repo\\k8s-namespace.yml"
-                    bat "kubectl apply -f manifests-repo\\k8s-flaskapi-configmap.yml"
-                    bat "for %%i in (manifests-repo\\k8s-*-spc.yml) do kubectl apply -f %%i"
-
-                    deploymentOrder.each { serviceName ->
-                        if (buildResults.succeeded.contains(serviceName)) {
-                            echo "--- Starting deployment for ${serviceName} (in order) ---"
-                            def fullTag = "${serviceName}-${IMAGE_TAG}"
-                            def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
-                            def serviceManifestFile = "manifests-repo\\k8s-${serviceName}.yml"
-
-                            bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
-
-                            bat "kubectl apply -f ${serviceManifestFile}"
+                        withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
+                            bat "set GIT_SSH_COMMAND=ssh -i %GIT_KEY% -o StrictHostKeyChecking=no && git clone ${MANIFEST_REPO_URL} manifests-repo"
                         }
-                    }
 
-                    echo "Applying ingress manifest..."
-                    bat "kubectl apply -f manifests-repo\\k8s-ingress.yml"
+                        def deploymentOrder = [
+                            'config-server', 'discovery-service', 'gateway-service', 'user-service',
+                            'news-service', 'flaskapi', 'dedup-service', 'crawler-service',
+                            'newsletter-service', 'tooltip-service'
+                        ]
+
+                        echo "Applying global and prerequisite manifests..."
+                        bat "kubectl apply -f manifests-repo\\k8s-namespace.yml"
+                        bat "kubectl apply -f manifests-repo\\k8s-flaskapi-configmap.yml"
+                        bat "for %%i in (manifests-repo\\k8s-*-spc.yml) do kubectl apply -f %%i"
+
+                        deploymentOrder.each { serviceName ->
+                            if (buildResults.succeeded.contains(serviceName)) {
+                                echo "--- Starting deployment for ${serviceName} (in order) ---"
+                                def fullTag = "${serviceName}-${IMAGE_TAG}"
+                                def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
+                                def serviceManifestFile = "manifests-repo\\k8s-${serviceName}.yml"
+
+                                bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
+
+                                bat "kubectl apply -f ${serviceManifestFile}"
+                            }
+                        }
+
+                        echo "Applying ingress manifest..."
+                        bat "kubectl apply -f manifests-repo\\k8s-ingress.yml"
+                    }
                 }
             }
         }
@@ -210,4 +209,3 @@ def buildAndPush(String serviceName, String servicePath, String fullTag) {
         bat "docker push ${image}"
     }
 }
-

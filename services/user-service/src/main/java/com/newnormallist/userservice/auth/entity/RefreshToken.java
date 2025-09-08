@@ -15,7 +15,7 @@ public class RefreshToken {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  // 사용자와 1:1 관계 설정
+  // 사용자와 1:1 관계 매핑
   @OneToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "user_id", nullable = false)
   private User user;

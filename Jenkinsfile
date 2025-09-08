@@ -7,6 +7,10 @@ def changedServicePaths = []
 pipeline {
     agent any
 
+    tools {
+            jdk 'jdk17'
+    }
+
     environment {
         // AWS 설정
         AWS_DEFAULT_REGION = 'ap-northeast-2'

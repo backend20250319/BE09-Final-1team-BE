@@ -1,8 +1,12 @@
 package com.newsletterservice.dto;
 
-import lombok.*;
-import java.time.LocalDateTime;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -10,10 +14,8 @@ import java.util.List;
 @AllArgsConstructor
 public class UserPreferenceProfile {
     private Long userId;
-    private List<String> preferredCategories;
-    private Integer recentInteractions;
-    private Integer mostActiveHour;
-    private Integer preferredReadTime;
-    private Double engagementScore;
-    private LocalDateTime lastAnalyzed;
+    private Map<String, Double> categoryPreferences;
+    private List<String> preferredKeywords;
+    private String preferredContentType;
+    private double engagementRate;
 }

@@ -124,7 +124,7 @@ pipeline {
         }
 
         // ▼▼▼ [수정] 'Deploy to EKS' 스테이지가 아래와 같이 변경됩니다. ▼▼▼
-                 stage('Update Manifests and Push') {
+                stage('Update Manifests and Push') {
                             when { expression { !buildResults.succeeded.isEmpty() } }
                             steps {
                                 script {
@@ -149,23 +149,23 @@ pipeline {
                                             bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
                                         }
 
-                                        echo "Pushing updated manifests to Git repository..."
-                                        withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
-                                            // ▼▼▼ [수정] git checkout 및 git push 명령어를 수정하여 Detached HEAD 문제를 해결합니다. ▼▼▼
-                                            bat """
-                                                set GIT_SSH_COMMAND=ssh -i %GIT_KEY% -o StrictHostKeyChecking=no
-                                                git config --global user.email "jenkins@example.com"
-                                                git config --global user.name "Jenkins CI"
-                                                git checkout main
-                                                git add .
-                                                git commit -m "Deploy: Update image tags for services - ${buildResults.succeeded.join(', ')} (Build #${env.BUILD_NUMBER})"
-                                                git push origin HEAD:main
-                                            """
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                                         echo "Pushing updated manifests to Git repository..."
+                                         // ▼▼▼ [수정] withCredentials 대신 sshagent를 사용하여 git push 인증을 처리합니다. ▼▼▼
+                                         sshagent (credentials: [GIT_CREDENTIALS_ID]) {
+                                             bat """
+                                                 git config --global user.email "jenkins@example.com"
+                                                 git config --global user.name "Jenkins CI"
+                                                 git checkout main
+                                                 git add .
+                                                 git commit -m "Deploy: Update image tags for services - ${buildResults.succeeded.join(', ')} (Build #${env.BUILD_NUMBER})"
+                                                 git push origin HEAD:main
+                                             """
+                                         }
+                                     }
+                                 }
+                             }
+                         }
+                     }
     }
 
     post {

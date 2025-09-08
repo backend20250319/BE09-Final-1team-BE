@@ -7,9 +7,10 @@ spring:
   cloud:
     bootstrap:
       enabled: false
+      # feignclient bean override 설정
   main:
     allow-bean-definition-overriding: true
-    # feignclient bean override 설정
+
 server:
   port: 8085
   # port 설정

@@ -124,49 +124,48 @@ pipeline {
         }
 
         // ▼▼▼ [수정] 'Deploy to EKS' 스테이지가 아래와 같이 변경됩니다. ▼▼▼
-                stage('Update Manifests and Push') {
-                    when { expression { !buildResults.succeeded.isEmpty() } }
-                    steps {
-                        script {
-                            echo "Updating manifests for successfully built services: ${buildResults.succeeded.join(', ')}"
+                 stage('Update Manifests and Push') {
+                            when { expression { !buildResults.succeeded.isEmpty() } }
+                            steps {
+                                script {
+                                    echo "Updating manifests for successfully built services: ${buildResults.succeeded.join(', ')}"
 
-                            // 1. Manifest 레포지토리 클론
-                            checkout([
-                                $class: 'GitSCM',
-                                branches: [[name: '*/main']],
-                                doGenerateSubmoduleConfigurations: false,
-                                extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'manifests-repo']],
-                                submoduleCfg: [],
-                                userRemoteConfigs: [[credentialsId: GIT_CREDENTIALS_ID, url: MANIFEST_REPO_URL]]
-                            ])
+                                    checkout([
+                                        $class: 'GitSCM',
+                                        branches: [[name: '*/main']],
+                                        doGenerateSubmoduleConfigurations: false,
+                                        extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'manifests-repo']],
+                                        submoduleCfg: [],
+                                        userRemoteConfigs: [[credentialsId: GIT_CREDENTIALS_ID, url: MANIFEST_REPO_URL]]
+                                    ])
 
-                            // 2. 빌드 성공한 서비스들의 YAML 파일 이미지 태그 업데이트
-                            dir('manifests-repo') {
-                                buildResults.succeeded.each { serviceName ->
-                                    echo "--- Updating manifest for ${serviceName} ---"
-                                    def fullTag = "${serviceName}-${IMAGE_TAG}"
-                                    def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
-                                    def serviceManifestFile = "k8s-${serviceName}.yml"
+                                    dir('manifests-repo') {
+                                        buildResults.succeeded.each { serviceName ->
+                                            echo "--- Updating manifest for ${serviceName} ---"
+                                            def fullTag = "${serviceName}-${IMAGE_TAG}"
+                                            def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
+                                            def serviceManifestFile = "k8s-${serviceName}.yml"
 
-                                    bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
-                                }
+                                            bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
+                                        }
 
-                                // 3. 변경된 내용을 Manifest 레포지토리에 Commit & Push
-                                echo "Pushing updated manifests to Git repository..."
-                                withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
-                                    bat """
-                                        set GIT_SSH_COMMAND=ssh -i %GIT_KEY% -o StrictHostKeyChecking=no
-                                        git config --global user.email "jenkins@example.com"
-                                        git config --global user.name "Jenkins CI"
-                                        git add .
-                                        git commit -m "Deploy: Update image tags for services - ${buildResults.succeeded.join(', ')} (Build #${env.BUILD_NUMBER})"
-                                        git push origin main
-                                    """
+                                        echo "Pushing updated manifests to Git repository..."
+                                        withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
+                                            // ▼▼▼ [수정] git checkout 및 git push 명령어를 수정하여 Detached HEAD 문제를 해결합니다. ▼▼▼
+                                            bat """
+                                                set GIT_SSH_COMMAND=ssh -i %GIT_KEY% -o StrictHostKeyChecking=no
+                                                git config --global user.email "jenkins@example.com"
+                                                git config --global user.name "Jenkins CI"
+                                                git checkout main
+                                                git add .
+                                                git commit -m "Deploy: Update image tags for services - ${buildResults.succeeded.join(', ')} (Build #${env.BUILD_NUMBER})"
+                                                git push origin HEAD:main
+                                            """
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-                }
     }
 
     post {

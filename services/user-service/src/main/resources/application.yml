@@ -1,3 +1,4 @@
+# User-service 내부 설정 파일
 spring:
   application:
     name: user-service

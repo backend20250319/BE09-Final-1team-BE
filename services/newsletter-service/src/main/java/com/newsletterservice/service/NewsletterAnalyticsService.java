@@ -47,4 +47,9 @@ public interface NewsletterAnalyticsService {
      * 뉴스레터 발송 통계 기록
      */
     void recordNewsletterDelivery(Long userId, String newsletterType, boolean success);
+    
+    /**
+     * 뉴스레터 발송 통계 동기화
+     */
+    void syncNewsletterDeliveryStats();
 }

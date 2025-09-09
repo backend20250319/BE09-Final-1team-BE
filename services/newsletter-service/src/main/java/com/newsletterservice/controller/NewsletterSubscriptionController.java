@@ -1,10 +1,8 @@
 package com.newsletterservice.controller;
 
 import com.newsletterservice.common.ApiResponse;
-import com.newsletterservice.common.exception.NewsletterException;
 import com.newsletterservice.entity.UserNewsletterSubscription;
 import com.newsletterservice.repository.UserNewsletterSubscriptionRepository;
-import com.newsletterservice.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +13,6 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,19 +45,18 @@ public class NewsletterSubscriptionController extends BaseController {
             
             log.info("뉴스레터 구독 요청: userId={}, category={}", userId, category);
             
-            // 기존 구독 확인
-            Optional<UserNewsletterSubscription> existing = subscriptionRepository.findByUserIdAndCategory(userId, category);
+            // 기존 활성 구독 확인 (다중 구독 허용하므로 중복 체크 제거)
+            // 카테고리별로 여러 구독이 가능하므로 중복 체크를 하지 않음
             
-            if (existing.isPresent()) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("ALREADY_SUBSCRIBED", "이미 구독 중인 카테고리입니다."));
-            }
-            
-            // 새 구독 생성
+            // 새 구독 생성 (다중 구독 지원)
             UserNewsletterSubscription subscription = UserNewsletterSubscription.builder()
                     .userId(userId)
                     .category(category)
                     .isActive(true)
+                    .frequency((String) request.getOrDefault("frequency", "DAILY"))
+                    .sendTime((String) request.getOrDefault("sendTime", "09:00"))
+                    .isPersonalized((Boolean) request.getOrDefault("isPersonalized", false))
+                    .keywords((String) request.getOrDefault("keywords", null))
                     .build();
             
             subscriptionRepository.save(subscription);
@@ -73,6 +69,10 @@ public class NewsletterSubscriptionController extends BaseController {
             response.put("subscriptionId", subscription.getId());
             response.put("category", category);
             response.put("isActive", true);
+            response.put("frequency", subscription.getFrequency());
+            response.put("sendTime", subscription.getSendTime());
+            response.put("isPersonalized", subscription.getIsPersonalized());
+            response.put("keywords", subscription.getKeywords());
             response.put("subscribedAt", subscription.getSubscribedAt());
             response.put("updatedAt", subscription.getUpdatedAt());
             
@@ -100,14 +100,15 @@ public class NewsletterSubscriptionController extends BaseController {
             
             log.info("뉴스레터 구독 취소 요청: userId={}, category={}", userId, category);
             
-            Optional<UserNewsletterSubscription> subscription = subscriptionRepository.findByUserIdAndCategory(userId, category);
+            // 카테고리별 모든 구독 조회
+            List<UserNewsletterSubscription> subscriptions = subscriptionRepository.findAllByUserIdAndCategory(userId, category);
             
-            if (subscription.isEmpty()) {
+            if (subscriptions.isEmpty()) {
                 return ResponseEntity.badRequest()
                     .body(ApiResponse.error("SUBSCRIPTION_NOT_FOUND", "구독 정보를 찾을 수 없습니다."));
             }
             
-            // Repository의 효율적인 업데이트 메서드 사용
+            // 카테고리별 모든 구독을 비활성화
             int updatedRows = subscriptionRepository.updateSubscriptionStatus(userId, category, false);
             
             if (updatedRows == 0) {
@@ -440,6 +441,46 @@ public class NewsletterSubscriptionController extends BaseController {
     }
 
     /**
+     * 카테고리별 구독 목록 조회
+     */
+    @GetMapping("/category/{category}")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getSubscriptionsByCategory(
+            @PathVariable String category,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            Long userId = super.extractUserIdFromToken(httpRequest);
+            
+            log.info("카테고리별 구독 목록 조회 요청: userId={}, category={}", userId, category);
+            
+            List<UserNewsletterSubscription> subscriptions = subscriptionRepository.findAllByUserIdAndCategory(userId, category);
+            
+            List<Map<String, Object>> result = subscriptions.stream()
+                    .map(sub -> {
+                        Map<String, Object> subMap = new HashMap<>();
+                        subMap.put("subscriptionId", sub.getId());
+                        subMap.put("category", sub.getCategory());
+                        subMap.put("isActive", sub.getIsActive());
+                        subMap.put("subscribedAt", sub.getSubscribedAt());
+                        subMap.put("updatedAt", sub.getUpdatedAt());
+                        subMap.put("frequency", sub.getFrequency());
+                        subMap.put("sendTime", sub.getSendTime());
+                        subMap.put("isPersonalized", sub.getIsPersonalized());
+                        subMap.put("keywords", sub.getKeywords());
+                        return subMap;
+                    })
+                    .toList();
+            
+            return ResponseEntity.ok(ApiResponse.success(result, "카테고리별 구독 목록을 조회했습니다."));
+            
+        } catch (Exception e) {
+            log.error("카테고리별 구독 목록 조회 중 오류 발생", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("CATEGORY_SUBSCRIPTION_LIST_ERROR", "카테고리별 구독 목록 조회 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    /**
      * 구독 여부 확인
      */
     @GetMapping("/check/{category}")
@@ -452,17 +493,28 @@ public class NewsletterSubscriptionController extends BaseController {
             
             log.info("구독 여부 확인 요청: userId={}, category={}", userId, category);
             
-            Optional<UserNewsletterSubscription> subscription = subscriptionRepository.findByUserIdAndCategory(userId, category);
+            List<UserNewsletterSubscription> subscriptions = subscriptionRepository.findAllByUserIdAndCategory(userId, category);
+            List<UserNewsletterSubscription> activeSubscriptions = subscriptionRepository.findAllActiveSubscriptionsByUserIdAndCategory(userId, category);
             
             Map<String, Object> result = new HashMap<>();
             result.put("category", category);
-            result.put("isSubscribed", subscription.isPresent());
+            result.put("isSubscribed", !subscriptions.isEmpty());
+            result.put("totalSubscriptions", subscriptions.size());
+            result.put("activeSubscriptions", activeSubscriptions.size());
+            result.put("inactiveSubscriptions", subscriptions.size() - activeSubscriptions.size());
             
-            if (subscription.isPresent()) {
-                result.put("subscriptionId", subscription.get().getId());
-                result.put("isActive", subscription.get().getIsActive());
-                result.put("subscribedAt", subscription.get().getSubscribedAt());
-            }
+            // 구독 목록 정보 추가
+            List<Map<String, Object>> subscriptionList = subscriptions.stream()
+                    .map(sub -> {
+                        Map<String, Object> subMap = new HashMap<>();
+                        subMap.put("subscriptionId", sub.getId());
+                        subMap.put("isActive", sub.getIsActive());
+                        subMap.put("subscribedAt", sub.getSubscribedAt());
+                        subMap.put("updatedAt", sub.getUpdatedAt());
+                        return subMap;
+                    })
+                    .toList();
+            result.put("subscriptions", subscriptionList);
             
             return ResponseEntity.ok(ApiResponse.success(result, "구독 여부를 확인했습니다."));
             

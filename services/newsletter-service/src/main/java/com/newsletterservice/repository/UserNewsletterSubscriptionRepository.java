@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,9 +24,14 @@ public interface UserNewsletterSubscriptionRepository extends JpaRepository<User
     List<UserNewsletterSubscription> findByUserId(Long userId);
 
     /**
-     * 사용자 ID와 카테고리로 구독 정보 조회
+     * 사용자 ID와 카테고리로 구독 정보 조회 (첫 번째 구독만)
      */
     Optional<UserNewsletterSubscription> findByUserIdAndCategory(Long userId, String category);
+
+    /**
+     * 사용자 ID와 카테고리로 모든 구독 정보 조회 (다중 구독 지원)
+     */
+    List<UserNewsletterSubscription> findAllByUserIdAndCategory(Long userId, String category);
 
     /**
      * 사용자 ID로 활성 구독 정보만 조회
@@ -34,10 +40,16 @@ public interface UserNewsletterSubscriptionRepository extends JpaRepository<User
     List<UserNewsletterSubscription> findActiveSubscriptionsByUserId(@Param("userId") Long userId);
 
     /**
-     * 사용자 ID와 카테고리로 활성 구독 정보 조회
+     * 사용자 ID와 카테고리로 활성 구독 정보 조회 (첫 번째 구독만)
      */
     @Query("SELECT s FROM UserNewsletterSubscription s WHERE s.userId = :userId AND s.category = :category AND s.isActive = true")
     Optional<UserNewsletterSubscription> findActiveSubscriptionByUserIdAndCategory(@Param("userId") Long userId, @Param("category") String category);
+
+    /**
+     * 사용자 ID와 카테고리로 모든 활성 구독 정보 조회 (다중 구독 지원)
+     */
+    @Query("SELECT s FROM UserNewsletterSubscription s WHERE s.userId = :userId AND s.category = :category AND s.isActive = true")
+    List<UserNewsletterSubscription> findAllActiveSubscriptionsByUserIdAndCategory(@Param("userId") Long userId, @Param("category") String category);
 
     /**
      * 구독 상태 업데이트
@@ -104,4 +116,64 @@ public interface UserNewsletterSubscriptionRepository extends JpaRepository<User
      * 사용자 ID와 카테고리 조합 존재 여부 확인
      */
     boolean existsByUserIdAndCategory(Long userId, String category);
+    
+    /**
+     * 스케줄링용 활성 구독자 조회 (발송 시간 및 빈도 고려)
+     */
+    @Query("""
+        SELECT s FROM UserNewsletterSubscription s 
+        WHERE s.isActive = true 
+        AND s.frequency = :frequency
+        AND s.sendTime = :sendTime
+        """)
+    List<UserNewsletterSubscription> findActiveSubscriptionsForScheduling(
+        @Param("frequency") String frequency,
+        @Param("sendTime") String sendTime,
+        @Param("now") LocalDateTime now
+    );
+    
+    /**
+     * 특정 시간대의 활성 구독자 조회 (빈도 무관)
+     */
+    @Query("""
+        SELECT s FROM UserNewsletterSubscription s 
+        WHERE s.isActive = true 
+        AND s.sendTime = :sendTime
+        """)
+    List<UserNewsletterSubscription> findActiveSubscriptionsBySendTime(
+        @Param("sendTime") String sendTime
+    );
+    
+    /**
+     * 특정 빈도의 활성 구독자 조회 (시간 무관)
+     */
+    @Query("""
+        SELECT s FROM UserNewsletterSubscription s 
+        WHERE s.isActive = true 
+        AND s.frequency = :frequency
+        """)
+    List<UserNewsletterSubscription> findActiveSubscriptionsByFrequency(
+        @Param("frequency") String frequency
+    );
+    
+    /**
+     * 개인화 설정이 활성화된 구독자 조회
+     */
+    @Query("""
+        SELECT s FROM UserNewsletterSubscription s 
+        WHERE s.isActive = true 
+        AND s.isPersonalized = true
+        """)
+    List<UserNewsletterSubscription> findPersonalizedActiveSubscriptions();
+    
+    /**
+     * 키워드가 설정된 구독자 조회
+     */
+    @Query("""
+        SELECT s FROM UserNewsletterSubscription s 
+        WHERE s.isActive = true 
+        AND s.keywords IS NOT NULL 
+        AND s.keywords != ''
+        """)
+    List<UserNewsletterSubscription> findSubscriptionsWithKeywords();
 }

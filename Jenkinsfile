@@ -40,10 +40,11 @@ pipeline {
 
                     def servicePathsOutput = bat(returnStdout: true, script: 'dir /s /b Dockerfile').trim()
 
-                    // [수정됨] 필터링 로직 강화: 명령어 에코 등 불필요한 라인을 확실히 제거합니다.
-                    // 실제 'Dockerfile' 텍스트를 포함하는 라인만 유효한 경로로 간주합니다.
+                    // [수정됨] 더 강력한 필터링: '>'로 시작하는 명령어 에코 라인을 명시적으로 제외합니다.
                     def validServicePaths = servicePathsOutput.split('\r\n').findAll { line ->
-                        line.trim() != '' && line.contains('Dockerfile')
+                        def trimmedLine = line.trim()
+                        // 비어있지 않고, '>'로 시작하지 않으며, 'Dockerfile'을 포함하는 라인만 필터링
+                        trimmedLine != '' && !trimmedLine.startsWith('>') && trimmedLine.contains('Dockerfile')
                     }.collect { it.replace('\\Dockerfile', '') }
 
                     def workspacePath = env.WORKSPACE

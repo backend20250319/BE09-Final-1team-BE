@@ -1,4 +1,4 @@
-// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (post 블록 위치 수정)
+// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]
@@ -27,10 +27,6 @@ pipeline {
         // Kubernetes Manifests 리포지토리 정보
         MANIFEST_REPO_URL = 'git@github.com:Berry-mas/BE09_Final_1team_k8s_manifests.git'
 
-        // EKS 설정
-        EKS_CLUSTER_NAME = 'BE09-Final-1team-BE-cluster'
-        EKS_NAMESPACE = 'msa-namespace'
-
         // Docker 이미지 태그 (빌드번호 + 커밋해시)
         IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
     }
@@ -43,9 +39,7 @@ pipeline {
                     def changedServices = new HashSet<String>()
 
                     def servicePathsOutput = bat(returnStdout: true, script: 'dir /s /b Dockerfile').trim()
-                    def allServicePaths = servicePathsOutput.split('\r\n').findAll { line ->
-                        line.matches("^[a-zA-Z]:.*") && !line.contains('>') && line.trim() != ''
-                    }.collect { it.replace('\\Dockerfile', '') }
+                    def allServicePaths = servicePathsOutput.split('\r\n').findAll { line -> !line.startsWith('>') && line.trim() != '' }.collect { it.replace('\\Dockerfile', '') }
 
                     def workspacePath = env.WORKSPACE
                     def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
@@ -90,31 +84,18 @@ pipeline {
                     changedServicePaths.each { servicePath ->
                         def currentService = servicePath
                         parallelStages["Build & Push ${currentService}"] = {
-                        def result = [:]
+                        try {
                             def serviceName = currentService.split('\\\\').last()
-                            try {
-                            def fullTag = "${serviceName}-${IMAGE_TAG}"
+                                def fullTag = "${serviceName}-${IMAGE_TAG}"
                                 buildAndPush(serviceName, currentService, fullTag)
-                                result = [service: serviceName, status: 'SUCCESS']
+                                buildResults.succeeded.add(serviceName)
                             } catch (e) {
-                            echo "ERROR in parallel stage for ${currentService}: ${e.getMessage()}"
-                                result = [service: serviceName, status: 'FAILURE']
-                            }
-                            return result
-                        }
-                    }
-
-                    def stageResults = parallel parallelStages
-
-                    stageResults.each { stageName, result ->
-                        if (result != null) {
-                        if (result.status == 'SUCCESS') {
-                            buildResults.succeeded.add(result.service)
-                            } else {
-                            buildResults.failed.add(result.service)
+                            echo "ERROR during build or push for ${currentService}: ${e.toString()}"
+                                buildResults.failed.add(currentService.split('\\\\').last())
                             }
                         }
                     }
+                    parallel parallelStages
 
                     if (!buildResults.failed.isEmpty()) {
                         error("One or more services failed to build: ${buildResults.failed.join(', ')}")
@@ -129,16 +110,23 @@ pipeline {
                 script {
                     echo "Updating manifests for successfully built services: ${buildResults.succeeded.join(', ')}"
 
+                    // 1. Manifest 리포지토리를 'manifests-repo' 폴더에 checkout
                     checkout([
                         $class: 'GitSCM',
                         branches: [[name: '*/main']],
-                        doGenerateSubmoduleConfigurations: false,
-                        extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'manifests-repo']],
-                        submoduleCfg: [],
-                        userRemoteConfigs: [[credentialsId: GIT_CREDENTIALS_ID, url: MANIFEST_REPO_URL]]
+                        userRemoteConfigs: [[
+                            url: MANIFEST_REPO_URL,
+                            credentialsId: GIT_CREDENTIALS_ID
+                        ]],
+                        extensions: [[
+                            $class: 'RelativeTargetDirectory',
+                            relativeTargetDir: 'manifests-repo'
+                        ]]
                     ])
 
+                    // 2. checkout 받은 폴더로 이동하여 작업
                     dir('manifests-repo') {
+                        // 3. 빌드 성공한 서비스들의 YAML 파일만 이미지 태그 교체
                         buildResults.succeeded.each { serviceName ->
                             echo "--- Updating manifest for ${serviceName} ---"
                             def fullTag = "${serviceName}-${IMAGE_TAG}"
@@ -148,15 +136,15 @@ pipeline {
                             bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
                         }
 
+                        // 4. 변경된 파일들을 Git에 Commit 하고 Push
                         echo "Pushing updated manifests to Git repository..."
                         withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
                             bat """
                                 set GIT_SSH_COMMAND=ssh -i "%GIT_KEY%" -o StrictHostKeyChecking=no
                                 git config --global user.email "jenkins@example.com"
                                 git config --global user.name "Jenkins CI"
-                                git checkout main
                                 git add .
-                                git commit -m "Deploy: Update image tags for services - ${buildResults.succeeded.join(', ')} (Build #${env.BUILD_NUMBER})"
+                                git commit -m "Deploy: Update image tags for services: ${buildResults.succeeded.join(', ')} [Build #${env.BUILD_NUMBER}]"
                                 git push origin HEAD:main
                             """
                         }
@@ -166,7 +154,6 @@ pipeline {
         }
     }
 
-    // ▼▼▼ [최종 수정] post 블록을 stages 블록과 같은 레벨로, pipeline 블록 안으로 이동시켰습니다. ▼▼▼
     post {
         always {
             script {
@@ -207,4 +194,3 @@ def buildAndPush(String serviceName, String servicePath, String fullTag) {
         bat "docker push ${image}"
     }
 }
-

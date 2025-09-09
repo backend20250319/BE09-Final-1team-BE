@@ -27,9 +27,9 @@ NEWS_SERVICE_URL: http://localhost:8082
 
 # 카카오 API 공통 설정 (모든 환경에서 사용)
 kakao:
-  app-key: ${KAKAO_APP_KEY:your-app-key}
-  client-id: ${KAKAO_CLIENT_ID:your-client-id}
-  client-secret: ${KAKAO_CLIENT_SECRET:your-client-secret}
+  app-key: ${newsletter.kakao.app-key:your-app-key}
+  client-id: ${newsletter.kakao.client-id:your-client-id}
+  client-secret: ${newsletter.kakao.client-secret:your-client-secret}
   redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:8085/api/kakao/redirect}
   template-id: ${KAKAO_TEMPLATE_ID:123798}
   

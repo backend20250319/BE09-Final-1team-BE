@@ -21,7 +21,7 @@ pipeline {
         GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key'
 
         // Kubernetes Manifests 리포지토리 정보
-        MANIFEST_REPO_URL = 'git@github.com:backend20250319/BE09-Final-1team-k8s-manifests.git'
+        MANIFEST_REPO_URL = 'git@github.com:Berry-mas/BE09-Final-1team-k8s-manifests.git'
         
         // EKS 설정
         EKS_CLUSTER_NAME = 'BE09-Final-1team-BE-cluster'

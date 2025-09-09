@@ -50,7 +50,4 @@ public interface NewsScrapRepository extends JpaRepository<NewsScrap, Integer> {
     // 컬렉션에 속하지 않은 스크랩을 제목으로 검색
     @Query("SELECT ns FROM NewsScrap ns JOIN ns.news n WHERE ns.userId = :userId AND ns.storageId IS NULL AND n.title LIKE %:query%")
     Page<NewsScrap> findByUserIdAndStorageIdIsNullAndNewsTitleContaining(@Param("userId") Long userId, @Param("query") String query, Pageable pageable);
-
-    // 특정 뉴스의 스크랩 수 조회 (인기도 점수 계산용)
-    long countByNewsNewsId(Long newsId);
 }

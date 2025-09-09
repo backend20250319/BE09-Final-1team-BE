@@ -15,6 +15,6 @@ public class CategoryPerformance {
     private int deliveryCount;
     private int openCount;
     private int clickCount;
-    private double openRate;
-    private double clickRate;
+    private long totalSent;
+    private long totalOpened;
 }

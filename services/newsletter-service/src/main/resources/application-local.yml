@@ -5,8 +5,6 @@ spring:
      import: configserver:http://192.168.0.38:8888
 #    import: optional:configserver:http://localhost:8888
     # import: configserver:http://dev.macacolabs.site:8888  #  다른 와이파이에서도 config와 연결 가능
-  retry:
-    enabled: true
 
 eureka:
   client:
@@ -23,6 +21,9 @@ user:
 
 # 환경변수 설정 (Feign Client에서 사용)
 USER_SERVICE_URL: http://localhost:8081
+<<<<<<< HEAD
+NEWS_SERVICE_URL: http://localhost:8082
+=======
 NEWS_SERVICE_URL: http://localhost:8082
 
 # 카카오 API 공통 설정 (모든 환경에서 사용)
@@ -65,3 +66,4 @@ firebase:
     path: firebase-service-account.json
   project:
     id: ${FIREBASE_PROJECT_ID:}
+>>>>>>> develop

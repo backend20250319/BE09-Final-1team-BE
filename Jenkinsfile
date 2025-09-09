@@ -1,4 +1,4 @@
-// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (@로 에코를 꺼서 문제 해결)
+// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (flaskapi 디버깅)
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]
@@ -38,11 +38,9 @@ pipeline {
                     echo "Detecting all services to build using PowerShell..."
                     def allServices = new HashSet<String>()
 
-                    // [수정됨] 최종 해결책: 명령어 앞에 '@'를 붙여 명령어 에코 현상을 원천 차단합니다.
                     def psCommand = '@powershell -Command "Get-ChildItem -Path . -Recurse -Filter Dockerfile | ForEach-Object { $_.Directory.FullName }"'
                     def servicePathsOutput = bat(returnStdout: true, script: psCommand).trim()
 
-                    // 이제 출력이 깨끗하므로, 콜론(':') 필터링만으로도 충분히 안정적입니다.
                     def validServicePaths = servicePathsOutput.split('\r\n').findAll { line ->
                         def trimmedLine = line.trim()
                         trimmedLine != '' && trimmedLine.contains(':')
@@ -83,6 +81,8 @@ pipeline {
                                 buildResults.succeeded.add(serviceName)
                             } catch (e) {
                             echo "ERROR during build or push for ${currentService}: ${e.toString()}"
+                                // [수정됨] 상세한 에러 로그를 출력하여 디버깅을 돕습니다.
+                                e.printStackTrace()
                                 buildResults.failed.add(currentService.split('\\\\').last())
                             }
                         }

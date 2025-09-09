@@ -53,7 +53,6 @@ public class NewsletterService {
  
     private final NewsletterDeliveryRepository deliveryRepository;
     private final SubscriptionRepository subscriptionRepository;
-=======
     private final NewsletterContentService contentService;
     private final NewsletterDeliveryService deliveryService;
     private final NewsletterAnalyticsService analyticsService;

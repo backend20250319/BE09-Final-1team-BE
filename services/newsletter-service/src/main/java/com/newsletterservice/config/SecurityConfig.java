@@ -52,8 +52,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/newsletter/{newsletterId}/preview").permitAll()
 
                         // 2-4. 구독 관리 - 인증 불필요 (개별 인증 로직으로 처리)
-                        .requestMatchers(HttpMethod.GET, "/api/newsletter/subscription/\\d+").permitAll() // 숫자 ID만 허용
-                        .requestMatchers(HttpMethod.GET, "/api/newsletter/subscription/my").permitAll() // 내 구독 조회
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/subscription/{id}").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/newsletter/subscription/{id}").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/newsletter/subscription/{subscriptionId}/status").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/newsletter/newsletters/unsubscribe").permitAll()
@@ -71,14 +70,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/newsletter/trending-keywords").permitAll()
                         .requestMatchers(HttpMethod.GET, "/newsletter/category/*/trending-keywords").permitAll()
 
-                        // 2-7. 테스트 API - 인증 불필요
-                        .requestMatchers("/api/newsletters/test-user-service/**").permitAll()
-
-                        // 2-8. 관리자 기능 - 인증 필요
+                        // 2-7. 관리자 기능 - 인증 필요
                         .requestMatchers("/api/newsletter/delivery/**").authenticated()
 
-                        // 2-9. 나머지 모든 요청은 인증 불필요 (개발용)
-                        .anyRequest().permitAll()
+                        // 2-8. 나머지 모든 요청은 인증 필요
+                        .anyRequest().authenticated()
                 )
 
                 // 3. HTTP Basic 인증 사용 (개발용)

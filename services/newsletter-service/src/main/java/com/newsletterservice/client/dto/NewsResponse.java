@@ -21,6 +21,4 @@ public class NewsResponse {
     private String categoryName;
     private LocalDateTime publishedAt;
     private LocalDateTime createdAt;
-    private Long viewCount;
-    private Long shareCount;
 }

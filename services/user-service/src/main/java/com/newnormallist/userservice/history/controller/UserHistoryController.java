@@ -1,7 +1,6 @@
 package com.newnormallist.userservice.history.controller;
 
 import com.newnormallist.userservice.common.ApiResult;
-import com.newnormallist.userservice.common.AuthUtils;
 import com.newnormallist.userservice.history.dto.ReadHistoryResponse;
 import com.newnormallist.userservice.history.service.UserHistoryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,13 +37,9 @@ public class UserHistoryController {
             @Parameter(hidden = true) @AuthenticationPrincipal String userIdStr,
             @Parameter(description = "뉴스 ID", example = "98765") @PathVariable Long newsId
     ) {
-        try {
-            Long userId = AuthUtils.parseUserId(userIdStr);
-            userHistoryService.addReadHistory(userId, newsId);
-            return ResponseEntity.ok(ApiResult.success("읽은 뉴스가 저장되었습니다."));
-        } catch (IllegalArgumentException e) {
-            return AuthUtils.unauthorizedResponse();
-        }
+        Long userId = Long.parseLong(userIdStr);
+        userHistoryService.addReadHistory(userId, newsId);
+        return ResponseEntity.ok(ApiResult.success("읽은 뉴스가 저장되었습니다."));
     }
 
     /**
@@ -61,12 +56,8 @@ public class UserHistoryController {
             @ParameterObject
             @PageableDefault(size = 10, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        try {
-            Long userId = AuthUtils.parseUserId(userIdStr);
-            Page<ReadHistoryResponse> historyPage = userHistoryService.getReadHistory(userId, pageable);
-            return ResponseEntity.ok(ApiResult.success(historyPage));
-        } catch (IllegalArgumentException e) {
-            return AuthUtils.unauthorizedResponse();
-        }
+        Long userId = Long.parseLong(userIdStr);
+        Page<ReadHistoryResponse> historyPage = userHistoryService.getReadHistory(userId, pageable);
+        return ResponseEntity.ok(ApiResult.success(historyPage));
     }
 }

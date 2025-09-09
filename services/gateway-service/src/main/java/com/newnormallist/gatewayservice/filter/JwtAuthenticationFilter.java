@@ -93,30 +93,11 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     // /api/search/ 경로는 검색 기능으로 공개 접근 허용
     boolean isPublicSearchPath = path.startsWith("/api/search");
 
-    // /api/trending/ 경로는 트렌딩 기능으로 공개 접근 허용
-    boolean isPublicTrendingPath = path.startsWith("/api/trending");
-
-    // /api/categories/ 경로는 카테고리 기능으로 공개 접근 허용
-    boolean isPublicCategoriesPath = path.startsWith("/api/categories");
-
-    // 뉴스레터 공개 경로들 - 인증 불필요
-    boolean isPublicNewsletterPath = path.startsWith("/api/newsletter/stats/subscribers")
-            || path.startsWith("/api/newsletter/trending-keywords")
-            || path.startsWith("/api/newsletter/category/") && (path.contains("/trending-keywords") || path.contains("/headlines") || path.contains("/articles") || path.contains("/subscribers"))
-            || path.startsWith("/api/newsletter/categories/subscribers")
-            || path.startsWith("/api/newsletter/subscribe")
-            || path.startsWith("/api/newsletter/confirm")
-            || (path.startsWith("/api/newsletter/subscription/") && path.matches(".*/\\d+$")) // /api/newsletter/subscription/{id} 형태만 허용
-            || path.startsWith("/api/newsletter/newsletters/unsubscribe");
-
     return path.startsWith("/api/users/signup")
             || path.startsWith("/api/auth/")
             || path.startsWith("/api/users/categories")
             || isPublicNewsPath
             || isPublicSearchPath
-            || isPublicTrendingPath
-            || isPublicCategoriesPath
-            || isPublicNewsletterPath
             || path.startsWith("/swagger-ui")
             || path.contains("api-docs");
   }

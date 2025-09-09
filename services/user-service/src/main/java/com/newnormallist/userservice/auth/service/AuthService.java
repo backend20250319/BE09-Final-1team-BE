@@ -11,7 +11,6 @@ import com.newnormallist.userservice.common.ErrorCode;
 import com.newnormallist.userservice.user.entity.User;
 import com.newnormallist.userservice.common.exception.UserException;
 import com.newnormallist.userservice.user.repository.UserRepository;
-import com.newnormallist.userservice.user.dto.MyPageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -193,18 +192,6 @@ public class AuthService {
         );
         // 4. 최종 응답 DTO 생성 및 반환
         return new LoginResponseDto(accessToken, refreshTokenValue, userInfo);
-    }
-
-    /**
-     * 사용자 정보 조회 로직
-     * @param userId 사용자 ID
-     * @return MyPageResponse 사용자 정보
-     */
-    @Transactional(readOnly = true)
-    public MyPageResponse getUserInfo(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
-        return new MyPageResponse(user);
     }
 
 }

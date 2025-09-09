@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
+@AllArgsConstructor
 public enum RecommendationType {
     CONTENT_BASED("콘텐츠 기반"),
     COLLABORATIVE("협업 필터링"),
@@ -12,8 +13,4 @@ public enum RecommendationType {
     CATEGORY_BASED("카테고리 기반");
     
     private final String description;
-    
-    RecommendationType(String description) {
-        this.description = description;
-    }
 }

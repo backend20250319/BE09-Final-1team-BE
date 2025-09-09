@@ -40,11 +40,8 @@ springdoc:
   swagger-ui:
     path: /newsletter-swagger-ui.html
 
-# OAuth2 설정
-spring:
-  security:
-    oauth2:
-      client:
-        registration:
-          kakao:
-            redirect-uri: http://localhost:8085/api/auth/login/oauth2/code/kakao
+oauth2:
+  redirect:
+    frontend-callback-url: http://be09-final-1team-fe-env.eba-92qhhhzz.ap-northeast-2.elasticbeanstalk.com/auth/callback
+    frontend-additional-info-url: http://be09-final-1team-fe-env.eba-92qhhhzz.ap-northeast-2.elasticbeanstalk.com/auth/additional-info
+    frontend-additional-info-url: http://be09-final-1team-fe-env.eba-92qhhhzz.ap-northeast-2.elasticbeanstalk.com/auth/additional-info

@@ -3,12 +3,14 @@ package com.newnormallist.userservice.auth.handler;
 import com.newnormallist.userservice.auth.dto.GoogleUserInfo;
 import com.newnormallist.userservice.auth.dto.KakaoUserInfo;
 import com.newnormallist.userservice.auth.dto.OAuth2UserInfo;
+import com.newnormallist.userservice.auth.entity.RefreshToken;
 import com.newnormallist.userservice.auth.jwt.JwtTokenProvider;
 import com.newnormallist.userservice.auth.repository.CookieOAuth2AuthorizationRequestRepository;
 import com.newnormallist.userservice.auth.repository.RefreshTokenRepository;
 import com.newnormallist.userservice.common.util.CookieUtil;
 import com.newnormallist.userservice.user.entity.User;
 import com.newnormallist.userservice.user.repository.UserRepository;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +21,11 @@ import org.springframework.security.oauth2.client.authentication.OAuth2Authentic
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -65,11 +70,11 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         if (user.getBirthYear() == null || user.getGender() == null) {
             log.info("신규 소셜 로그인 사용자입니다. 추가 정보 입력 페이지로 리디렉션합니다. Email: {}", email);
             String tempToken = jwtTokenProvider.createTempToken(user.getEmail(), user.getId());
-            // 임시 토큰을 쿠키와 URL 파라미터 모두로 전달 (프론트엔드 호환성을 위해)
+            // 임시 토큰을 URL 대신 HttpOnly 쿠키로 전달
             int tempTokenMaxAge = 10 * 60; // 10분
             CookieUtil.addCookie(response, "temp_token", tempToken, tempTokenMaxAge);
-            // 사용자 정보와 함께 URL로 리디렉션
-            String targetUrl = createAdditionalInfoRedirectUrl(user);
+            // 토큰 정보 없는 URL로 리디렉션
+            String targetUrl = createAdditionalInfoRedirectUrl();
             getRedirectStrategy().sendRedirect(request, response, targetUrl);
         } else {
             // 기존 소셜 로그인 사용자의 경우
@@ -82,13 +87,13 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
                             refreshToken -> refreshToken.updateTokenValue(refreshTokenValue),
                             () -> refreshTokenRepository.save(new RefreshToken(user, refreshTokenValue))
                     );
-            // 토큰을 쿠키와 URL 파라미터 모두로 전달 (프론트엔드 호환성을 위해)
+            // 토큰을 URL 대신 HttpOnly 쿠키로 전달
             int accessTokenMaxAge = (int) (jwtTokenProvider.getAccessTokenValidityInMilliseconds() / 1000);
             int refreshTokenMaxAge = (int) (jwtTokenProvider.getRefreshTokenValidityInMilliseconds() / 1000);
             CookieUtil.addCookie(response, "access-token", accessToken, accessTokenMaxAge);
             CookieUtil.addCookie(response, "refresh-token", refreshTokenValue, refreshTokenMaxAge);
 
-            String targetUrl = createFinalRedirectUrl(user);
+            String targetUrl = createFinalRedirectUrl();
             getRedirectStrategy().sendRedirect(request, response, targetUrl);
         }
     }
@@ -97,29 +102,8 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         return finalRedirectUrl;
     }
 
-    private String createFinalRedirectUrl(User user) {
-        return UriComponentsBuilder.fromUriString(finalRedirectUrl)
-                .queryParam("success", "true")
-                .queryParam("userId", user.getId())
-                .queryParam("email", user.getEmail())
-                .queryParam("nickname", user.getName())
-                .queryParam("role", user.getRole().name())
-                .build().toUriString();
-    }
-
     private String createAdditionalInfoRedirectUrl() {
         return additionalInfoUrl;
-    }
-
-    private String createAdditionalInfoRedirectUrl(User user) {
-        return UriComponentsBuilder.fromUriString(additionalInfoUrl)
-                .queryParam("success", "true")
-                .queryParam("userId", user.getId())
-                .queryParam("email", user.getEmail())
-                .queryParam("nickname", user.getName())
-                .queryParam("role", user.getRole().name())
-                .queryParam("needsAdditionalInfo", "true")
-                .build().toUriString();
     }
 
     protected void clearAuthenticationAttributes(HttpServletRequest request, HttpServletResponse response) {

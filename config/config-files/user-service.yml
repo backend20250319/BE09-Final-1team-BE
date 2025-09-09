@@ -50,8 +50,16 @@ spring:
         registration:
           kakao:
             redirect-uri: "http://localhost:8000/api/auth/login/oauth2/code/kakao"
+            authorization-grant-type: authorization_code
+            client-authentication-method: client_secret_post
+            scope:
+              - profile_nickname
+              - account_email
           google:
             redirect-uri: "http://localhost:8000/api/auth/login/oauth2/code/google"
+            scope:
+              - email
+              - profile
         provider:
           kakao:
             # 카카오 서버의 엔드포인트 주소들
@@ -61,10 +69,5 @@ spring:
             user-name-attribute: id
 oauth2:
   redirect:
-    frontend-callback-url: http://localhost:3000/auth/oauth/kakao # 프론트엔드 리다이렉트 URL (개발/테스트용)
-    frontend-additional-info-url: http://localhost:3000/auth/oauth/additional-info # 추가 정보 입력 페이지 URL (개발/테스트용)
-
-# 카카오 API 설정
-kakao:
-  client-id: ${KAKAO_CLIENT_ID:your-client-id}
-  client-secret: ${KAKAO_CLIENT_SECRET:your-client-secret}
+    frontend-callback-url: http://localhost:3000/oauth/callback # 프론트엔드 리다이렉트 URL (개발/테스트용)
+    frontend-additional-info-url: http://localhost:3000/oauth/additional-info # 추가 정보 입력 페이지 URL (개발/테스트용)

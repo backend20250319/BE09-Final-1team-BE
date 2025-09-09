@@ -7,29 +7,27 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
-import org.springframework.validation.annotation.Validated;
 
 import java.io.IOException;
 
 @Configuration
 @Slf4j
-@Validated
 public class FeignTimeoutConfig {
     
     /**
-     * Feign 재시도 설정 - 더 빠른 실패 감지
+     * Feign 재시도 설정
      */
     @Bean
     public Retryer feignRetryer() {
-        return new Retryer.Default(500, 2000, 1); // (period, maxPeriod, maxAttempts) - 1회만 재시도
+        return new Retryer.Default(100, 1000, 2); // (period, maxPeriod, maxAttempts)
     }
     
     /**
-     * Feign 타임아웃 설정 - 더 짧은 타임아웃으로 빠른 실패 감지
+     * Feign 타임아웃 설정
      */
     @Bean
     public feign.Request.Options feignOptions() {
-        return new feign.Request.Options(3000, 5000); // (connectTimeout, readTimeout) - 3초 연결, 5초 읽기
+        return new feign.Request.Options(5000, 10000); // (connectTimeout, readTimeout)
     }
     
     /**

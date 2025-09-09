@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -43,6 +44,7 @@ public class NewsletterController extends BaseController {
     private final NewsletterDeliveryRepository deliveryRepository;
     private final Optional<KakaoMessageService> kakaoMessageService;
     private final com.newsletterservice.client.UserServiceClient userServiceClient;
+    private final com.newsletterservice.client.NewsServiceClient newsServiceClient;
     private final UserNewsletterSubscriptionRepository subscriptionRepository;
 
     // ========================================
@@ -2097,6 +2099,268 @@ public class NewsletterController extends BaseController {
             return null;
         }
         return authorization.substring(7);
+    }
+
+    // ========================================
+    // Enhanced API - 실시간 뉴스 필터링
+    // ========================================
+
+    /**
+     * Enhanced 뉴스레터 API - 각 카테고리별 실시간 주제와 헤드라인 표시
+     */
+    @GetMapping("/enhanced")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getEnhancedNewsletter(
+            @RequestParam(defaultValue = "5") int headlinesPerCategory,
+            @RequestParam(defaultValue = "8") int trendingKeywordsLimit,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            log.info("Enhanced 뉴스레터 요청: headlinesPerCategory={}, trendingKeywordsLimit={}", 
+                    headlinesPerCategory, trendingKeywordsLimit);
+            
+            // 사용자 ID 추출 (선택적)
+            Long userId = null;
+            try {
+                userId = super.extractUserIdFromToken(httpRequest);
+                log.info("인증된 사용자: userId={}", userId);
+            } catch (Exception e) {
+                log.info("비인증 사용자 접근");
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            
+            // 1. 카테고리별 실시간 헤드라인 수집
+            Map<String, Object> categoryData = new HashMap<>();
+            String[] categories = {"정치", "경제", "사회", "생활", "세계", "IT/과학", "자동차/교통", "여행/음식", "예술"};
+            
+            for (String category : categories) {
+                try {
+                    List<NewsletterContent.Article> headlines = newsletterService.getCategoryHeadlines(category, headlinesPerCategory);
+                    List<Map<String, Object>> headlineList = headlines.stream()
+                            .map(article -> {
+                                Map<String, Object> headline = new HashMap<>();
+                                headline.put("id", article.getId());
+                                headline.put("title", article.getTitle());
+                                headline.put("summary", article.getSummary());
+                                headline.put("url", article.getUrl());
+                                headline.put("publishedAt", article.getPublishedAt());
+                                headline.put("category", article.getCategory());
+                                return headline;
+                            })
+                            .collect(Collectors.toList());
+                    
+                    categoryData.put(category, headlineList);
+                    log.debug("카테고리 {} 헤드라인 수집 완료: {}개", category, headlineList.size());
+                    
+                } catch (Exception e) {
+                    log.warn("카테고리 {} 헤드라인 수집 실패: {}", category, e.getMessage());
+                    categoryData.put(category, new ArrayList<>());
+                }
+            }
+            
+            // 2. 트렌딩 키워드 수집
+            List<String> trendingKeywords = new ArrayList<>();
+            try {
+                // NewsServiceClient를 통해 실제 트렌딩 키워드 조회
+                com.newsletterservice.common.ApiResponse<List<com.newsletterservice.client.dto.TrendingKeywordDto>> response = 
+                        newsServiceClient.getTrendingKeywords(trendingKeywordsLimit, "24h", 24);
+                
+                if (response.isSuccess() && response.getData() != null) {
+                    trendingKeywords = response.getData().stream()
+                            .map(com.newsletterservice.client.dto.TrendingKeywordDto::getKeyword)
+                            .collect(Collectors.toList());
+                    log.info("실제 트렌딩 키워드 수집 완료: {}개", trendingKeywords.size());
+                } else {
+                    // 폴백: 기본 키워드 사용
+                    trendingKeywords = List.of("AI", "블록체인", "환경", "부동산", "주식", "코로나", "기후변화", "디지털");
+                    log.warn("트렌딩 키워드 API 응답 실패, 기본 키워드 사용");
+                }
+            } catch (Exception e) {
+                log.warn("트렌딩 키워드 수집 실패, 기본 키워드 사용: {}", e.getMessage());
+                trendingKeywords = List.of("AI", "블록체인", "환경", "부동산", "주식", "코로나", "기후변화", "디지털");
+            }
+            
+            // 3. 사용자 구독 정보 (인증된 경우)
+            Map<String, Object> userSubscriptionInfo = new HashMap<>();
+            if (userId != null) {
+                try {
+                    List<UserNewsletterSubscription> activeSubscriptions = subscriptionRepository
+                            .findActiveSubscriptionsByUserId(userId);
+                    
+                    List<String> subscribedCategories = activeSubscriptions.stream()
+                            .map(sub -> convertEnglishToKorean(sub.getCategory()))
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toList());
+                    
+                    userSubscriptionInfo.put("userId", userId);
+                    userSubscriptionInfo.put("subscribedCategories", subscribedCategories);
+                    userSubscriptionInfo.put("totalSubscriptions", activeSubscriptions.size());
+                    userSubscriptionInfo.put("isPersonalized", activeSubscriptions.stream()
+                            .anyMatch(UserNewsletterSubscription::getIsPersonalized));
+                    
+                } catch (Exception e) {
+                    log.warn("사용자 구독 정보 조회 실패: {}", e.getMessage());
+                }
+            }
+            
+            // 4. 결과 조립
+            result.put("categories", categoryData);
+            result.put("trendingKeywords", trendingKeywords);
+            result.put("userSubscriptionInfo", userSubscriptionInfo);
+            result.put("timestamp", LocalDateTime.now().toString());
+            result.put("totalCategories", categories.length);
+            result.put("headlinesPerCategory", headlinesPerCategory);
+            
+            log.info("Enhanced 뉴스레터 응답 생성 완료: userId={}, categories={}, keywords={}", 
+                    userId, categories.length, trendingKeywords.size());
+            
+            return ResponseEntity.ok(ApiResponse.success(result, "Enhanced 뉴스레터 데이터가 조회되었습니다."));
+            
+        } catch (Exception e) {
+            log.error("Enhanced 뉴스레터 조회 실패", e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("ENHANCED_NEWSLETTER_ERROR", "Enhanced 뉴스레터 조회 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 카테고리별 상세 정보 조회 - 확장된 뉴스 정보
+     */
+    @GetMapping("/enhanced/category/{category}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getEnhancedCategoryDetails(
+            @PathVariable String category,
+            @RequestParam(defaultValue = "10") int headlinesLimit,
+            @RequestParam(defaultValue = "8") int keywordsLimit,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            log.info("카테고리 상세 정보 조회: category={}, headlinesLimit={}, keywordsLimit={}", 
+                    category, headlinesLimit, keywordsLimit);
+            
+            // 사용자 ID 추출 (선택적)
+            Long userId = null;
+            try {
+                userId = super.extractUserIdFromToken(httpRequest);
+            } catch (Exception e) {
+                log.info("비인증 사용자 접근");
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            
+            // 1. 카테고리별 헤드라인 (더 많은 수)
+            List<NewsletterContent.Article> headlines = newsletterService.getCategoryHeadlines(category, headlinesLimit);
+            List<Map<String, Object>> headlineList = headlines.stream()
+                    .map(article -> {
+                        Map<String, Object> headline = new HashMap<>();
+                        headline.put("id", article.getId());
+                        headline.put("title", article.getTitle());
+                        headline.put("summary", article.getSummary());
+                        headline.put("url", article.getUrl());
+                        headline.put("publishedAt", article.getPublishedAt());
+                        headline.put("category", article.getCategory());
+                        return headline;
+                    })
+                    .collect(Collectors.toList());
+            
+            // 2. 카테고리별 트렌딩 키워드
+            List<String> categoryKeywords = new ArrayList<>();
+            try {
+                // NewsServiceClient를 통해 실제 카테고리별 키워드 조회
+                String englishCategory = convertCategoryToEnglish(category);
+                if (englishCategory != null) {
+                    com.newsletterservice.common.ApiResponse<List<com.newsletterservice.client.dto.TrendingKeywordDto>> response = 
+                            newsServiceClient.getTrendingKeywordsByCategory(englishCategory, keywordsLimit, "24h", 24);
+                    
+                    if (response.isSuccess() && response.getData() != null) {
+                        categoryKeywords = response.getData().stream()
+                                .map(com.newsletterservice.client.dto.TrendingKeywordDto::getKeyword)
+                                .collect(Collectors.toList());
+                        log.info("실제 카테고리별 키워드 수집 완료: category={}, keywords={}", category, categoryKeywords.size());
+                    } else {
+                        // 폴백: 기본 키워드 사용
+                        categoryKeywords = getDefaultCategoryKeywords(category);
+                        log.warn("카테고리별 키워드 API 응답 실패, 기본 키워드 사용: category={}", category);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("카테고리별 키워드 조회 실패, 기본 키워드 사용: category={}, error={}", category, e.getMessage());
+                categoryKeywords = getDefaultCategoryKeywords(category);
+            }
+            
+            // 3. 사용자 구독 상태 (인증된 경우)
+            Map<String, Object> subscriptionStatus = new HashMap<>();
+            if (userId != null) {
+                try {
+                    String englishCategory = convertCategoryToEnglish(category);
+                    if (englishCategory != null) {
+                        Optional<UserNewsletterSubscription> subscription = subscriptionRepository
+                                .findByUserIdAndCategory(userId, englishCategory);
+                        
+                        subscriptionStatus.put("isSubscribed", subscription.isPresent() && subscription.get().getIsActive());
+                        subscriptionStatus.put("subscriptionId", subscription.map(UserNewsletterSubscription::getId).orElse(null));
+                        subscriptionStatus.put("subscribedAt", subscription.map(UserNewsletterSubscription::getSubscribedAt).orElse(null));
+                    }
+                } catch (Exception e) {
+                    log.warn("구독 상태 조회 실패: {}", e.getMessage());
+                }
+            }
+            
+            // 4. 결과 조립
+            result.put("category", category);
+            result.put("categoryEn", convertCategoryToEnglish(category));
+            result.put("headlines", headlineList);
+            result.put("trendingKeywords", categoryKeywords);
+            result.put("subscriptionStatus", subscriptionStatus);
+            result.put("timestamp", LocalDateTime.now().toString());
+            result.put("totalHeadlines", headlineList.size());
+            result.put("totalKeywords", categoryKeywords.size());
+            
+            log.info("카테고리 상세 정보 조회 완료: category={}, headlines={}, keywords={}", 
+                    category, headlineList.size(), categoryKeywords.size());
+            
+            return ResponseEntity.ok(ApiResponse.success(result, "카테고리 상세 정보가 조회되었습니다."));
+            
+        } catch (Exception e) {
+            log.error("카테고리 상세 정보 조회 실패: category={}", category, e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("CATEGORY_DETAILS_ERROR", "카테고리 상세 정보 조회 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 영어 카테고리를 한국어로 변환하는 헬퍼 메서드
+     */
+    private String convertEnglishToKorean(String englishCategory) {
+        Map<String, String> categoryMap = Map.of(
+            "POLITICS", "정치",
+            "ECONOMY", "경제",
+            "SOCIETY", "사회",
+            "LIFE", "생활",
+            "INTERNATIONAL", "세계",
+            "IT_SCIENCE", "IT/과학",
+            "VEHICLE", "자동차/교통",
+            "TRAVEL_FOOD", "여행/음식",
+            "ART", "예술"
+        );
+        return categoryMap.get(englishCategory);
+    }
+
+    /**
+     * 카테고리별 기본 키워드를 반환하는 헬퍼 메서드
+     */
+    private List<String> getDefaultCategoryKeywords(String category) {
+        Map<String, List<String>> categoryKeywordMap = Map.of(
+            "정치", List.of("대통령", "국회", "선거", "정당", "정책", "외교", "국방", "안보"),
+            "경제", List.of("주식", "부동산", "금리", "인플레이션", "GDP", "고용", "기업", "투자"),
+            "사회", List.of("교육", "의료", "복지", "범죄", "교통", "환경", "노동", "문화"),
+            "생활", List.of("건강", "요리", "육아", "여행", "쇼핑", "패션", "뷰티", "취미"),
+            "세계", List.of("미국", "중국", "일본", "유럽", "러시아", "북한", "국제", "글로벌"),
+            "IT/과학", List.of("AI", "반도체", "스마트폰", "게임", "소프트웨어", "하드웨어", "연구", "기술"),
+            "자동차/교통", List.of("전기차", "자율주행", "교통", "대중교통", "도로", "주차", "운전", "모터쇼"),
+            "여행/음식", List.of("해외여행", "국내여행", "맛집", "레스토랑", "카페", "호텔", "항공", "관광"),
+            "예술", List.of("영화", "음악", "미술", "연극", "뮤지컬", "전시", "공연", "문화")
+        );
+        return categoryKeywordMap.getOrDefault(category, new ArrayList<>());
     }
 }
 

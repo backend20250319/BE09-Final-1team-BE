@@ -1,3 +1,4 @@
+# user
 # 1. 서버 포트 설정
 server:
   port: 8081
@@ -25,47 +26,48 @@ logging:
 
 # 5. swagger 설정
 springdoc:
-  forward-headers-enabled: true # 게이트웨이에서 전달된 헤더를 사용
-  # 이 서비스의 API 문서(JSON 파일)를 어떤 경로에 만들지 결정
+  forward-headers-enabled: true
   api-docs:
     path: /user-api-docs
-  # 2. 이 서비스 단독으로 Swagger UI 페이지를 보고 싶을 때 사용할 경로 (개발/테스트용)
   swagger-ui:
     path: /user-swagger-ui.html
-  # 3. 게이트웨이에서 이 서비스를 식별할 그룹 정보 설정
   group-configs:
     - group: user-service
       paths-to-match:
         - /api/users/**
-        - /api/auth/** # auth API도 문서에 포함
+        - /api/auth/**
 
 app:
-  gateway-url: http://localhost:8000 # 게이트웨이 URL (개발/테스트용)
+  gateway-url: http://localhost:8000
 
-# 6. oauth 설정
+# 6. oauth 설정 (민감 정보 제거됨)
 spring:
   security:
     oauth2:
       client:
         registration:
           kakao:
-            redirect-uri: "http://localhost:8000/api/auth/login/oauth2/code/kakao"
+            redirect-uri: 'http://localhost:8000/api/auth/login/oauth2/code/kakao'
+            authorization-grant-type: authorization_code
+            client-authentication-method: client_secret_post
+            scope:
+              - profile_nickname
+              - account_email
           google:
-            redirect-uri: "http://localhost:8000/api/auth/login/oauth2/code/google"
+            redirect-uri: 'http://localhost:8000/api/auth/login/oauth2/code/google'
+            scope:
+              - email
+              - profile
         provider:
           kakao:
-            # 카카오 서버의 엔드포인트 주소들
             authorization-uri: https://kauth.kakao.com/oauth/authorize
             token-uri: https://kauth.kakao.com/oauth/token
             user-info-uri: https://kapi.kakao.com/v2/user/me
             user-name-attribute: id
 
-# 카카오 API 설정
-kakao:
-  client-id: ${KAKAO_CLIENT_ID:8944645f178eb64e30fca4c7f3c41f3a}
-  client-secret: ${KAKAO_CLIENT_SECRET:h93D4ZAW0v6EciwrtycOQliq3a8UF36X}
-
+# 7. 프론트엔드 리디렉션 URL 설정
 oauth2:
   redirect:
-    frontend-callback-url: http://localhost:3000/auth/oauth/kakao # 프론트엔드 리다이렉트 URL (개발/테스트용)
-    frontend-additional-info-url: http://localhost:3000/auth/oauth/additional-info # 추가 정보 입력 페이지 URL (개발/테스트용)
+    # 두 브랜치의 내용을 병합하고 경로를 통일
+    frontend-callback-url: http://localhost:3000/auth/oauth/kakao
+    frontend-additional-info-url: http://localhost:3000/auth/oauth/additional-info

@@ -68,6 +68,10 @@ public class News {
     @Column(name = "updated_at", columnDefinition = "DATETIME(6)")
     private LocalDateTime updatedAt;
 
+    @Column(name = "view_count", nullable = false, columnDefinition = "INT DEFAULT 0")
+    @Builder.Default
+    private Integer viewCount = 0;
+
     // 날짜를 원하는 형식으로 변환하는 메서드
     public String getCreatedAtFormatted() {
         if (createdAt != null) {

@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: newsletter-service
+  config:
+    import: optional:configserver:http://config-server:8888
+  cloud:
+    bootstrap:
+      enabled: false
+  main:
+    allow-bean-definition-overriding: true
+    # feignclient bean override 설정
+server:
+  port: 8085
+  # port 설정

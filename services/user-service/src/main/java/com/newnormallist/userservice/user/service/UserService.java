@@ -1,8 +1,12 @@
 package com.newnormallist.userservice.user.service;
 
+import com.newnormallist.userservice.analytics.service.UserAnalyticsService;
 import com.newnormallist.userservice.auth.repository.RefreshTokenRepository;
 import com.newnormallist.userservice.common.ErrorCode;
 import com.newnormallist.userservice.history.dto.ReadHistoryResponse;
+import com.newnormallist.userservice.history.dto.UserBehaviorAnalysis;
+import com.newnormallist.userservice.history.dto.CategoryPreferenceResponse;
+import com.newnormallist.userservice.history.dto.UserInterestResponse;
 import com.newnormallist.userservice.history.entity.UserReadHistory;
 import com.newnormallist.userservice.history.repository.UserReadHistoryRepository;
 import com.newnormallist.userservice.user.dto.*;
@@ -27,9 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -43,6 +49,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserReadHistoryRepository userReadHistoryRepository;
     private final NewsRepository newsRepository;
+    private final UserAnalyticsService userAnalyticsService;
 
     /**
      * 회원가입 로직
@@ -242,6 +249,69 @@ public class UserService {
         }
         if (lowerPassword.contains(emailId)) {
             throw new UserException(ErrorCode.PASSWORD_CONTAINS_EMAIL);
+        }
+    }
+
+    /**
+     * 사용자 행동 분석 조회 (내부 서비스용) - 위임
+     */
+    @Transactional(readOnly = true)
+    public UserBehaviorAnalysis getUserBehaviorAnalysis(Long userId) {
+        return userAnalyticsService.getUserBehaviorAnalysis(userId);
+    }
+
+    /**
+     * 사용자 카테고리 선호도 조회 (내부 서비스용) - 위임
+     */
+    @Transactional(readOnly = true)
+    public CategoryPreferenceResponse getCategoryPreferences(Long userId) {
+        return userAnalyticsService.getCategoryPreferences(userId);
+    }
+
+    /**
+     * 사용자 관심사 분석 조회 (내부 서비스용) - 위임
+     */
+    @Transactional(readOnly = true)
+    public UserInterestResponse getUserInterests(Long userId) {
+        return userAnalyticsService.getUserInterests(userId);
+    }
+
+    /**
+     * 사용자 관심사 점수 맵 조회 (내부 서비스용) - 위임
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Double> getInterestScores(Long userId) {
+        return userAnalyticsService.getInterestScores(userId);
+    }
+
+    /**
+     * 사용자 상위 관심사 목록 조회 (내부 서비스용) - 위임
+     */
+    @Transactional(readOnly = true)
+    public List<String> getTopInterests(Long userId) {
+        return userAnalyticsService.getTopInterests(userId);
+    }
+
+    /**
+     * 앱 내 알림을 허용한 사용자 목록 조회
+     * @return 앱 내 알림을 허용한 사용자 ID 목록
+     */
+    @Transactional(readOnly = true)
+    public List<Long> getInAppNotificationEnabledUsers() {
+        log.debug("앱 내 알림을 허용한 사용자 목록 조회");
+        
+        try {
+            // 활성 사용자 중에서 뉴스레터 수신 동의(letterOk = true)한 사용자들을 조회
+            // letterOk 필드를 앱 내 알림 허용으로 해석
+            List<Long> enabledUsers = userRepository.findInAppNotificationEnabledUserIds();
+            
+            log.info("앱 내 알림 허용 사용자 수: {}", enabledUsers.size());
+            return enabledUsers;
+            
+        } catch (Exception e) {
+            log.error("앱 내 알림 허용 사용자 목록 조회 실패", e);
+            // 오류 발생 시 빈 목록 반환
+            return new ArrayList<>();
         }
     }
 

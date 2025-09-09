@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
 public enum DeliveryStatus {
     PENDING("발송 대기"),
     PROCESSING("발송 중"),
@@ -16,4 +15,8 @@ public enum DeliveryStatus {
     CANCELLED("취소됨");
 
     private final String description;
+    
+    DeliveryStatus(String description) {
+        this.description = description;
+    }
 }

@@ -2,35 +2,24 @@ package com.newnormallist.newsservice.news.service;
 
 import com.newnormallist.newsservice.news.dto.*;
 import com.newnormallist.newsservice.news.entity.*;
-import com.newnormallist.newsservice.news.exception.NewsNotFoundException;
-import com.newnormallist.newsservice.news.exception.NewsForbiddenException;
-
-import com.newnormallist.newsservice.news.repository.KeywordSubscriptionRepository;
-import com.newnormallist.newsservice.news.repository.NewsCrawlRepository;
-import com.newnormallist.newsservice.news.repository.NewsRepository;
+import com.newnormallist.newsservice.news.exception.*;
+import com.newnormallist.newsservice.news.repository.*;
 import com.newnormallist.newsservice.tooltip.client.TooltipServiceClient;
-import com.newnormallist.newsservice.tooltip.dto.ProcessContentRequest;
-import com.newnormallist.newsservice.tooltip.dto.ProcessContentResponse;
-import com.newnormallist.newsservice.news.repository.NewsScrapRepository;
-import com.newnormallist.newsservice.news.repository.ScrapStorageRepository;
-import com.newnormallist.newsservice.news.entity.NewsComplaint;
-import com.newnormallist.newsservice.news.entity.NewsStatus;
-import com.newnormallist.newsservice.news.repository.NewsComplaintRepository;
-import com.newnormallist.newsservice.news.dto.ScrappedNewsResponse;
+import com.newnormallist.newsservice.tooltip.dto.*;
+import com.newnormallist.newsservice.news.client.UserServiceClient;
+import com.newnormallist.newsservice.news.client.dto.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import java.time.*;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Set;
-import java.util.Map;
 
 @Service
 @Transactional
@@ -42,9 +31,18 @@ public class NewsServiceImpl implements NewsService {
 
     @Autowired
     private NewsRepository newsRepository;
+    
+    @Autowired
+    private UserServiceClient userServiceClient;
 
     @Autowired
     private TooltipServiceClient tooltipServiceClient;
+    
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
+    
+    // 비동기 처리를 위한 Executor
+    private final Executor asyncExecutor = Executors.newFixedThreadPool(5);
 
     @Autowired
     private KeywordSubscriptionRepository keywordSubscriptionRepository;
@@ -152,8 +150,9 @@ public class NewsServiceImpl implements NewsService {
         return NewsResponse.builder()
                 .newsId(news.getNewsId())
                 .title(news.getTitle())
-                .content(processedContent) // 👈 마크업된 본문
+                .content(processedContent) 
                 .press(news.getPress())
+                .link(news.getLink())
                 .publishedAt(parsePublishedAt(news.getPublishedAt()))
                 .reporterName(news.getReporter())
                 .createdAt(news.getCreatedAt())
@@ -162,19 +161,74 @@ public class NewsServiceImpl implements NewsService {
                 .imageUrl(news.getImageUrl())
                 .oidAid(news.getOidAid())
                 .categoryName(news.getCategoryName().name())
+                .viewCount(news.getViewCount())
                 .build();
                 // ----- 툴팁 기능을 위한 코드 끝 -----
     }
 
     @Override
     public List<NewsResponse> getPersonalizedNews(Long userId) {
-        // TODO: 사용자 선호도 기반 개인화 로직 구현
-        // 현재는 신뢰도가 높은 뉴스 10개 반환
-        return newsRepository.findByTrustedTrue(Pageable.ofSize(10))
-                .getContent()
-                .stream()
-                .map(this::convertToNewsResponse)
-                .collect(Collectors.toList());
+        try {
+            log.info("개인화 뉴스 조회 시작: userId={}", userId);
+            
+            // 1. 사용자 선호도 조회 (UserServiceClient 사용)
+            List<String> userPreferences = getUserPreferences(userId);
+            List<String> readingHistory = getUserReadingHistory(userId);
+            
+            if (userPreferences.isEmpty() && readingHistory.isEmpty()) {
+                log.info("신규 사용자 또는 데이터 부족: userId={}, 신뢰도 높은 뉴스 반환", userId);
+                // 신규 사용자의 경우 신뢰도 높은 뉴스 반환
+                return newsRepository.findByTrustedTrue(Pageable.ofSize(10))
+                        .getContent()
+                        .stream()
+                        .map(this::convertToNewsResponse)
+                        .collect(Collectors.toList());
+            }
+            
+            // 2. 개인화된 뉴스 조회
+            List<News> personalizedNews;
+            if (!userPreferences.isEmpty()) {
+                // String 카테고리를 Category enum으로 변환
+                List<Category> categories = userPreferences.stream()
+                        .map(this::stringToCategory)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
+                
+                if (!categories.isEmpty()) {
+                    // 카테고리 기반 개인화 뉴스 조회
+                    personalizedNews = newsRepository.findPersonalizedNewsByCategories(
+                        categories, Pageable.ofSize(15)
+                    );
+                } else {
+                    // 변환 실패 시 신뢰도 높은 뉴스 조회
+                    personalizedNews = newsRepository.findByTrustedTrue(Pageable.ofSize(15))
+                            .getContent();
+                }
+            } else {
+                // 읽기 기록 기반 뉴스 조회 (신뢰도 높은 뉴스)
+                personalizedNews = newsRepository.findByTrustedTrue(Pageable.ofSize(15))
+                        .getContent();
+            }
+            
+            // 3. 다양성을 위해 카테고리별로 균형있게 선택
+            List<NewsResponse> diversifiedNews = diversifyNews(personalizedNews)
+                    .stream()
+                    .limit(10)
+                    .map(this::convertToNewsResponse)
+                    .collect(Collectors.toList());
+            
+            log.info("개인화 뉴스 조회 완료: userId={}, count={}", userId, diversifiedNews.size());
+            return diversifiedNews;
+                    
+        } catch (Exception e) {
+            log.error("개인화 뉴스 조회 실패: userId={}", userId, e);
+            // 폴백: 신뢰도 높은 뉴스 반환
+            return newsRepository.findByTrustedTrue(Pageable.ofSize(10))
+                    .getContent()
+                    .stream()
+                    .map(this::convertToNewsResponse)
+                    .collect(Collectors.toList());
+        }
     }
 
     @Override
@@ -189,8 +243,25 @@ public class NewsServiceImpl implements NewsService {
 
     @Override
     public void incrementViewCount(Long newsId) {
-        // TODO: 조회수 증가 로직 구현
-        // 현재는 view count 필드가 없으므로 나중에 구현
+        try {
+            String key = "news:viewcount:" + newsId;
+            String dailyKey = "news:daily:viewcount:" + newsId + ":" + LocalDate.now();
+            
+            // Redis에서 조회수 증가 (원자적 연산)
+            redisTemplate.opsForValue().increment(key, 1);
+            redisTemplate.opsForValue().increment(dailyKey, 1);
+            
+            // 일일 조회수는 자정에 만료
+            redisTemplate.expire(dailyKey, Duration.ofDays(1));
+            
+            // 비동기로 DB 업데이트 (배치 처리)
+            CompletableFuture.runAsync(() -> updateViewCountInDB(newsId), asyncExecutor);
+            
+            log.debug("뉴스 조회수 증가: newsId={}", newsId);
+            
+        } catch (Exception e) {
+            log.error("조회수 증가 실패: newsId={}", newsId, e);
+        }
     }
 
 
@@ -202,10 +273,36 @@ public class NewsServiceImpl implements NewsService {
 
     @Override
     public Page<NewsListResponse> getRecommendedNews(Long userId, Pageable pageable) {
-        // TODO: 사용자 기반 추천 로직 구현
-        // 현재는 신뢰도가 높은 뉴스 반환
-        return newsRepository.findByTrustedTrue(pageable)
-                .map(this::convertToNewsListResponse);
+        try {
+            // 사용자 프로필 기반 추천
+            UserProfile userProfile = getUserProfile(userId);
+            
+            if (userProfile.isNewUser()) {
+                // 신규 사용자: 인기 뉴스 + 다양한 카테고리
+                return getPopularNewsForNewUser(pageable);
+            }
+            
+            // 기존 사용자: 협업 필터링 + 콘텐츠 기반 필터링
+            List<News> recommendedNews = getHybridRecommendations(userId, userProfile);
+            
+            // 페이징 처리
+            int start = (int) pageable.getOffset();
+            int end = Math.min(start + pageable.getPageSize(), recommendedNews.size());
+            
+            List<NewsListResponse> pageContent = recommendedNews
+                    .subList(start, end)
+                    .stream()
+                    .map(this::convertToNewsListResponse)
+                    .collect(Collectors.toList());
+            
+            return new PageImpl<>(pageContent, pageable, recommendedNews.size());
+            
+        } catch (Exception e) {
+            log.error("추천 뉴스 조회 실패: userId={}", userId, e);
+            // 폴백: 신뢰도 높은 뉴스 반환
+            return newsRepository.findByTrustedTrue(pageable)
+                    .map(this::convertToNewsListResponse);
+        }
     }
 
     @Override
@@ -407,13 +504,14 @@ public class NewsServiceImpl implements NewsService {
     }
 
     // DTO 변환 메서드들
+    // 4. DTO 변환 메서드 개선 (link 필드 및 viewCount 추가)
     private NewsResponse convertToNewsResponse(News news) {
         return NewsResponse.builder()
                 .newsId(news.getNewsId())
                 .title(news.getTitle())
                 .content(news.getContent())
                 .press(news.getPress())
-                .link(null) // TODO: link 필드 추가 필요
+                .link(buildNewsLink(news)) // 뉴스 링크 생성
                 .trusted(news.getTrusted() ? 1 : 0)
                 .publishedAt(parsePublishedAt(news.getPublishedAt()))
                 .createdAt(news.getCreatedAt())
@@ -423,6 +521,7 @@ public class NewsServiceImpl implements NewsService {
                 .dedupStateDescription(news.getDedupState().getDescription())
                 .imageUrl(news.getImageUrl())
                 .oidAid(news.getOidAid())
+                .viewCount(news.getViewCount())
                 .build();
     }
 
@@ -432,12 +531,12 @@ public class NewsServiceImpl implements NewsService {
                 .title(news.getTitle())
                 .content(news.getContent())
                 .press(news.getPress())
-                .link(null) // TODO: link 필드 추가 필요
+                .link(buildNewsLink(news)) // 뉴스 링크 생성
                 .trusted(news.getTrusted() ? 1 : 0)
                 .publishedAt(parsePublishedAt(news.getPublishedAt()))
                 .createdAt(news.getCreatedAt())
                 .reporterName(news.getReporter())
-                .viewCount(0) // TODO: view count 필드 추가 필요
+                .viewCount(getViewCount(news.getNewsId()).intValue()) // 실제 조회수 조회
                 .categoryName(news.getCategoryName().name())
                 .dedupState(news.getDedupState().name())
                 .dedupStateDescription(news.getDedupState().getDescription())
@@ -450,7 +549,7 @@ public class NewsServiceImpl implements NewsService {
         return CategoryDto.builder()
                 .categoryCode(category.name())
                 .categoryName(category.getCategoryName())
-                .icon("📰") // 기본 아이콘
+                .icon("📰") 
                 .build();
     }
 
@@ -916,7 +1015,7 @@ public class NewsServiceImpl implements NewsService {
     }
     
     /**
-     * 텍스트에서 키워드 추출
+     * 텍스트에서 키워드 추출 - 개선된 필터링 로직
      */
     private List<String> extractKeywordsFromText(String text) {
         if (text == null || text.trim().isEmpty()) {
@@ -936,44 +1035,8 @@ public class NewsServiceImpl implements NewsService {
             // 2. 특수문자 제거 (한글, 영문, 숫자만 남김)
             String cleanedWord = word.replaceAll("[^가-힣0-9A-Za-z]", "");
             
-            // 3. 더 관대한 키워드 필터링 조건
-            if (cleanedWord.length() >= 2 && 
-                !STOPWORDS.contains(cleanedWord) &&
-                !cleanedWord.equals("있다") && 
-                !cleanedWord.equals("없다") && 
-                !cleanedWord.equals("하다") && 
-                !cleanedWord.equals("되다") && 
-                !cleanedWord.equals("이다") &&
-                !cleanedWord.equals("것") &&
-                !cleanedWord.equals("수") &&
-                !cleanedWord.equals("등") &&
-                !cleanedWord.equals("및") &&
-                !cleanedWord.equals("또는") &&
-                !cleanedWord.equals("그리고") &&
-                !cleanedWord.equals("이번") &&
-                !cleanedWord.equals("지난") &&
-                !cleanedWord.equals("현재") &&
-                !cleanedWord.equals("최대") &&
-                !cleanedWord.equals("최소") &&
-                !cleanedWord.equals("현장") &&
-                !cleanedWord.equals("관련") &&
-                !cleanedWord.equals("기자") &&
-                !cleanedWord.equals("사진") &&
-                !cleanedWord.equals("영상") &&
-                !cleanedWord.equals("단독") &&
-                !cleanedWord.equals("인터뷰") &&
-                !cleanedWord.equals("종합") &&
-                !cleanedWord.equals("오늘") &&
-                !cleanedWord.equals("내일") &&
-                !cleanedWord.equals("정부") &&
-                !cleanedWord.equals("대통령") &&
-                !cleanedWord.equals("국회") &&
-                !cleanedWord.equals("한국") &&
-                !cleanedWord.equals("대한민국") &&
-                !cleanedWord.equals("뉴스") &&
-                !cleanedWord.equals("기사") &&
-                !cleanedWord.equals("외신")) {
-                
+            // 3. 개선된 키워드 필터링 조건
+            if (isValidKeyword(cleanedWord)) {
                 keywords.add(cleanedWord);
                 log.debug("추출된 키워드: '{}' (원본: '{}')", cleanedWord, word);
             }
@@ -981,6 +1044,69 @@ public class NewsServiceImpl implements NewsService {
         
         log.debug("텍스트에서 추출된 키워드 수: {}", keywords.size());
         return keywords;
+    }
+    
+    /**
+     * 키워드 유효성 검사 - 체계적인 필터링
+     */
+    private boolean isValidKeyword(String word) {
+        if (word == null || word.length() < 2) {
+            return false;
+        }
+        
+        // 1. 불용어 목록에 포함된 단어 제외
+        if (STOPWORDS.contains(word)) {
+            return false;
+        }
+        
+        // 2. 숫자만으로 구성된 단어 제외 (연도, 날짜 등)
+        if (word.matches("^\\d+$")) {
+            return false;
+        }
+        
+        // 3. 특수 패턴 제외
+        if (word.matches(".*[#@$%^&*()].*")) {
+            return false;
+        }
+        
+        // 4. 너무 짧은 영문 단어 제외 (2글자 이하)
+        if (word.matches("^[A-Za-z]{1,2}$")) {
+            return false;
+        }
+        
+        // 5. 반복 문자 패턴 제외 (예: "ㅋㅋㅋ", "ㅎㅎㅎ")
+        if (word.matches("(.)\\1{2,}")) {
+            return false;
+        }
+        
+        // 6. 의미없는 조합어 제외
+        if (isMeaninglessCombination(word)) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 의미없는 조합어 판별
+     */
+    private boolean isMeaninglessCombination(String word) {
+        // 의미없는 조합어 패턴들
+        String[] meaninglessPatterns = {
+            "영화의", "기사의", "뉴스의", "사진의", "영상의", "내용의", "정보의",
+            "추출할", "분석할", "조사할", "확인할", "검토할", "검증할",
+            "관련된", "대한", "위한", "통한", "통해", "대해", "관해",
+            "있는", "없는", "같은", "다른", "이런", "그런", "저런",
+            "하는", "되는", "되는", "이되는", "되는", "되는", "되는"
+        };
+        
+        for (String pattern : meaninglessPatterns) {
+            if (word.contains(pattern)) {
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     /**
@@ -1048,12 +1174,33 @@ public class NewsServiceImpl implements NewsService {
                 .collect(Collectors.toList());
     }
     
-    // 너무 일반적인 단어는 제외
+    // 확장된 불용어 목록 - 의미없는 단어들을 체계적으로 필터링
     private static final Set<String> STOPWORDS = Set.of(
-        "속보", "영상", "단독", "인터뷰", "기자", "사진", "종합", "오늘", "내일",
-        "정부", "대통령", "국회", "한국", "대한민국", "뉴스", "기사", "외신",
-        "관련", "이번", "지난", "현재", "최대", "최소", "현장", "및", "또는", "그리고",
-        "있다", "없다", "하다", "되다", "이다"
+            // 뉴스 관련 일반 용어
+            "속보", "영상", "단독", "인터뷰", "기자", "사진", "종합", "뉴스", "기사", "외신",
+            "현장", "보도", "취재", "논평", "사설", "칼럼", "특집", "기획", "리포트",
+            
+            // 시간 관련
+            "오늘", "내일", "어제", "이번", "지난", "현재", "최근", "곧", "이제",
+            "년", "월", "일", "시", "분", "초", "주", "달", "년도",
+            
+            // 일반적인 조사/어미
+            "것", "수", "등", "및", "또는", "그리고", "하지만", "그러나", "따라서",
+            "있다", "없다", "하다", "되다", "이다", "아니다", "같다", "다르다",
+            "위해", "통해", "대해", "관해", "대한", "관련", "위한", "통한",
+            
+            // 정부/기관 관련
+            "정부", "대통령", "국회", "한국", "대한민국", "국가", "정부기관", "공공기관",
+            "시청", "구청", "군청", "도청", "청", "부", "처", "원",
+            
+            // 일반적인 형용사/부사
+            "최대", "최소", "매우", "정말", "진짜", "완전", "엄청", "너무", "아주",
+            "많이", "조금", "약간", "좀", "더", "가장", "제일", "특히", "특별히",
+            
+            // 기타 의미없는 단어들
+            "내용", "정보", "자료", "데이터", "결과", "상황", "문제", "이슈", "사건",
+            "분석", "전망", "동향", "소식", "업데이트", "변화", "발전", "진전",
+            "영향", "효과", "원인", "이유", "목적", "방법", "과정"
     );
     
     private KeywordSubscriptionDto convertToKeywordSubscriptionDto(KeywordSubscription subscription) {
@@ -1065,5 +1212,750 @@ public class NewsServiceImpl implements NewsService {
                 .createdAt(subscription.getCreatedAt())
                 .updatedAt(subscription.getUpdatedAt())
                 .build();
+    }
+
+    // ========================================
+    // 개인화 뉴스 관련 헬퍼 메서드들
+    // ========================================
+
+    /**
+     * 사용자 선호도 조회 (UserServiceClient 사용)
+     */
+    private List<String> getUserPreferences(Long userId) {
+        try {
+            UserInterestResponse interestResponse = userServiceClient.getUserInterests(userId);
+            if (interestResponse != null && interestResponse.getTopCategories() != null) {
+                return interestResponse.getTopCategories();
+            }
+        } catch (Exception e) {
+            log.warn("사용자 관심사 조회 실패: userId={}", userId, e);
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 사용자 읽기 기록 조회 (UserServiceClient 사용)
+     */
+    private List<String> getUserReadingHistory(Long userId) {
+        try {
+            UserBehaviorAnalysis behaviorAnalysis = userServiceClient.getUserBehaviorAnalysis(userId);
+            if (behaviorAnalysis != null && behaviorAnalysis.getCategoryReadCounts() != null) {
+                // 카테고리별 읽기 횟수가 높은 순으로 정렬하여 반환
+                return behaviorAnalysis.getCategoryReadCounts().entrySet().stream()
+                        .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                        .map(Map.Entry::getKey)
+                        .collect(Collectors.toList());
+            }
+        } catch (Exception e) {
+            log.warn("사용자 읽기 기록 조회 실패: userId={}", userId, e);
+        }
+        return Collections.emptyList();
+    }
+
+
+    /**
+     * String을 Category enum으로 변환하는 헬퍼 메서드
+     */
+    private Category stringToCategory(String categoryName) {
+        try {
+            return Category.valueOf(categoryName.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("유효하지 않은 카테고리명: {}", categoryName);
+        return null;
+        }
+    }
+
+    // ========================================
+    // 조회수 관련 헬퍼 메서드들
+    // ========================================
+
+    /**
+     * 비동기로 DB의 조회수 업데이트
+     */
+    private void updateViewCountInDB(Long newsId) {
+        try {
+            // Redis에서 현재 조회수 조회
+            String key = "news:viewcount:" + newsId;
+            String viewCountStr = redisTemplate.opsForValue().get(key);
+            
+            if (viewCountStr != null) {
+                Long viewCount = Long.parseLong(viewCountStr);
+                
+                // DB 업데이트
+                newsRepository.findById(newsId).ifPresent(news -> {
+                    news.setViewCount(viewCount);
+                    newsRepository.save(news);
+                });
+                
+                log.debug("DB 조회수 업데이트 완료: newsId={}, viewCount={}", newsId, viewCount);
+            }
+            
+        } catch (Exception e) {
+            log.error("DB 조회수 업데이트 실패: newsId={}", newsId, e);
+        }
+    }
+
+
+    /**
+     * 일일 조회수 조회 (Redis에서)
+     */
+    public Long getDailyViewCount(Long newsId) {
+        try {
+            String dailyKey = "news:daily:viewcount:" + newsId + ":" + LocalDate.now();
+            String viewCountStr = redisTemplate.opsForValue().get(dailyKey);
+            return viewCountStr != null ? Long.parseLong(viewCountStr) : 0L;
+        } catch (Exception e) {
+            log.error("일일 조회수 조회 실패: newsId={}", newsId, e);
+            return 0L;
+        }
+    }
+
+
+    // ========================================
+    // 카카오 토큰 관련 메서드들
+    // ========================================
+
+    /**
+     * 사용자의 카카오 토큰 조회 (사용자가 제공한 코드 예시)
+     * 실제로는 UserServiceClient를 통해 user-service의 API를 호출
+     */
+    private String getUserKakaoToken(String userId) {
+        try {
+            log.debug("사용자 카카오 토큰 조회: userId={}", userId);
+            
+            // UserServiceClient를 통해 user-service의 카카오 토큰 조회 API 호출
+            String kakaoToken = userServiceClient.getKakaoToken(userId);
+            
+            if (kakaoToken != null && !kakaoToken.trim().isEmpty()) {
+                log.debug("카카오 토큰 조회 성공: userId={}", userId);
+                return kakaoToken;
+            } else {
+                log.warn("카카오 토큰이 없음: userId={}", userId);
+                return null;
+            }
+            
+        } catch (Exception e) {
+            log.error("카카오 토큰 조회 실패: userId={}", userId, e);
+            return null;
+        }
+    }
+
+    /**
+     * 카카오 토큰을 사용한 예시 메서드
+     * 뉴스 공유 시 카카오 메시지 전송 등에 사용할 수 있음
+     */
+    public void shareNewsToKakao(Long userId, Long newsId) {
+        try {
+            // 1. 사용자의 카카오 토큰 조회
+            String kakaoToken = getUserKakaoToken(String.valueOf(userId));
+            
+            if (kakaoToken == null) {
+                log.warn("카카오 토큰이 없어 뉴스 공유를 할 수 없습니다: userId={}, newsId={}", userId, newsId);
+                return;
+            }
+            
+            // 2. 뉴스 정보 조회
+            News news = newsRepository.findById(newsId)
+                    .orElseThrow(() -> new NewsNotFoundException("뉴스를 찾을 수 없습니다: " + newsId));
+            
+            // 3. 카카오 메시지 전송 로직 (실제 구현은 KakaoMessageService 등에서)
+            log.info("카카오로 뉴스 공유: userId={}, newsId={}, title={}", userId, newsId, news.getTitle());
+            
+            // TODO: 실제 카카오 메시지 전송 로직 구현
+            // kakaoMessageService.sendMessage(kakaoToken, templateId, templateArgs);
+            
+        } catch (Exception e) {
+            log.error("카카오 뉴스 공유 실패: userId={}, newsId={}", userId, newsId, e);
+        }
+    }
+
+    // ========================================
+    // 인기도 점수 계산 관련 메서드들
+    // ========================================
+
+    /**
+     * 인기도 점수 계산 구현
+     */
+    private double calculatePopularityScore(NewsResponse news) {
+        try {
+            // 여러 지표를 종합하여 인기도 점수 계산
+            double viewScore = calculateViewScore(news.getNewsId());
+            double shareScore = calculateShareScore(news.getNewsId());
+            double timeScore = calculateTimeScore(news.getPublishedAt());
+            double trustScore = news.getTrusted() == 1 ? 1.0 : 0.0;
+            
+            // 가중평균으로 최종 점수 계산
+            double popularityScore = (viewScore * 0.4) + (shareScore * 0.3) + 
+                                    (timeScore * 0.2) + (trustScore * 0.1);
+            
+            return Math.min(1.0, popularityScore); // 최대값 1.0으로 제한
+            
+        } catch (Exception e) {
+            log.error("인기도 점수 계산 실패: newsId={}", news.getNewsId(), e);
+            return 0.5; // 기본값
+        }
+    }
+
+    /**
+     * 조회수 점수 계산 (0.0 ~ 1.0)
+     */
+    private double calculateViewScore(Long newsId) {
+        try {
+            Long viewCount = getViewCount(newsId);
+            if (viewCount == null || viewCount == 0) {
+                return 0.0;
+            }
+            
+            // 로그 스케일링을 사용하여 조회수 점수 계산
+            // 최대 조회수를 100,000으로 가정하고 로그 스케일 적용
+            double normalizedScore = Math.log10(viewCount + 1) / Math.log10(100001);
+            return Math.min(1.0, normalizedScore);
+            
+        } catch (Exception e) {
+            log.error("조회수 점수 계산 실패: newsId={}", newsId, e);
+            return 0.0;
+        }
+    }
+
+    /**
+     * 공유 점수 계산 (0.0 ~ 1.0)
+     * 현재는 스크랩 수를 공유 지표로 사용
+     */
+    private double calculateShareScore(Long newsId) {
+        try {
+            // 스크랩 수를 공유 지표로 사용
+            long scrapCount = newsScrapRepository.countByNewsNewsId(newsId);
+            if (scrapCount == 0) {
+                return 0.0;
+            }
+            
+            // 로그 스케일링을 사용하여 공유 점수 계산
+            // 최대 공유 수를 1,000으로 가정
+            double normalizedScore = Math.log10(scrapCount + 1) / Math.log10(1001);
+            return Math.min(1.0, normalizedScore);
+            
+        } catch (Exception e) {
+            log.error("공유 점수 계산 실패: newsId={}", newsId, e);
+            return 0.0;
+        }
+    }
+
+    /**
+     * 시간 점수 계산 (0.0 ~ 1.0)
+     * 최신 뉴스일수록 높은 점수
+     */
+    private double calculateTimeScore(LocalDateTime publishedAt) {
+        try {
+            if (publishedAt == null) {
+                return 0.0;
+            }
+            
+            LocalDateTime now = LocalDateTime.now();
+            Duration duration = Duration.between(publishedAt, now);
+            long hoursAgo = duration.toHours();
+            
+            // 시간이 지날수록 점수가 감소
+            // 24시간 이내: 1.0
+            // 48시간 이내: 0.8
+            // 72시간 이내: 0.6
+            // 168시간(7일) 이내: 0.4
+            // 그 이후: 0.2
+            
+            if (hoursAgo <= 24) {
+                return 1.0;
+            } else if (hoursAgo <= 48) {
+                return 0.8;
+            } else if (hoursAgo <= 72) {
+                return 0.6;
+            } else if (hoursAgo <= 168) { // 7일
+                return 0.4;
+            } else {
+                return 0.2;
+            }
+            
+        } catch (Exception e) {
+            log.error("시간 점수 계산 실패: publishedAt={}", publishedAt, e);
+            return 0.5; // 기본값
+        }
+    }
+
+    // ========================================
+    // 개인화 정보 구성 관련 메서드들
+    // ========================================
+
+    /**
+     * 개인화 정보 구성 개선
+     */
+    private Map<String, Object> buildPersonalizationInfo(Long userId) {
+        Map<String, Object> info = new HashMap<>();
+        
+        try {
+            List<String> signupInterests = getUserSignupInterests(userId);
+            List<String> subscriptionCategories = getUserSubscriptionCategories(userId);
+            
+            // UserServiceClient에서 카테고리별 읽기 횟수 조회
+            Map<String, Long> readingHistory = userServiceClient.getCategoryReadingHistory(userId);
+            
+            info.put("signupInterests", signupInterests);
+            info.put("subscriptionCategories", subscriptionCategories);
+            info.put("hasReadingHistory", !readingHistory.isEmpty());
+            info.put("totalReadCount", readingHistory.values().stream().mapToLong(Long::longValue).sum());
+            info.put("preferredCategories", getTopPreferredCategories(readingHistory, 3));
+            info.put("personalizationScore", calculatePersonalizationScore(signupInterests, subscriptionCategories, readingHistory));
+            
+            // 추가 개인화 지표
+            info.put("readingTimePreference", userServiceClient.getReadingTimePreference(userId));
+            info.put("devicePreference", userServiceClient.getDevicePreference(userId));
+            info.put("contentLengthPreference", userServiceClient.getContentLengthPreference(userId));
+            
+            log.info("개인화 정보 구성 완료: userId={}, score={}", userId, info.get("personalizationScore"));
+            
+        } catch (Exception e) {
+            log.error("개인화 정보 구성 실패: userId={}", userId, e);
+            // 기본값 설정
+            info.put("signupInterests", List.of());
+            info.put("subscriptionCategories", List.of());
+            info.put("hasReadingHistory", false);
+            info.put("totalReadCount", 0L);
+            info.put("preferredCategories", List.of());
+            info.put("personalizationScore", 0.0);
+            info.put("readingTimePreference", "MORNING");
+            info.put("devicePreference", "MOBILE");
+            info.put("contentLengthPreference", "MEDIUM");
+        }
+        
+        return info;
+    }
+
+    /**
+     * 사용자 가입 시 관심사 조회
+     */
+    private List<String> getUserSignupInterests(Long userId) {
+        try {
+            UserInterestResponse interestResponse = userServiceClient.getUserInterests(userId);
+            if (interestResponse != null && interestResponse.getSignupInterests() != null) {
+                return interestResponse.getSignupInterests();
+            }
+        } catch (Exception e) {
+            log.warn("가입 관심사 조회 실패: userId={}", userId, e);
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 사용자 구독 카테고리 조회
+     */
+    private List<String> getUserSubscriptionCategories(Long userId) {
+        try {
+            // 키워드 구독에서 카테고리 정보 추출
+            List<KeywordSubscription> subscriptions = keywordSubscriptionRepository.findByUserIdAndIsActiveTrue(userId);
+            return subscriptions.stream()
+                    .map(KeywordSubscription::getKeyword)
+                    .distinct()
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.warn("구독 카테고리 조회 실패: userId={}", userId, e);
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 상위 선호 카테고리 조회
+     */
+    private List<String> getTopPreferredCategories(Map<String, Long> readingHistory, int limit) {
+        if (readingHistory == null || readingHistory.isEmpty()) {
+            return Collections.emptyList();
+        }
+        
+        return readingHistory.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(limit)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 개인화 점수 계산
+     */
+    private double calculatePersonalizationScore(List<String> signupInterests, 
+                                               List<String> subscriptionCategories, 
+                                               Map<String, Long> readingHistory) {
+        try {
+            double score = 0.0;
+            
+            // 1. 가입 관심사 점수 (30%)
+            if (!signupInterests.isEmpty()) {
+                score += 0.3;
+            }
+            
+            // 2. 구독 카테고리 점수 (25%)
+            if (!subscriptionCategories.isEmpty()) {
+                score += Math.min(0.25, subscriptionCategories.size() * 0.05);
+            }
+            
+            // 3. 읽기 기록 점수 (45%)
+            if (readingHistory != null && !readingHistory.isEmpty()) {
+                long totalReadCount = readingHistory.values().stream().mapToLong(Long::longValue).sum();
+                if (totalReadCount > 0) {
+                    // 읽기 횟수에 따른 점수 (최대 0.45)
+                    double readingScore = Math.min(0.45, Math.log10(totalReadCount + 1) / Math.log10(101));
+                    score += readingScore;
+                }
+            }
+            
+            return Math.min(1.0, score);
+            
+        } catch (Exception e) {
+            log.error("개인화 점수 계산 실패", e);
+            return 0.0;
+        }
+    }
+
+
+    // ========================================
+    // 헬퍼 메서드들
+    // ========================================
+
+    /**
+     * 뉴스 링크 생성 (개선된 버전)
+     */
+    private String buildNewsLink(News news) {
+        if (StringUtils.hasText(news.getOidAid())) {
+            return news.getOidAid();
+        } else if (StringUtils.hasText(news.getLink())) {
+            return news.getLink();
+        } else {
+            return "/news/" + news.getNewsId(); // 내부 뉴스 페이지 URL
+        }
+    }
+
+    /**
+     * 조회수 조회 (개선된 버전)
+     */
+    public Long getViewCount(Long newsId) {
+        try {
+            String key = "news:viewcount:" + newsId;
+            String viewCountStr = redisTemplate.opsForValue().get(key);
+            return viewCountStr != null ? Long.parseLong(viewCountStr) : 0L;
+        } catch (Exception e) {
+            log.error("조회수 조회 실패: newsId={}", newsId, e);
+            return 0L;
+        }
+    }
+
+    /**
+     * 뉴스 다양성 확보를 위한 메서드 (개선된 버전)
+     */
+    private List<News> diversifyNews(List<News> news) {
+        if (news == null || news.isEmpty()) {
+            return Collections.emptyList();
+        }
+        
+        // 카테고리별로 그룹화하여 다양성 확보
+        Map<Category, List<News>> categoryGroups = news.stream()
+                .collect(Collectors.groupingBy(News::getCategoryName));
+        
+        List<News> diversified = new ArrayList<>();
+        int maxPerCategory = Math.max(1, 10 / categoryGroups.size());
+        
+        for (Map.Entry<Category, List<News>> entry : categoryGroups.entrySet()) {
+            List<News> categoryNews = entry.getValue();
+            int takeCount = Math.min(maxPerCategory, categoryNews.size());
+            
+            // 신뢰도가 높은 순으로 정렬하여 선택
+            categoryNews.stream()
+                    .sorted((n1, n2) -> Boolean.compare(n2.getTrusted(), n1.getTrusted()))
+                    .limit(takeCount)
+                    .forEach(diversified::add);
+        }
+        
+        // 남은 자리가 있으면 전체에서 신뢰도 높은 순으로 추가
+        if (diversified.size() < 10) {
+            int remaining = 10 - diversified.size();
+            news.stream()
+                    .filter(newsItem -> !diversified.contains(newsItem))
+                    .sorted((n1, n2) -> Boolean.compare(n2.getTrusted(), n1.getTrusted()))
+                    .limit(remaining)
+                    .forEach(diversified::add);
+        }
+        
+        return diversified;
+    }
+
+    /**
+     * 텍스트 자르기 메서드
+     */
+    private String truncateText(String text, int maxLength) {
+        if (text == null || text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength - 3) + "...";
+    }
+
+    /**
+     * 뉴스 제목 요약 생성
+     */
+    private String generateNewsSummary(String content, int maxLength) {
+        if (content == null || content.trim().isEmpty()) {
+            return "";
+        }
+        
+        // HTML 태그 제거
+        String cleanContent = content.replaceAll("<[^>]*>", "");
+        
+        // 공백 정리
+        cleanContent = cleanContent.replaceAll("\\s+", " ").trim();
+        
+        return truncateText(cleanContent, maxLength);
+    }
+
+    /**
+     * 뉴스 우선순위 계산
+     */
+    private double calculateNewsPriority(News news) {
+        try {
+            double priority = 0.0;
+            
+            // 1. 신뢰도 점수 (40%)
+            if (news.getTrusted()) {
+                priority += 0.4;
+            }
+            
+            // 2. 조회수 점수 (30%)
+            Long viewCount = getViewCount(news.getNewsId());
+            if (viewCount > 0) {
+                double viewScore = Math.min(0.3, Math.log10(viewCount + 1) / Math.log10(1001));
+                priority += viewScore;
+            }
+            
+            // 3. 시간 점수 (30%)
+            LocalDateTime publishedAt = parsePublishedAt(news.getPublishedAt());
+            LocalDateTime now = LocalDateTime.now();
+            Duration duration = Duration.between(publishedAt, now);
+            long hoursAgo = duration.toHours();
+            
+            if (hoursAgo <= 24) {
+                priority += 0.3;
+            } else if (hoursAgo <= 48) {
+                priority += 0.2;
+            } else if (hoursAgo <= 72) {
+                priority += 0.1;
+            }
+            
+            return Math.min(1.0, priority);
+            
+        } catch (Exception e) {
+            log.error("뉴스 우선순위 계산 실패: newsId={}", news.getNewsId(), e);
+            return 0.5; // 기본값
+        }
+    }
+
+    /**
+     * 뉴스 관련도 계산
+     */
+    private double calculateNewsRelevance(News news, List<String> userInterests) {
+        if (userInterests == null || userInterests.isEmpty()) {
+            return 0.5; // 기본값
+        }
+        
+        try {
+            double relevance = 0.0;
+            String categoryName = news.getCategoryName().name();
+            
+            // 카테고리 매칭 점수
+            if (userInterests.contains(categoryName)) {
+                relevance += 0.6;
+            }
+            
+            // 제목 키워드 매칭 점수
+            if (news.getTitle() != null) {
+                String title = news.getTitle().toLowerCase();
+                long matchingKeywords = userInterests.stream()
+                        .map(String::toLowerCase)
+                        .filter(title::contains)
+                        .count();
+                
+                if (matchingKeywords > 0) {
+                    relevance += Math.min(0.4, matchingKeywords * 0.1);
+                }
+            }
+            
+            return Math.min(1.0, relevance);
+            
+        } catch (Exception e) {
+            log.error("뉴스 관련도 계산 실패: newsId={}", news.getNewsId(), e);
+            return 0.5; // 기본값
+        }
+    }
+
+    // ========================================
+    // 누락된 메서드들 추가
+    // ========================================
+
+    /**
+     * 사용자 프로필 조회
+     */
+    private UserProfile getUserProfile(Long userId) {
+        try {
+            // 사용자 관심사 조회
+            UserInterestResponse interestResponse = userServiceClient.getUserInterests(userId);
+            List<String> preferredCategories = interestResponse != null && interestResponse.getTopCategories() != null 
+                ? interestResponse.getTopCategories() : Collections.emptyList();
+            
+            // 사용자 행동 분석 조회
+            UserBehaviorAnalysis behaviorAnalysis = userServiceClient.getUserBehaviorAnalysis(userId);
+            Map<String, Long> categoryReadCounts = behaviorAnalysis != null && behaviorAnalysis.getCategoryReadCounts() != null
+                ? behaviorAnalysis.getCategoryReadCounts() : Collections.emptyMap();
+            
+            // 구독 키워드 조회
+            List<KeywordSubscription> subscriptions = keywordSubscriptionRepository.findByUserIdAndIsActiveTrue(userId);
+            List<String> subscribedKeywords = subscriptions.stream()
+                .map(KeywordSubscription::getKeyword)
+                .collect(Collectors.toList());
+            
+            // 총 읽기 횟수 계산
+            int totalReadCount = categoryReadCounts.values().stream()
+                .mapToInt(Long::intValue)
+                .sum();
+            
+            // 개인화 점수 계산
+            double personalizationScore = calculatePersonalizationScore(
+                preferredCategories, subscribedKeywords, categoryReadCounts);
+            
+            return UserProfile.builder()
+                .userId(userId)
+                .preferredCategories(preferredCategories)
+                .categoryReadCounts(categoryReadCounts)
+                .subscribedKeywords(subscribedKeywords)
+                .totalReadCount(totalReadCount)
+                .personalizationScore(personalizationScore)
+                .build();
+                
+        } catch (Exception e) {
+            log.error("사용자 프로필 조회 실패: userId={}", userId, e);
+            // 기본 프로필 반환
+            return UserProfile.builder()
+                .userId(userId)
+                .preferredCategories(Collections.emptyList())
+                .categoryReadCounts(Collections.emptyMap())
+                .subscribedKeywords(Collections.emptyList())
+                .totalReadCount(0)
+                .personalizationScore(0.0)
+                .build();
+        }
+    }
+
+    /**
+     * 신규 사용자를 위한 인기 뉴스 조회
+     */
+    private Page<NewsListResponse> getPopularNewsForNewUser(Pageable pageable) {
+        try {
+            // 신뢰도가 높은 뉴스 중에서 다양한 카테고리로 구성
+            List<News> trustedNews = newsRepository.findByTrustedTrue(Pageable.ofSize(50))
+                .getContent();
+            
+            // 카테고리별로 균형있게 선택
+            List<News> diversifiedNews = diversifyNews(trustedNews);
+            
+            // 페이징 처리
+            int start = (int) pageable.getOffset();
+            int end = Math.min(start + pageable.getPageSize(), diversifiedNews.size());
+            
+            List<NewsListResponse> pageContent = diversifiedNews
+                .subList(start, end)
+                .stream()
+                .map(this::convertToNewsListResponse)
+                .collect(Collectors.toList());
+            
+            return new PageImpl<>(pageContent, pageable, diversifiedNews.size());
+            
+        } catch (Exception e) {
+            log.error("신규 사용자 인기 뉴스 조회 실패", e);
+            // 폴백: 기본 인기 뉴스
+            return newsRepository.findPopularNews(pageable)
+                .map(this::convertToNewsListResponse);
+        }
+    }
+
+    /**
+     * 하이브리드 추천 시스템 (협업 필터링 + 콘텐츠 기반 필터링)
+     */
+    private List<News> getHybridRecommendations(Long userId, UserProfile userProfile) {
+        try {
+            List<News> recommendations = new ArrayList<>();
+            
+            // 1. 콘텐츠 기반 필터링 (사용자 선호 카테고리 기반)
+            if (!userProfile.getPreferredCategories().isEmpty()) {
+                List<Category> categories = userProfile.getPreferredCategories().stream()
+                    .map(this::stringToCategory)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+                
+                if (!categories.isEmpty()) {
+                    List<News> contentBasedNews = newsRepository.findPersonalizedNewsByCategories(
+                        categories, Pageable.ofSize(20));
+                    recommendations.addAll(contentBasedNews);
+                }
+            }
+            
+            // 2. 협업 필터링 (비슷한 사용자들이 읽은 뉴스)
+            List<News> collaborativeNews = getCollaborativeRecommendations(userId, userProfile);
+            recommendations.addAll(collaborativeNews);
+            
+            // 3. 인기도 기반 보완
+            if (recommendations.size() < 15) {
+                List<News> popularNews = newsRepository.findPopularNews(Pageable.ofSize(10))
+                    .getContent();
+                recommendations.addAll(popularNews);
+            }
+            
+            // 4. 중복 제거 및 정렬
+            return recommendations.stream()
+                .distinct()
+                .sorted((n1, n2) -> Double.compare(
+                    calculateNewsRelevance(n2, userProfile.getPreferredCategories()),
+                    calculateNewsRelevance(n1, userProfile.getPreferredCategories())))
+                .limit(20)
+                .collect(Collectors.toList());
+                
+        } catch (Exception e) {
+            log.error("하이브리드 추천 실패: userId={}", userId, e);
+            // 폴백: 신뢰도 높은 뉴스
+            return newsRepository.findByTrustedTrue(Pageable.ofSize(15))
+                .getContent();
+        }
+    }
+
+    /**
+     * 협업 필터링 기반 추천
+     */
+    private List<News> getCollaborativeRecommendations(Long userId, UserProfile userProfile) {
+        try {
+            // 간단한 협업 필터링 구현
+            // 실제로는 더 복잡한 알고리즘이 필요하지만, 여기서는 기본적인 구현만 제공
+            
+            // 사용자와 비슷한 관심사를 가진 사용자들이 읽은 뉴스 조회
+            List<String> userInterests = userProfile.getPreferredCategories();
+            if (userInterests.isEmpty()) {
+                return Collections.emptyList();
+            }
+            
+            // 관심사 기반 뉴스 조회
+            List<Category> categories = userInterests.stream()
+                .map(this::stringToCategory)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+            
+            if (categories.isEmpty()) {
+                return Collections.emptyList();
+            }
+            
+            return newsRepository.findPersonalizedNewsByCategories(
+                categories, Pageable.ofSize(10));
+                
+        } catch (Exception e) {
+            log.error("협업 필터링 추천 실패: userId={}", userId, e);
+            return Collections.emptyList();
+        }
     }
 }

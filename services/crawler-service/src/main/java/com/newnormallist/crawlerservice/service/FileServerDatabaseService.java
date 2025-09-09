@@ -181,7 +181,7 @@ public class FileServerDatabaseService {
      * NewsDetail을 News Entity로 변환
      */
     private News convertToNewsEntity(NewsDetail newsDetail) {
-        return News.builder()
+        News news = News.builder()
             .oidAid(newsDetail.getOidAid())
             .title(newsDetail.getTitle())
             .content(newsDetail.getContent())
@@ -193,8 +193,16 @@ public class FileServerDatabaseService {
             .trusted(newsDetail.getTrusted() == 1)
             .dedupState(convertDedupState(newsDetail.getDedupState()))
             .category(convertCategory(newsDetail.getCategoryName())) // 카테고리 변환 추가
+            .viewCount(0) // 조회수 기본값 0으로 설정
             .createdAt(LocalDateTime.now())
             .build();
+        
+        // viewCount가 null인 경우 명시적으로 0으로 설정
+        if (news.getViewCount() == null) {
+            news.setViewCount(0);
+        }
+        
+        return news;
     }
     
     /**

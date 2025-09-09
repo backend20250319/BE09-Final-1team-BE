@@ -63,14 +63,14 @@ public class NewsletterController {
     /**
      * 구독 정보 조회
      */
-<<<<<<< HEAD
+ 
     @GetMapping("/subscription/{id}")
     public ResponseEntity<ApiResponse<SubscriptionResponse>> getSubscription(
             @PathVariable Long id,
 =======
     @GetMapping("/subscription/my")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getMySubscriptions(
->>>>>>> develop
+  
             HttpServletRequest httpRequest) {
         
         try {
@@ -102,7 +102,7 @@ public class NewsletterController {
             String userId = extractUserIdFromToken(httpRequest);
             log.info("내 구독 목록 조회 요청 - userId: {}", userId);
             
-<<<<<<< HEAD
+ 
             List<SubscriptionResponse> subscriptions = newsletterService.getMySubscriptions(Long.valueOf(userId));
 =======
             // 활성화된 구독 정보만 조회
@@ -158,7 +158,7 @@ public class NewsletterController {
             
             log.info("활성 구독 목록 조회 완료: userId={}, count={}", userId, subscriptions.size());
             return ResponseEntity.ok(ApiResponse.success(result, "구독 목록 조회가 완료되었습니다."));
->>>>>>> develop
+  
             
             return ResponseEntity.ok(ApiResponse.success(subscriptions));
         } catch (Exception e) {
@@ -228,7 +228,7 @@ public class NewsletterController {
             String userId = extractUserIdFromToken(httpRequest);
             String newStatus = request.get("status");
             
-<<<<<<< HEAD
+ 
             if (newStatus == null || newStatus.trim().isEmpty()) {
 =======
             // isActive가 null인 경우 기본값으로 true 설정 (구독 요청의 경우)
@@ -242,12 +242,12 @@ public class NewsletterController {
             // 입력값 검증
             if (category == null || category.trim().isEmpty()) {
                 log.warn("카테고리가 비어있습니다: category={}", category);
->>>>>>> develop
+  
                 return ResponseEntity.badRequest()
                     .body(ApiResponse.error("INVALID_STATUS", "상태값이 필요합니다."));
             }
             
-<<<<<<< HEAD
+ 
             log.info("구독 상태 변경 요청 - userId: {}, subscriptionId: {}, newStatus: {}", 
                     userId, subscriptionId, newStatus);
             
@@ -293,13 +293,13 @@ public class NewsletterController {
                     throw new RuntimeException(e);
                 }
             });
->>>>>>> develop
+  
             
             return ResponseEntity.ok(ApiResponse.success(subscription, "구독 상태가 변경되었습니다."));
         } catch (NewsletterException e) {
             log.warn("구독 상태 변경 실패: {}", e.getMessage());
             return ResponseEntity.badRequest()
-<<<<<<< HEAD
+ 
                 .body(ApiResponse.error(e.getErrorCode(), e.getMessage()));
 =======
                 .body(ApiResponse.error("SUBSCRIPTION_STATS_ERROR", "구독 통계 조회 중 오류가 발생했습니다."));
@@ -356,7 +356,7 @@ public class NewsletterController {
             
             return ResponseEntity.ok(ApiResponse.success(result, "테스트 구독 데이터가 초기화되었습니다."));
             
->>>>>>> develop
+  
         } catch (Exception e) {
             log.error("구독 상태 변경 중 오류 발생", e);
             return ResponseEntity.badRequest()
@@ -892,7 +892,7 @@ public class NewsletterController {
                     .body(ApiResponse.error("KAKAO_SEND_ERROR", "카카오톡 메시지 전송에 실패했습니다."));
         }
     }
-<<<<<<< HEAD
+ 
 =======
 
     // ========================================
@@ -1462,5 +1462,5 @@ public class NewsletterController {
         }
         return authorization.substring(7);
     }
->>>>>>> develop
+  
 }

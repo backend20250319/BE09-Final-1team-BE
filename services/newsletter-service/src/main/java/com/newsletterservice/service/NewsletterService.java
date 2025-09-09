@@ -16,7 +16,7 @@ import com.newsletterservice.repository.SubscriptionRepository;
 import com.newsletterservice.entity.NewsCategory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-<<<<<<< HEAD
+ 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -39,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.*;
 import java.util.Optional;
->>>>>>> develop
+  
 
 @Service
 @RequiredArgsConstructor
@@ -50,7 +50,7 @@ public class NewsletterService {
     // ========================================
     // Dependencies
     // ========================================
-<<<<<<< HEAD
+ 
     private final NewsletterDeliveryRepository deliveryRepository;
     private final SubscriptionRepository subscriptionRepository;
 =======
@@ -61,7 +61,7 @@ public class NewsletterService {
     private final FeedTemplateService feedTemplateService;
     private final Optional<KakaoMessageService> kakaoMessageService;
     
->>>>>>> develop
+  
     private final NewsServiceClient newsServiceClient;
     private final UserServiceClient userServiceClient;
     private final EmailNewsletterRenderer emailRenderer;
@@ -372,12 +372,12 @@ public class NewsletterService {
             log.error("카테고리별 트렌드 키워드 조회 재시도 실패: category={}, error={}", category, e.getMessage());
             return getFallbackKeywordsForCategory(category, limit);
         } catch (Exception e) {
-<<<<<<< HEAD
+ 
             log.error("이메일 열람 추적 실패: deliveryId={}", deliveryId, e);
 =======
             log.warn("카테고리별 트렌드 키워드 조회 실패: category={}, error={}", category, e.getMessage());
             return getFallbackKeywordsForCategory(category, limit);
->>>>>>> develop
+  
         }
     }
 
@@ -994,7 +994,7 @@ public class NewsletterService {
             throw new NewsletterException("활성 구독 목록 조회 중 오류가 발생했습니다.", "ACTIVE_SUBSCRIPTION_ERROR");
         }
     }
-<<<<<<< HEAD
+ 
 
     public SubscriptionResponse changeSubscriptionStatus(Long subscriptionId, Long userId, String newStatus) {
         log.info("구독 상태 변경: subscriptionId={}, userId={}, newStatus={}", subscriptionId, userId, newStatus);
@@ -1305,12 +1305,12 @@ public class NewsletterService {
             errorResponse.put("message", "미리보기 생성 실패");
             errorResponse.put("timestamp", System.currentTimeMillis());
             return errorResponse;
->>>>>>> develop
+  
         }
     }
 
     /**
-<<<<<<< HEAD
+ 
      * 공유 통계 기록
      */
     public ShareStatsResponse recordShareStats(ShareStatsRequest request, String userId) {
@@ -1400,4 +1400,4 @@ public class NewsletterService {
                 .collect(Collectors.toList());
     }
 }
->>>>>>> develop
+  

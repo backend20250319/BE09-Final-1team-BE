@@ -6,11 +6,11 @@ import feign.codec.ErrorDecoder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-<<<<<<< HEAD
+ 
 import org.springframework.http.HttpStatus;
 =======
 import org.springframework.validation.annotation.Validated;
->>>>>>> develop
+  
 
 import java.io.IOException;
 
@@ -19,7 +19,7 @@ import java.io.IOException;
 public class FeignTimeoutConfig {
     
     /**
-<<<<<<< HEAD
+ 
      * Feign 재시도 설정
      */
     @Bean
@@ -50,7 +50,7 @@ public class FeignTimeoutConfig {
             (int) java.time.Duration.ofSeconds(5).toMillis(),  // connectTimeout
             (int) java.time.Duration.ofSeconds(10).toMillis()  // readTimeout
         );
->>>>>>> develop
+  
     }
     
     /**

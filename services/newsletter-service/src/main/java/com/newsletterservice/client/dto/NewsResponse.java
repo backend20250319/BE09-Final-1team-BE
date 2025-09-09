@@ -21,13 +21,11 @@ public class NewsResponse {
     private String categoryName;
     private LocalDateTime publishedAt;
     private LocalDateTime createdAt;
-<<<<<<< HEAD
-=======
+
     private Long viewCount;
     private Long shareCount;
     
     public String getCategory() {
         return categoryName;
     }
->>>>>>> develop
 }

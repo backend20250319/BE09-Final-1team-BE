@@ -1,7 +1,7 @@
 package com.newsletterservice.service;
 
 import com.newsletterservice.common.exception.NewsletterException;
-<<<<<<< HEAD
+ 
 import com.newsletterservice.dto.NewsletterContent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,21 +15,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.*;
->>>>>>> develop
+  
 import org.springframework.stereotype.Service;
 
-<<<<<<< HEAD
+ 
 import java.util.Map;
 =======
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
->>>>>>> develop
+  
 
 @Service
 @Slf4j
-<<<<<<< HEAD
+ 
 public final class KakaoMessageService {
 
 =======
@@ -83,7 +83,7 @@ public class KakaoMessageService {
     /**
      * 뉴스레터 콘텐츠로 카카오톡 메시지 전송 (기존 호환성 유지)
      */
->>>>>>> develop
+  
     public void sendNewsletterMessage(NewsletterContent content) {
         try {
             // 이미지 URL 선택
@@ -117,7 +117,7 @@ public class KakaoMessageService {
                 .orElse("http://be09-final-1team-fe-env.eba-92qhhhzz.ap-northeast-2.elasticbeanstalk.com/images/newsletter-default.jpg");
     }
 
-<<<<<<< HEAD
+ 
     private void sendMessage(Long templateId, Map<String, String> templateArgs) {
 =======
     
@@ -129,7 +129,7 @@ public class KakaoMessageService {
         
         validateInputs(accessToken, templateId, templateArgs);
         
->>>>>>> develop
+  
         try {
             log.info("카카오톡 메시지 전송 시작: templateId={}, args={}", templateId, templateArgs);
 
@@ -171,7 +171,7 @@ public class KakaoMessageService {
         try {
             return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(map);
         } catch (Exception e) {
-<<<<<<< HEAD
+ 
             log.error("JSON 변환 실패", e);
             return "{}";
 =======
@@ -419,7 +419,7 @@ public class KakaoMessageService {
 
         } catch (Exception e) {
             log.error("권한 필요 알림 전송 실패: userId={}", userId, e);
->>>>>>> develop
+  
         }
     }
     

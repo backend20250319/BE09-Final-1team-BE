@@ -17,19 +17,19 @@ public class NewsletterContent {
     private String featuredImageUrl;
     private LocalDateTime generatedAt;
     private List<Section> sections;
-<<<<<<< HEAD
-=======
+ 
+   
     private Map<String, Object> personalizationInfo;
     private String type; // 뉴스레터 타입 (DAILY, WEEKLY, MONTHLY, BREAKING)
     private String category; // 카테고리
->>>>>>> develop
+  
     
     public boolean isPersonalized() {
         return personalized != null && personalized;
     }
     
-<<<<<<< HEAD
-=======
+ 
+   
     /**
      * 뉴스레터 요약 정보 생성
      * 
@@ -95,7 +95,7 @@ public class NewsletterContent {
         return content.toString();
     }
     
->>>>>>> develop
+  
     @Data
     @Builder
     @NoArgsConstructor

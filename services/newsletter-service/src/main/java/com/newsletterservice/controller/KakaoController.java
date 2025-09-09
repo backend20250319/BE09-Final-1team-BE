@@ -260,10 +260,21 @@ public class KakaoController {
     public ResponseEntity<ApiResponse<Boolean>> checkTalkMessagePermission(
             @Parameter(description = "카카오 액세스 토큰") @RequestHeader("Authorization") String accessToken) {
         
-        String token = accessToken.replace("Bearer ", "");
-        boolean hasPermission = kakaoApiService.hasTalkMessagePermission(token);
-        
-        return ResponseEntity.ok(ApiResponse.success(hasPermission));
+        try {
+            String token = accessToken.replace("Bearer ", "");
+            boolean hasPermission = kakaoApiService.hasTalkMessagePermission(token);
+            
+            return ResponseEntity.ok(ApiResponse.success(hasPermission));
+            
+        } catch (NewsletterException e) {
+            log.error("카카오톡 메시지 권한 확인 실패", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error(e.getErrorCode(), e.getMessage()));
+        } catch (Exception e) {
+            log.error("카카오톡 메시지 권한 확인 중 예상치 못한 오류 발생", e);
+            return ResponseEntity.internalServerError()
+                .body(ApiResponse.error("INTERNAL_ERROR", "권한 확인 중 오류가 발생했습니다."));
+        }
     }
 
     /**

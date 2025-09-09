@@ -6,8 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -52,12 +50,7 @@ public class EmailNewsletterRenderer {
         html.append("        .article-category { background-color: #667eea; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; }\n");
         html.append("        .personalized-badge { background-color: #ff6b6b; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px; }\n");
         html.append("        .footer { background-color: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; }\n");
-        html.append("        .personalization-info { background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea; }\n");
-        html.append("        .personalization-info h3 { margin: 0 0 10px 0; color: #333; font-size: 16px; }\n");
-        html.append("        .personalization-info p { margin: 5px 0; color: #555; font-size: 14px; }\n");
-        html.append("        .score-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 8px; }\n");
-        html.append("        .score-badge.personalized { background-color: #e8f5e8; color: #2e7d32; }\n");
-        html.append("        .score-badge.trending { background-color: #fff3e0; color: #f57c00; }\n");
+        html.append("        .personalization-info { background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin-bottom: 20px; border-radius: 4px; }\n");
         html.append("    </style>\n");
         html.append("</head>\n");
         html.append("<body>\n");
@@ -78,8 +71,11 @@ public class EmailNewsletterRenderer {
         html.append("    <div class='content'>\n");
         
         // 개인화 정보 (개인화된 경우)
-        if (content.isPersonalized() && content.getPersonalizationInfo() != null) {
-            html.append(renderPersonalizationInfo(content.getPersonalizationInfo()));
+        if (content.isPersonalized()) {
+            html.append("        <div class='personalization-info'>\n");
+            html.append("            <strong>🎯 개인화 정보</strong><br>\n");
+            html.append("            이 뉴스레터는 당신의 관심사와 행동 패턴을 분석하여 맞춤 구성되었습니다.\n");
+            html.append("        </div>\n");
         }
         
         // 섹션들 렌더링
@@ -252,85 +248,15 @@ public class EmailNewsletterRenderer {
         
         // 메타 정보
         html.append("                <div class='article-meta'>\n");
-        html.append("                    <span class='article-category'>").append(convertCategoryToKorean(article.getCategory())).append("</span>\n");
+        html.append("                    <span class='article-category'>").append(article.getCategory()).append("</span>\n");
         if (article.getPublishedAt() != null) {
             html.append("                    <span>").append(article.getPublishedAt().format(DATE_FORMATTER)).append("</span>\n");
         }
-        
-        // 개인화 점수 표시
-        if (article.getPersonalizedScore() != null && article.getPersonalizedScore() > 0.7) {
-            html.append("                    <span class='score-badge personalized'>개인화 추천</span>\n");
-        }
-        
-        // 트렌드 점수 표시
-        if (article.getTrendScore() != null && article.getTrendScore() > 0.8) {
-            html.append("                    <span class='score-badge trending'>인기</span>\n");
-        }
-        
         html.append("                </div>\n");
         
         html.append("            </div>\n");
         
         return html.toString();
-    }
-
-    /**
-     * 개인화 정보 렌더링
-     */
-    private String renderPersonalizationInfo(Map<String, Object> personalizationInfo) {
-        StringBuilder html = new StringBuilder();
-        
-        html.append("        <div class='personalization-info'>\n");
-        html.append("            <h3>🎯 개인화 정보</h3>\n");
-        
-        // 개인화 점수
-        Object score = personalizationInfo.get("personalizationScore");
-        if (score != null) {
-            double scoreValue = (Double) score;
-            String scoreText = String.format("%.1f", scoreValue * 100);
-            html.append("            <p><strong>개인화 점수:</strong> ").append(scoreText).append("%</p>\n");
-        }
-        
-        // 선호 카테고리
-        @SuppressWarnings("unchecked")
-        List<String> preferredCategories = (List<String>) personalizationInfo.get("preferredCategories");
-        if (preferredCategories != null && !preferredCategories.isEmpty()) {
-            String categories = preferredCategories.stream()
-                    .map(this::convertCategoryToKorean)
-                    .collect(Collectors.joining(", "));
-            html.append("            <p><strong>관심 카테고리:</strong> ").append(categories).append("</p>\n");
-        }
-        
-        // 읽기 기록
-        Object totalReadCount = personalizationInfo.get("totalReadCount");
-        if (totalReadCount != null) {
-            html.append("            <p><strong>최근 읽은 뉴스:</strong> ").append(totalReadCount).append("개</p>\n");
-        }
-        
-        html.append("            <p>이 뉴스레터는 당신의 관심사와 행동 패턴을 분석하여 맞춤 구성되었습니다.</p>\n");
-        html.append("        </div>\n");
-        
-        return html.toString();
-    }
-
-    /**
-     * 카테고리명을 한국어로 변환
-     */
-    private String convertCategoryToKorean(String englishCategory) {
-        if (englishCategory == null) return "뉴스";
-        
-        return switch (englishCategory.toUpperCase()) {
-            case "POLITICS" -> "정치";
-            case "ECONOMY" -> "경제";
-            case "SOCIETY" -> "사회";
-            case "LIFE" -> "생활";
-            case "INTERNATIONAL" -> "세계";
-            case "IT_SCIENCE" -> "IT/과학";
-            case "VEHICLE" -> "자동차/교통";
-            case "TRAVEL_FOOD" -> "여행/음식";
-            case "ART" -> "예술";
-            default -> "뉴스";
-        };
     }
 
     /**

@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
+@AllArgsConstructor
 public enum NewsletterType {
     // 카테고리 기반
     POLITICS_DAILY("정치 데일리", "daily", NewsCategory.POLITICS),
@@ -25,10 +26,4 @@ public enum NewsletterType {
     private final String description;
     private final String frequency;
     private final NewsCategory defaultCategory;
-    
-    NewsletterType(String description, String frequency, NewsCategory defaultCategory) {
-        this.description = description;
-        this.frequency = frequency;
-        this.defaultCategory = defaultCategory;
-    }
 }

@@ -4,12 +4,9 @@ import com.newnormallist.userservice.auth.dto.*;
 import com.newnormallist.userservice.auth.jwt.JwtTokenProvider;
 import com.newnormallist.userservice.auth.service.AuthService;
 import com.newnormallist.userservice.common.ApiResult;
-import com.newnormallist.userservice.common.AuthUtils;
-import com.newnormallist.userservice.user.dto.MyPageResponse;
 
 import com.newnormallist.userservice.common.util.CookieUtil;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,7 +16,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Auth", description = "인증/인가 및 토큰 관리 API")
@@ -51,31 +47,6 @@ public class AuthController {
         CookieUtil.addCookie(response, "refresh-token", loginResponse.getRefreshToken(), 604800); // 7일
 
         return ResponseEntity.ok(ApiResult.success(loginResponse));
-    }
-
-    /**
-     * 현재 로그인된 사용자 정보 조회 API (쿠키 기반)
-     */
-    @Operation(
-            summary = "현재 사용자 정보 조회",
-            description = "쿠키의 JWT 토큰을 통해 현재 로그인된 사용자 정보를 조회합니다.",
-            operationId = "getCurrentUser"
-    )
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "사용자 정보 조회 성공"),
-            @ApiResponse(responseCode = "401", description = "인증 필요")
-    })
-    @GetMapping("/me")
-    public ResponseEntity<ApiResult<MyPageResponse>> getCurrentUser(
-            @Parameter(hidden = true) @AuthenticationPrincipal String userIdStr
-    ) {
-        try {
-            Long userId = AuthUtils.parseUserId(userIdStr);
-            MyPageResponse userResponse = authService.getUserInfo(userId);
-            return ResponseEntity.ok(ApiResult.success(userResponse));
-        } catch (IllegalArgumentException e) {
-            return AuthUtils.unauthorizedResponse();
-        }
     }
 
     /**

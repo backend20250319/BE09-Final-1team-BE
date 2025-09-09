@@ -207,7 +207,7 @@ public class NewsServiceImpl implements NewsService {
         return newsRepository.findByTrustedTrue(pageable)
                 .map(this::convertToNewsListResponse);
     }
-
+    // 카테고리별 뉴스 조회
     @Override
     public Page<NewsListResponse> getNewsByCategory(Category category, Pageable pageable) {
         return newsRepository.findByCategory(category, pageable)

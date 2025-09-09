@@ -11,18 +11,7 @@ spring:
   cloud:
     bootstrap:
       enabled: false
-# 곧 삭제
-# Eureka 클라이언트 설정
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-    fetch-registry: true
-    register-with-eureka: true
-  instance:
-    prefer-ip-address: true
-    instance-id: ${spring.application.name}:${server.port}
-  # 여기까지
+
   cache:
     type: redis
     redis:

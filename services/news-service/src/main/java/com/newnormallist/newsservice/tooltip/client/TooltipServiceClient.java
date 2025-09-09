@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 @FeignClient(
     name = "tooltip-service",
-    url = "http://localhost:8086", // 배포시 삭제
     fallback = TooltipServiceFallback.class
 )
 public interface TooltipServiceClient {

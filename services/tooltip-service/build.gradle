@@ -35,6 +35,9 @@ dependencies {
 	// 웹 API 서버 구성을 위한 기본 의존성
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 
+	// 서비스 디스커버리를 위한 Eureka Client 의존성
+	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+
 	// DB 연동을 위한 JPA 의존성
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
@@ -60,6 +63,12 @@ dependencies {
 
 	// 테스트를 위한 의존성
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+dependencyManagement {
+	imports {
+		mavenBom "org.springframework.cloud:spring-cloud-dependencies:2023.0.4"
+	}
 }
 
 tasks.named('test') {

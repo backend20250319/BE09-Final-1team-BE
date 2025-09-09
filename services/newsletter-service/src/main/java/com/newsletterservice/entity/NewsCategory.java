@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
 public enum NewsCategory {
     POLITICS("정치", "🏛️"),
     ECONOMY("경제", "💰"),
@@ -18,4 +17,9 @@ public enum NewsCategory {
 
     private final String categoryName;
     private final String icon;
+    
+    NewsCategory(String categoryName, String icon) {
+        this.categoryName = categoryName;
+        this.icon = icon;
+    }
 }

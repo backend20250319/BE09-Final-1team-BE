@@ -93,8 +93,6 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     // /api/search/ 경로는 검색 기능으로 공개 접근 허용
     boolean isPublicSearchPath = path.startsWith("/api/search");
 
-<<<<<<< HEAD
-=======
     // /api/trending/ 경로는 트렌딩 기능으로 공개 접근 허용
     boolean isPublicTrendingPath = path.startsWith("/api/trending");
 
@@ -114,19 +112,15 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     // 카카오 API 경로들 - 카카오 액세스 토큰을 사용하므로 JWT 토큰 검증 불필요
     boolean isKakaoApiPath = path.startsWith("/api/kakao/");
 
->>>>>>> develop
     return path.startsWith("/api/users/signup")
             || path.startsWith("/api/auth/")
             || path.startsWith("/api/users/categories")
             || isPublicNewsPath
             || isPublicSearchPath
-<<<<<<< HEAD
-=======
             || isPublicTrendingPath
             || isPublicCategoriesPath
             || isPublicNewsletterPath
             || isKakaoApiPath
->>>>>>> develop
             || path.startsWith("/swagger-ui")
             || path.contains("api-docs");
   }

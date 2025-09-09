@@ -3,11 +3,13 @@ package com.newsletterservice.dto;
 import lombok.*;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Getter
 public class NewsletterContent {
     private Long newsletterId;
     private Long userId;
@@ -17,19 +19,14 @@ public class NewsletterContent {
     private String featuredImageUrl;
     private LocalDateTime generatedAt;
     private List<Section> sections;
-<<<<<<< HEAD
-=======
     private Map<String, Object> personalizationInfo;
     private String type; // 뉴스레터 타입 (DAILY, WEEKLY, MONTHLY, BREAKING)
     private String category; // 카테고리
->>>>>>> develop
     
     public boolean isPersonalized() {
         return personalized != null && personalized;
     }
     
-<<<<<<< HEAD
-=======
     /**
      * 뉴스레터 요약 정보 생성
      * 
@@ -95,11 +92,11 @@ public class NewsletterContent {
         return content.toString();
     }
     
->>>>>>> develop
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @Getter
     public static class Section {
         private String heading;
         private String title;
@@ -113,6 +110,7 @@ public class NewsletterContent {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @Getter
     public static class Article {
         private Long id;
         private String title;

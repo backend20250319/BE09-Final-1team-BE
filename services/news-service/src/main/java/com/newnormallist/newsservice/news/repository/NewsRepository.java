@@ -104,4 +104,26 @@ public interface NewsRepository extends JpaRepository<News, Long> {
 
     // 같은 카테고리, 특정 뉴스들 제외 (페이징)
     Page<News> findByCategoryNameAndNewsIdNotIn(Category categoryName, List<Long> excludeNewsIds, Pageable pageable);
+
+    // 개인화된 뉴스 조회 (사용자 선호도 기반)
+    @Query("SELECT n FROM News n WHERE " +
+           "n.categoryName IN :categories OR " +
+           "n.title LIKE %:keyword% OR " +
+           "n.content LIKE %:keyword% " +
+           "ORDER BY n.trusted DESC, STR_TO_DATE(n.publishedAt, '%Y-%m-%d %H:%i:%s') DESC")
+    List<News> findPersonalizedNews(@Param("userId") Long userId,
+                                   @Param("categories") List<String> userPreferences,
+                                   @Param("keyword") String readingHistory,
+                                   Pageable pageable);
+
+    // 개인화된 뉴스 조회 (카테고리 기반)
+    @Query("SELECT n FROM News n WHERE n.categoryName IN :categories " +
+           "ORDER BY n.trusted DESC, STR_TO_DATE(n.publishedAt, '%Y-%m-%d %H:%i:%s') DESC")
+    List<News> findPersonalizedNewsByCategories(@Param("categories") List<Category> categories,
+                                               Pageable pageable);
+
+    // 카테고리별 신뢰도 높은 뉴스 조회
+    @Query("SELECT n FROM News n WHERE n.categoryName = :category AND n.trusted = true " +
+           "ORDER BY STR_TO_DATE(n.publishedAt, '%Y-%m-%d %H:%i:%s') DESC")
+    Page<News> findByCategoryAndTrustedTrue(@Param("category") Category category, Pageable pageable);
 }

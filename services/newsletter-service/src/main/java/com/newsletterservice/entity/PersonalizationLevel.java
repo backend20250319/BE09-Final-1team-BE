@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
 public enum PersonalizationLevel {
     NONE("개인화 없음", 0),
     BASIC("기본", 1),
@@ -14,4 +13,9 @@ public enum PersonalizationLevel {
     
     private final String description;
     private final int level;
+    
+    PersonalizationLevel(String description, int level) {
+        this.description = description;
+        this.level = level;
+    }
 }

@@ -29,6 +29,7 @@ spring:
                 allowedOrigins:
                   - 'http://localhost:3000'
                   - 'https://be09-final-1team-fe.vercel.app'
+                  - 'http://be09-final-1team-fe-env.eba-92qhhhzz.ap-northeast-2.elasticbeanstalk.com'
                 allowedMethods:
                   - GET
                   - POST

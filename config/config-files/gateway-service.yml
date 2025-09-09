@@ -49,9 +49,8 @@ management:
 eureka:
   client:
     service-url:
-      # localhost 대신 Docker 서비스 이름 사용
-      defaultZone: http://discovery-service:8761/eureka/
-    #      defaultZone: http://localhost:8761/eureka/
+      # localhost 대신 K8s 서비스 이름 사용
+      defaultZone: http://discovery-service-service:8761/eureka/
     initial-instance-info-replication-interval-seconds: 40
     instance-info-replication-interval-seconds: 30
     register-with-eureka: true

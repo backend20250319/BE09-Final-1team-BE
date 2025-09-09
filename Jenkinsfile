@@ -1,8 +1,8 @@
-// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전
+// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (모든 서비스 항상 빌드)
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]
-def changedServicePaths = []
+def servicePathsToBuild = [] // 변수 이름 변경 (changed -> toBuild)
 
 pipeline {
     agent any
@@ -32,12 +32,13 @@ pipeline {
     }
 
     stages {
-        stage('Detect Changed Services') {
+        stage('Detect All Services') { // 스테이지 이름 변경
             steps {
-                script {
-                    echo "Detecting changed services on Windows..."
-                    def changedServices = new HashSet<String>()
+            script {
+                echo "Detecting all services to build..."
+                    def allServices = new HashSet<String>()
 
+                    // 1. Dockerfile을 기준으로 모든 서비스의 경로를 찾습니다.
                     def servicePathsOutput = bat(returnStdout: true, script: 'dir /s /b Dockerfile').trim()
                     def allServicePaths = servicePathsOutput.split('\r\n').findAll { line -> !line.startsWith('>') && line.trim() != '' }.collect { it.replace('\\Dockerfile', '') }
 
@@ -45,52 +46,39 @@ pipeline {
                     def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
                     echo "Found all relative service paths: ${relativeServicePaths}"
 
-                    if (currentBuild.changeSets.isEmpty()) {
-                        echo "No changesets found. Building all services."
-                        changedServices.addAll(relativeServicePaths)
-                    } else {
-                        for (changeSet in currentBuild.changeSets) {
-                            for (item in changeSet.items) {
-                                for (path in item.affectedPaths) {
-                                    def windowsStyleFile = path.replace('/', '\\')
-                                    for (String servicePath in relativeServicePaths) {
-                                        if (windowsStyleFile.startsWith(servicePath + '\\')) {
-                                            changedServices.add(servicePath)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    // 2. [수정됨] Git 변경사항을 확인하는 로직을 제거하고, 찾은 모든 서비스를 빌드 목록에 추가합니다.
+                    echo "Pipeline configured to build all services on every run."
+                    allServices.addAll(relativeServicePaths)
 
-                    if (changedServices.isEmpty()) {
-                        echo "No changes detected. Skipping subsequent stages."
+                    // 3. 빌드할 서비스가 없는 경우를 대비한 안전장치
+                    if (allServices.isEmpty()) {
+                    echo "No services with a Dockerfile were found. Skipping subsequent stages."
                         currentBuild.result = 'NOT_BUILT'
                         return
                     }
 
-                    echo "Services to be built: ${changedServices.toList()}"
-                    changedServicePaths = changedServices.toList()
+                    echo "Services to be built: ${allServices.toList()}"
+                    servicePathsToBuild = allServices.toList()
                 }
             }
         }
 
-        stage('Build and Push Changed Services') {
-            when { expression { !changedServicePaths.isEmpty() } }
+        stage('Build and Push All Services') { // 스테이지 이름 변경
+            when { expression { !servicePathsToBuild.isEmpty() } }
             steps {
-                script {
-                    def parallelStages = [:]
+            script {
+                def parallelStages = [:]
 
-                    changedServicePaths.each { servicePath ->
+                    servicePathsToBuild.each { servicePath ->
                         def currentService = servicePath
                         parallelStages["Build & Push ${currentService}"] = {
-                        try {
-                            def serviceName = currentService.split('\\\\').last()
+                    try {
+                        def serviceName = currentService.split('\\\\').last()
                                 def fullTag = "${serviceName}-${IMAGE_TAG}"
                                 buildAndPush(serviceName, currentService, fullTag)
                                 buildResults.succeeded.add(serviceName)
                             } catch (e) {
-                            echo "ERROR during build or push for ${currentService}: ${e.toString()}"
+                        echo "ERROR during build or push for ${currentService}: ${e.toString()}"
                                 buildResults.failed.add(currentService.split('\\\\').last())
                             }
                         }
@@ -98,7 +86,7 @@ pipeline {
                     parallel parallelStages
 
                     if (!buildResults.failed.isEmpty()) {
-                        error("One or more services failed to build: ${buildResults.failed.join(', ')}")
+                    error("One or more services failed to build: ${buildResults.failed.join(', ')}")
                     }
                 }
             }
@@ -126,7 +114,7 @@ pipeline {
 
                     // 2. checkout 받은 폴더로 이동하여 작업
                     dir('manifests-repo') {
-                        // 3. 빌드 성공한 서비스들의 YAML 파일만 이미지 태그 교체
+                        // 3. 빌드 성공한 모든 서비스들의 YAML 파일의 이미지 태그 교체
                         buildResults.succeeded.each { serviceName ->
                             echo "--- Updating manifest for ${serviceName} ---"
                             def fullTag = "${serviceName}-${IMAGE_TAG}"
@@ -144,7 +132,7 @@ pipeline {
                                 git config --global user.email "jenkins@example.com"
                                 git config --global user.name "Jenkins CI"
                                 git add .
-                                git commit -m "Deploy: Update image tags for services: ${buildResults.succeeded.join(', ')} [Build #${env.BUILD_NUMBER}]"
+                                git commit -m "Deploy: Update image tags for all services [Build #${env.BUILD_NUMBER}]"
                                 git push origin HEAD:main
                             """
                         }
@@ -165,7 +153,7 @@ pipeline {
                     echo "❌ Failed builds: ${buildResults.failed.join(', ')}"
                 }
                 if (currentBuild.result == 'NOT_BUILT') {
-                    echo "- No services were built as no changes were detected."
+                    echo "- No services were built as no services with a Dockerfile were found."
                 }
                 echo '---------------'
 

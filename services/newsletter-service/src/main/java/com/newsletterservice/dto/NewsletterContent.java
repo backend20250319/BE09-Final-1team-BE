@@ -13,14 +13,89 @@ public class NewsletterContent {
     private Long userId;
     private Boolean personalized;
     private String title;
+    private String subtitle;
     private String featuredImageUrl;
     private LocalDateTime generatedAt;
     private List<Section> sections;
+<<<<<<< HEAD
+=======
+    private Map<String, Object> personalizationInfo;
+    private String type; // 뉴스레터 타입 (DAILY, WEEKLY, MONTHLY, BREAKING)
+    private String category; // 카테고리
+>>>>>>> develop
     
     public boolean isPersonalized() {
         return personalized != null && personalized;
     }
     
+<<<<<<< HEAD
+=======
+    /**
+     * 뉴스레터 요약 정보 생성
+     * 
+     * @return 요약 문자열
+     */
+    public String getSummary() {
+        if (sections == null || sections.isEmpty()) {
+            return title != null ? title : "뉴스레터";
+        }
+        
+        StringBuilder summary = new StringBuilder();
+        summary.append(title != null ? title : "뉴스레터");
+        summary.append(" - ");
+        
+        int articleCount = 0;
+        for (Section section : sections) {
+            if (section.getArticles() != null) {
+                articleCount += section.getArticles().size();
+            }
+        }
+        
+        summary.append(articleCount).append("개의 기사");
+        return summary.toString();
+    }
+    
+    /**
+     * 뉴스레터 ID 반환 (newsletterId 사용)
+     */
+    public Long getId() {
+        return newsletterId;
+    }
+    
+    /**
+     * 뉴스레터 내용 생성 (sections 기반)
+     */
+    public String getContent() {
+        if (sections == null || sections.isEmpty()) {
+            return title != null ? title : "";
+        }
+        
+        StringBuilder content = new StringBuilder();
+        content.append(title != null ? title : "뉴스레터");
+        
+        for (Section section : sections) {
+            if (section.getTitle() != null) {
+                content.append("\n\n").append(section.getTitle());
+            }
+            if (section.getDescription() != null) {
+                content.append("\n").append(section.getDescription());
+            }
+            if (section.getArticles() != null) {
+                for (Article article : section.getArticles()) {
+                    if (article.getTitle() != null) {
+                        content.append("\n- ").append(article.getTitle());
+                    }
+                    if (article.getSummary() != null) {
+                        content.append("\n  ").append(article.getSummary());
+                    }
+                }
+            }
+        }
+        
+        return content.toString();
+    }
+    
+>>>>>>> develop
     @Data
     @Builder
     @NoArgsConstructor
@@ -50,5 +125,6 @@ public class NewsletterContent {
         private Long shareCount;
         private Double personalizedScore;
         private Double trendScore;
+        private Boolean isPersonalized;
     }
 }

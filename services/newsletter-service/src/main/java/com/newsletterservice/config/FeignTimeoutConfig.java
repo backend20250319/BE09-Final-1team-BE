@@ -6,7 +6,11 @@ import feign.codec.ErrorDecoder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+<<<<<<< HEAD
 import org.springframework.http.HttpStatus;
+=======
+import org.springframework.validation.annotation.Validated;
+>>>>>>> develop
 
 import java.io.IOException;
 
@@ -15,6 +19,7 @@ import java.io.IOException;
 public class FeignTimeoutConfig {
     
     /**
+<<<<<<< HEAD
      * Feign 재시도 설정
      */
     @Bean
@@ -28,6 +33,24 @@ public class FeignTimeoutConfig {
     @Bean
     public feign.Request.Options feignOptions() {
         return new feign.Request.Options(5000, 10000); // (connectTimeout, readTimeout)
+=======
+     * Feign 재시도 설정 - 더 강력한 재시도 메커니즘
+     */
+    @Bean
+    public Retryer feignRetryer() {
+        return new Retryer.Default(1000, 3000, 3); // (period, maxPeriod, maxAttempts) - 3회 재시도, 최대 3초 간격
+    }
+    
+    /**
+     * Feign 타임아웃 설정 - 적절한 타임아웃으로 안정성 확보
+     */
+    @Bean
+    public feign.Request.Options feignOptions() {
+        return new feign.Request.Options(
+            (int) java.time.Duration.ofSeconds(5).toMillis(),  // connectTimeout
+            (int) java.time.Duration.ofSeconds(10).toMillis()  // readTimeout
+        );
+>>>>>>> develop
     }
     
     /**

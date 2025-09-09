@@ -16,6 +16,7 @@ import com.newsletterservice.repository.SubscriptionRepository;
 import com.newsletterservice.entity.NewsCategory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+<<<<<<< HEAD
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -29,6 +30,16 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
+=======
+
+import org.springframework.data.domain.*;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+import java.util.stream.*;
+import java.util.Optional;
+>>>>>>> develop
 
 @Service
 @RequiredArgsConstructor
@@ -39,8 +50,18 @@ public class NewsletterService {
     // ========================================
     // Dependencies
     // ========================================
+<<<<<<< HEAD
     private final NewsletterDeliveryRepository deliveryRepository;
     private final SubscriptionRepository subscriptionRepository;
+=======
+    private final NewsletterContentService contentService;
+    private final NewsletterDeliveryService deliveryService;
+    private final NewsletterAnalyticsService analyticsService;
+    private final Optional<EmailService> emailService;
+    private final FeedTemplateService feedTemplateService;
+    private final Optional<KakaoMessageService> kakaoMessageService;
+    
+>>>>>>> develop
     private final NewsServiceClient newsServiceClient;
     private final UserServiceClient userServiceClient;
     private final EmailNewsletterRenderer emailRenderer;
@@ -235,8 +256,12 @@ public class NewsletterService {
                         .map(TrendingKeywordDto::getKeyword)
                         .collect(Collectors.toList());
             }
+        } catch (feign.RetryableException e) {
+            log.error("전체 트렌드 키워드 조회 재시도 실패: error={}", e.getMessage());
+            return getFallbackGeneralKeywords(limit);
         } catch (Exception e) {
-            log.warn("전체 트렌드 키워드 조회 실패", e);
+            log.warn("전체 트렌드 키워드 조회 실패: error={}", e.getMessage());
+            return getFallbackGeneralKeywords(limit);
         }
         return new ArrayList<>();
     }
@@ -343,8 +368,16 @@ public class NewsletterService {
                 
                 trackNewsView(delivery.getUserId(), delivery.getNewsletterId(), "EMAIL_NEWSLETTER");
             }
+        } catch (feign.RetryableException e) {
+            log.error("카테고리별 트렌드 키워드 조회 재시도 실패: category={}, error={}", category, e.getMessage());
+            return getFallbackKeywordsForCategory(category, limit);
         } catch (Exception e) {
+<<<<<<< HEAD
             log.error("이메일 열람 추적 실패: deliveryId={}", deliveryId, e);
+=======
+            log.warn("카테고리별 트렌드 키워드 조회 실패: category={}, error={}", category, e.getMessage());
+            return getFallbackKeywordsForCategory(category, limit);
+>>>>>>> develop
         }
     }
 
@@ -961,6 +994,7 @@ public class NewsletterService {
             throw new NewsletterException("활성 구독 목록 조회 중 오류가 발생했습니다.", "ACTIVE_SUBSCRIPTION_ERROR");
         }
     }
+<<<<<<< HEAD
 
     public SubscriptionResponse changeSubscriptionStatus(Long subscriptionId, Long userId, String newStatus) {
         log.info("구독 상태 변경: subscriptionId={}, userId={}, newStatus={}", subscriptionId, userId, newStatus);
@@ -1145,10 +1179,138 @@ public class NewsletterService {
         } catch (Exception e) {
             log.error("발송 재시도 실패: deliveryId={}, userId={}", deliveryId, userId, e);
             throw new NewsletterException("발송 재시도 중 오류가 발생했습니다.", "RETRY_ERROR");
+=======
+    
+    // ========================================
+    // 5. 피드 B형 뉴스레터 전송 기능
+    // ========================================
+    
+    /**
+     * 피드 B형 개인화 뉴스레터 전송
+     */
+    public void sendPersonalizedFeedBNewsletter(Long userId, String accessToken) {
+        if (kakaoMessageService.isEmpty()) {
+            log.warn("KakaoMessageService가 사용할 수 없습니다. 피드 B형 개인화 뉴스레터 전송을 건너뜁니다.");
+            return;
+        }
+        
+        try {
+            log.info("피드 B형 개인화 뉴스레터 전송 시작: userId={}", userId);
+            
+            // 피드 B형 템플릿 생성 및 전송
+            kakaoMessageService.get().sendFeedBMessage(userId, accessToken);
+            
+            // 전송 기록 저장
+            analyticsService.recordNewsletterDelivery(userId, "FEED_B_PERSONALIZED", true);
+            
+            log.info("피드 B형 개인화 뉴스레터 전송 완료: userId={}", userId);
+            
+        } catch (Exception e) {
+            log.error("피드 B형 개인화 뉴스레터 전송 실패: userId={}", userId, e);
+            analyticsService.recordNewsletterDelivery(userId, "FEED_B_PERSONALIZED", false);
+            throw new NewsletterException("피드 B형 개인화 뉴스레터 전송에 실패했습니다.", "FEED_B_PERSONALIZED_SEND_ERROR");
+        }
+    }
+    
+    /**
+     * 피드 B형 카테고리별 뉴스레터 전송
+     */
+    public void sendCategoryFeedBNewsletter(String category, String accessToken) {
+        if (kakaoMessageService.isEmpty()) {
+            log.warn("KakaoMessageService가 사용할 수 없습니다. 피드 B형 카테고리별 뉴스레터 전송을 건너뜁니다.");
+            return;
+        }
+        
+        try {
+            log.info("피드 B형 카테고리별 뉴스레터 전송 시작: category={}", category);
+            
+            // 피드 B형 템플릿 생성 및 전송
+            kakaoMessageService.get().sendCategoryFeedBMessage(category, accessToken);
+            
+            log.info("피드 B형 카테고리별 뉴스레터 전송 완료: category={}", category);
+            
+        } catch (Exception e) {
+            log.error("피드 B형 카테고리별 뉴스레터 전송 실패: category={}", category, e);
+            throw new NewsletterException("피드 B형 카테고리별 뉴스레터 전송에 실패했습니다.", "FEED_B_CATEGORY_SEND_ERROR");
+        }
+    }
+    
+    /**
+     * 피드 B형 트렌딩 뉴스레터 전송
+     */
+    public void sendTrendingFeedBNewsletter(String accessToken) {
+        if (kakaoMessageService.isEmpty()) {
+            log.warn("KakaoMessageService가 사용할 수 없습니다. 피드 B형 트렌딩 뉴스레터 전송을 건너뜁니다.");
+            return;
+        }
+        
+        try {
+            log.info("피드 B형 트렌딩 뉴스레터 전송 시작");
+            
+            // 피드 B형 템플릿 생성 및 전송
+            kakaoMessageService.get().sendTrendingFeedBMessage(accessToken);
+            
+            log.info("피드 B형 트렌딩 뉴스레터 전송 완료");
+            
+        } catch (Exception e) {
+            log.error("피드 B형 트렌딩 뉴스레터 전송 실패", e);
+            throw new NewsletterException("피드 B형 트렌딩 뉴스레터 전송에 실패했습니다.", "FEED_B_TRENDING_SEND_ERROR");
+        }
+    }
+    
+    /**
+     * 피드 B형 뉴스레터 미리보기 생성
+     */
+    public Map<String, Object> createFeedBPreview(String type, String param) {
+        try {
+            log.info("피드 B형 뉴스레터 미리보기 생성: type={}, param={}", type, param);
+            
+            FeedTemplate feedTemplate;
+            
+            switch (type.toLowerCase()) {
+                case "personalized":
+                    Long userId = Long.valueOf(param);
+                    feedTemplate = feedTemplateService.createPersonalizedFeedTemplate(
+                            userId, FeedTemplate.FeedType.FEED_B);
+                    break;
+                case "category":
+                    feedTemplate = feedTemplateService.createCategoryFeedTemplate(
+                            param, FeedTemplate.FeedType.FEED_B);
+                    break;
+                case "trending":
+                    feedTemplate = feedTemplateService.createTrendingFeedTemplate(
+                            FeedTemplate.FeedType.FEED_B);
+                    break;
+                default:
+                    feedTemplate = feedTemplateService.createTrendingFeedTemplate(
+                            FeedTemplate.FeedType.FEED_B);
+            }
+            
+            Map<String, Object> previewData = new HashMap<>();
+            previewData.put("success", true);
+            previewData.put("type", type);
+            previewData.put("param", param);
+            previewData.put("feedType", feedTemplate.getFeedType().name());
+            previewData.put("template", feedTemplate);
+            previewData.put("kakaoArgs", feedTemplate.toKakaoTemplateArgs());
+            previewData.put("timestamp", System.currentTimeMillis());
+            
+            log.info("피드 B형 뉴스레터 미리보기 생성 완료: type={}, param={}", type, param);
+            return previewData;
+            
+        } catch (Exception e) {
+            log.error("피드 B형 뉴스레터 미리보기 생성 실패: type={}, param={}", type, param, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "미리보기 생성 실패");
+            errorResponse.put("timestamp", System.currentTimeMillis());
+            return errorResponse;
+>>>>>>> develop
         }
     }
 
     /**
+<<<<<<< HEAD
      * 공유 통계 기록
      */
     public ShareStatsResponse recordShareStats(ShareStatsRequest request, String userId) {
@@ -1195,3 +1357,47 @@ public class NewsletterService {
         }
     }
 }
+=======
+     * 카테고리별 트렌드 키워드 조회 실패 시 사용할 fallback 키워드 제공
+     */
+    private List<String> getFallbackKeywordsForCategory(String category, int limit) {
+        log.info("카테고리별 fallback 키워드 사용: category={}, limit={}", category, limit);
+        
+        // 카테고리별 기본 키워드 매핑
+        Map<String, List<String>> fallbackKeywords = Map.of(
+            "ECONOMY", List.of("경제", "금리", "인플레이션", "주식", "부동산", "환율", "고용", "성장"),
+            "POLITICS", List.of("정치", "선거", "국회", "정부", "정책", "여당", "야당", "대통령"),
+            "SOCIETY", List.of("사회", "교육", "복지", "건강", "환경", "안전", "문화", "생활"),
+            "WORLD", List.of("국제", "외교", "무역", "글로벌", "유엔", "G7", "G20", "협정"),
+            "TECHNOLOGY", List.of("기술", "AI", "반도체", "스마트폰", "인터넷", "디지털", "혁신", "스타트업"),
+            "SPORTS", List.of("스포츠", "축구", "야구", "농구", "올림픽", "월드컵", "선수", "경기"),
+            "ENTERTAINMENT", List.of("연예", "영화", "드라마", "음악", "가수", "배우", "예능", "방송")
+        );
+        
+        String englishCategory = convertCategoryToEnglish(category);
+        List<String> keywords = fallbackKeywords.getOrDefault(englishCategory, 
+            List.of("뉴스", "이슈", "화제", "주목", "관심", "핫이슈", "트렌드", "이슈"));
+        
+        return keywords.stream()
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 전체 트렌드 키워드 조회 실패 시 사용할 fallback 키워드 제공
+     */
+    private List<String> getFallbackGeneralKeywords(int limit) {
+        log.info("전체 fallback 키워드 사용: limit={}", limit);
+        
+        // 일반적인 인기 키워드들
+        List<String> generalKeywords = List.of(
+            "경제", "정치", "사회", "기술", "스포츠", "연예", "국제", "환경", 
+            "교육", "건강", "부동산", "주식", "AI", "반도체", "디지털", "혁신"
+        );
+        
+        return generalKeywords.stream()
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+}
+>>>>>>> develop

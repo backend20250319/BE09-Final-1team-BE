@@ -344,7 +344,7 @@ public class KakaoApiService {
                 .get()
                 .uri(uriBuilder -> uriBuilder
                     .path("/v2/user/scopes")
-                    .queryParam("scopes", "[\"talk_message\"]")
+                    .queryParam("scopes", "talk_message")
                     .build())
                 .header("Authorization", "Bearer " + accessToken)
                 .retrieve()
@@ -366,11 +366,17 @@ public class KakaoApiService {
         } catch (WebClientResponseException e) {
             log.error("카카오톡 메시지 권한 확인 실패: statusCode={}, body={}",
                     e.getStatusCode(), e.getResponseBodyAsString());
-            // 권한 확인 실패 시 false 반환 (안전한 기본값)
-            return false;
+            
+            // 401, 403 에러는 권한이 없다는 의미로 false 반환
+            if (e.getStatusCode().value() == 401 || e.getStatusCode().value() == 403) {
+                return false;
+            }
+            
+            // 다른 에러는 예외로 처리
+            throw new NewsletterException("카카오톡 메시지 권한 확인 중 오류가 발생했습니다.", "KAKAO_PERMISSION_CHECK_ERROR");
         } catch (Exception e) {
             log.error("카카오톡 메시지 권한 확인 실패", e);
-            return false;
+            throw new NewsletterException("카카오톡 메시지 권한 확인 중 오류가 발생했습니다.", "KAKAO_PERMISSION_CHECK_ERROR");
         }
     }
 

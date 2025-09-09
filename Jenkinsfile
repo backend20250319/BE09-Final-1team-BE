@@ -1,8 +1,8 @@
-// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (모든 서비스 항상 빌드)
+// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (모든 서비스 항상 빌드 - 필터링 로직 수정)
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]
-def servicePathsToBuild = [] // 변수 이름 변경 (changed -> toBuild)
+def servicePathsToBuild = []
 
 pipeline {
     agent any
@@ -32,27 +32,29 @@ pipeline {
     }
 
     stages {
-        stage('Detect All Services') { // 스테이지 이름 변경
+        stage('Detect All Services') {
             steps {
-            script {
-                echo "Detecting all services to build..."
+                script {
+                    echo "Detecting all services to build..."
                     def allServices = new HashSet<String>()
 
-                    // 1. Dockerfile을 기준으로 모든 서비스의 경로를 찾습니다.
                     def servicePathsOutput = bat(returnStdout: true, script: 'dir /s /b Dockerfile').trim()
-                    def allServicePaths = servicePathsOutput.split('\r\n').findAll { line -> !line.startsWith('>') && line.trim() != '' }.collect { it.replace('\\Dockerfile', '') }
+
+                    // [수정됨] 필터링 로직 강화: 명령어 에코 등 불필요한 라인을 확실히 제거합니다.
+                    // 실제 'Dockerfile' 텍스트를 포함하는 라인만 유효한 경로로 간주합니다.
+                    def validServicePaths = servicePathsOutput.split('\r\n').findAll { line ->
+                        line.trim() != '' && line.contains('Dockerfile')
+                    }.collect { it.replace('\\Dockerfile', '') }
 
                     def workspacePath = env.WORKSPACE
-                    def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
+                    def relativeServicePaths = validServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
                     echo "Found all relative service paths: ${relativeServicePaths}"
 
-                    // 2. [수정됨] Git 변경사항을 확인하는 로직을 제거하고, 찾은 모든 서비스를 빌드 목록에 추가합니다.
                     echo "Pipeline configured to build all services on every run."
                     allServices.addAll(relativeServicePaths)
 
-                    // 3. 빌드할 서비스가 없는 경우를 대비한 안전장치
                     if (allServices.isEmpty()) {
-                    echo "No services with a Dockerfile were found. Skipping subsequent stages."
+                        echo "No services with a Dockerfile were found. Skipping subsequent stages."
                         currentBuild.result = 'NOT_BUILT'
                         return
                     }
@@ -63,22 +65,22 @@ pipeline {
             }
         }
 
-        stage('Build and Push All Services') { // 스테이지 이름 변경
+        stage('Build and Push All Services') {
             when { expression { !servicePathsToBuild.isEmpty() } }
             steps {
-            script {
-                def parallelStages = [:]
+                script {
+                    def parallelStages = [:]
 
                     servicePathsToBuild.each { servicePath ->
                         def currentService = servicePath
                         parallelStages["Build & Push ${currentService}"] = {
-                    try {
-                        def serviceName = currentService.split('\\\\').last()
+                        try {
+                            def serviceName = currentService.split('\\\\').last()
                                 def fullTag = "${serviceName}-${IMAGE_TAG}"
                                 buildAndPush(serviceName, currentService, fullTag)
                                 buildResults.succeeded.add(serviceName)
                             } catch (e) {
-                        echo "ERROR during build or push for ${currentService}: ${e.toString()}"
+                            echo "ERROR during build or push for ${currentService}: ${e.toString()}"
                                 buildResults.failed.add(currentService.split('\\\\').last())
                             }
                         }
@@ -86,7 +88,7 @@ pipeline {
                     parallel parallelStages
 
                     if (!buildResults.failed.isEmpty()) {
-                    error("One or more services failed to build: ${buildResults.failed.join(', ')}")
+                        error("One or more services failed to build: ${buildResults.failed.join(', ')}")
                     }
                 }
             }
@@ -98,7 +100,6 @@ pipeline {
                 script {
                     echo "Updating manifests for successfully built services: ${buildResults.succeeded.join(', ')}"
 
-                    // 1. Manifest 리포지토리를 'manifests-repo' 폴더에 checkout
                     checkout([
                         $class: 'GitSCM',
                         branches: [[name: '*/main']],
@@ -112,9 +113,7 @@ pipeline {
                         ]]
                     ])
 
-                    // 2. checkout 받은 폴더로 이동하여 작업
                     dir('manifests-repo') {
-                        // 3. 빌드 성공한 모든 서비스들의 YAML 파일의 이미지 태그 교체
                         buildResults.succeeded.each { serviceName ->
                             echo "--- Updating manifest for ${serviceName} ---"
                             def fullTag = "${serviceName}-${IMAGE_TAG}"
@@ -124,7 +123,6 @@ pipeline {
                             bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
                         }
 
-                        // 4. 변경된 파일들을 Git에 Commit 하고 Push
                         echo "Pushing updated manifests to Git repository..."
                         withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
                             bat """

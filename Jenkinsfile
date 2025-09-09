@@ -1,4 +1,4 @@
-// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (PowerShell로 안정성 확보)
+// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (PowerShell + 최종 필터링)
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]
@@ -38,12 +38,15 @@ pipeline {
                     echo "Detecting all services to build using PowerShell..."
                     def allServices = new HashSet<String>()
 
-                    // [수정됨] dir 명령어와 findFiles 대신, 안정적인 PowerShell 명령어로 Dockerfile의 부모 폴더 경로를 직접 가져옵니다.
                     def psCommand = 'powershell -Command "Get-ChildItem -Path . -Recurse -Filter Dockerfile | ForEach-Object { $_.Directory.FullName }"'
                     def servicePathsOutput = bat(returnStdout: true, script: psCommand).trim()
 
-                    // PowerShell 출력은 매우 깔끔하므로, 줄바꿈으로 나누기만 하면 됩니다.
-                    def validServicePaths = servicePathsOutput.split('\r\n').findAll { it.trim() != '' }
+                    // [수정됨] 최종 필터링: Windows 절대 경로에 반드시 포함되는 콜론(':')을 기준으로 유효한 경로만 필터링합니다.
+                    def validServicePaths = servicePathsOutput.split('\r\n').findAll { line ->
+                        def trimmedLine = line.trim()
+                        // 비어있지 않고, 콜론(':')을 포함하는 라인만 유효한 경로로 간주합니다.
+                        trimmedLine != '' && trimmedLine.contains(':')
+                    }
 
                     def workspacePath = env.WORKSPACE
                     def relativeServicePaths = validServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
@@ -179,4 +182,3 @@ def buildAndPush(String serviceName, String servicePath, String fullTag) {
         bat "docker push ${image}"
     }
 }
-

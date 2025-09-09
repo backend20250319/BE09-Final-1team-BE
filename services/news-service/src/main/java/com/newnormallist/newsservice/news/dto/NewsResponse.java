@@ -31,4 +31,5 @@ public class NewsResponse {
     private String oidAid;
     private NewsStatus status;
     private LocalDateTime updatedAt;
+    private Long viewCount;
 }

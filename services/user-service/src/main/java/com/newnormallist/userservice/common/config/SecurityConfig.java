@@ -34,6 +34,21 @@ public class SecurityConfig {
             "/api/users/signup",
             "/api/users/categories"
     };
+   // 서비스간 통신용 경로 (인증 면제) - 간소화됨
+   private static final String[] INTERNAL_SERVICE_ENDPOINTS = {
+        "/api/users/*",                    // 기본 사용자 정보 조회
+        "/api/users/*/read-news-ids",      // 읽은 뉴스 ID 목록
+        "/api/users/*/read-news/**",       // 읽기 기록 관련
+        "/api/users/*/interests",          // 관심사 분석
+        "/api/users/*/behavior-analysis",  // 행동 분석
+        "/api/users/*/categories",         // 카테고리 선호도
+        "/api/users/*/optimal-newsletter-frequency", // 최적 뉴스레터 빈도
+        "/api/users/mypage/history/**",    // 마이페이지 히스토리
+        "/api/users/active",               // 활성 사용자 목록
+        "/api/users/batch",                // 배치 사용자 조회
+        "/api/users/email/*",              // 이메일로 사용자 조회
+        "/api/users/*/exists"              // 사용자 존재 확인
+    };
 
     private static final String[] SWAGGER_ENDPOINTS = {
             "/swagger-ui/**",
@@ -64,6 +79,8 @@ public class SecurityConfig {
                         .requestMatchers(SWAGGER_ENDPOINTS).permitAll()
                         // 공개 API 엔드포인트
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                        // 서비스간 통신용 경로 - 인증 면제
+                        .requestMatchers(INTERNAL_SERVICE_ENDPOINTS).permitAll()
                         // 관리자 전용 엔드포인트
                         .requestMatchers("/api/users/admin/**").hasRole("ADMIN")
                         // 그 외 모든 요청은 인증 필요

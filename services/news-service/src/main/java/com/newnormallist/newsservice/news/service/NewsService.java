@@ -30,6 +30,8 @@ public interface NewsService {
     List<NewsResponse> getPersonalizedNews(Long userId);
     List<NewsResponse> getTrendingNews();
     void incrementViewCount(Long newsId);
+    Long getViewCount(Long newsId);
+    Long getDailyViewCount(Long newsId);
 
     // 새로운 API 엔드포인트들을 위한 메서드들
     Page<NewsListResponse> getTrendingNews(Pageable pageable);

@@ -29,8 +29,7 @@ public class TrendingService {
         // 제목 + 요약(가능하면)에서 키워드 추출   
         Map<String, Long> counts = recent.stream()
                 .flatMap(n -> tokenizeKo(joinTitleSummary(n)).stream())
-                .filter(tok -> !STOPWORDS.contains(tok))
-                .filter(tok -> tok.length() >= 2) // 1글자 제거
+                .filter(this::isValidKeyword)
                 .collect(Collectors.groupingBy(s -> s, Collectors.counting()));
 
         return counts.entrySet().stream()
@@ -64,7 +63,7 @@ public class TrendingService {
         return Arrays.asList(cleaned.split(" "));
     }
 
-    // 너무 일반적인 단어는 제외 (필요에 따라 계속 확장)
+    // 확장된 불용어 목록 - 의미없는 단어들을 체계적으로 필터링
     private static final Set<String> STOPWORDS = Set.of(
             // 뉴스 관련 일반 용어
             "속보", "영상", "단독", "인터뷰", "기자", "사진", "종합", "뉴스", "기사", "외신",
@@ -92,4 +91,67 @@ public class TrendingService {
             "분석", "전망", "동향", "소식", "업데이트", "변화", "발전", "진전",
             "영향", "효과", "원인", "이유", "목적", "방법", "과정"
     );
+    
+    /**
+     * 키워드 유효성 검사 - 체계적인 필터링
+     */
+    private boolean isValidKeyword(String word) {
+        if (word == null || word.length() < 2) {
+            return false;
+        }
+        
+        // 1. 불용어 목록에 포함된 단어 제외
+        if (STOPWORDS.contains(word)) {
+            return false;
+        }
+        
+        // 2. 숫자만으로 구성된 단어 제외 (연도, 날짜 등)
+        if (word.matches("^\\d+$")) {
+            return false;
+        }
+        
+        // 3. 특수 패턴 제외
+        if (word.matches(".*[#@$%^&*()].*")) {
+            return false;
+        }
+        
+        // 4. 너무 짧은 영문 단어 제외 (2글자 이하)
+        if (word.matches("^[A-Za-z]{1,2}$")) {
+            return false;
+        }
+        
+        // 5. 반복 문자 패턴 제외 (예: "ㅋㅋㅋ", "ㅎㅎㅎ")
+        if (word.matches("(.)\\1{2,}")) {
+            return false;
+        }
+        
+        // 6. 의미없는 조합어 제외
+        if (isMeaninglessCombination(word)) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 의미없는 조합어 판별
+     */
+    private boolean isMeaninglessCombination(String word) {
+        // 의미없는 조합어 패턴들
+        String[] meaninglessPatterns = {
+            "영화의", "기사의", "뉴스의", "사진의", "영상의", "내용의", "정보의",
+            "추출할", "분석할", "조사할", "확인할", "검토할", "검증할",
+            "관련된", "대한", "위한", "통한", "통해", "대해", "관해",
+            "있는", "없는", "같은", "다른", "이런", "그런", "저런",
+            "하는", "되는", "이되는"
+        };
+        
+        for (String pattern : meaninglessPatterns) {
+            if (word.contains(pattern)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
 }

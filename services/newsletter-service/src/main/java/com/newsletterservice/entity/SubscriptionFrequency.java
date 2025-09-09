@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
 public enum SubscriptionFrequency {
     DAILY("매일"),
     WEEKLY("주간"),
@@ -12,4 +11,8 @@ public enum SubscriptionFrequency {
     IMMEDIATE("즉시"); // 실시간 알림용
 
     private final String description;
+    
+    SubscriptionFrequency(String description) {
+        this.description = description;
+    }
 }

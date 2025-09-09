@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS user_newsletter_subscriptions (
     INDEX idx_is_active (is_active),
     INDEX idx_subscribed_at (subscribed_at),
     
-    -- 유니크 제약조건 (사용자당 카테고리별 하나의 구독만 허용)
-    UNIQUE KEY uk_user_category (user_id, category)
+    -- 유니크 제약조건 제거 (사용자당 카테고리별 여러 구독 허용)
+    -- UNIQUE KEY uk_user_category (user_id, category)
 );
 
 -- 댓글

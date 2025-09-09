@@ -9,8 +9,6 @@ import com.newsletterservice.repository.UserNewsletterSubscriptionRepository;
 import com.newsletterservice.service.EmailNewsletterRenderer;
 import com.newsletterservice.service.KakaoMessageService;
 import com.newsletterservice.service.NewsletterService;
-import com.newsletterservice.util.JwtUtil;
-import com.newsletterservice.client.dto.CategoryResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -104,7 +102,7 @@ public class NewsletterController extends BaseController {
      * 내 구독 목록 조회 (활성화된 구독만 반환)
      */
     @GetMapping("/subscription/my")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getMySubscriptions(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getMySubscriptions(
             HttpServletRequest httpRequest) {
         
         try {
@@ -127,7 +125,8 @@ public class NewsletterController extends BaseController {
                 "ART", "예술"
             );
             
-            List<Map<String, Object>> result = new ArrayList<>();
+            List<Map<String, Object>> subscriptions = new ArrayList<>();
+            List<String> preferredCategories = new ArrayList<>();
             
             // 활성화된 구독만 카드 형태로 반환
             for (UserNewsletterSubscription subscription : activeSubscriptions) {
@@ -135,8 +134,10 @@ public class NewsletterController extends BaseController {
                 String categoryName = categoryNames.getOrDefault(categoryCode, categoryCode);
                 
                 Map<String, Object> subscriptionCard = new HashMap<>();
+                subscriptionCard.put("id", subscription.getId());
                 subscriptionCard.put("subscriptionId", subscription.getId());
                 subscriptionCard.put("categoryId", categoryCode.hashCode());
+                subscriptionCard.put("category", categoryName);
                 subscriptionCard.put("categoryName", categoryCode);
                 subscriptionCard.put("categoryNameKo", categoryName);
                 subscriptionCard.put("isActive", subscription.getIsActive());
@@ -147,10 +148,19 @@ public class NewsletterController extends BaseController {
                 Long subscriberCount = getSubscriberCountWithFallback(categoryCode);
                 subscriptionCard.put("subscriberCount", subscriberCount);
                 
-                result.add(subscriptionCard);
+                subscriptions.add(subscriptionCard);
+                preferredCategories.add(categoryCode);
             }
             
-            log.info("활성 구독 목록 조회 완료: userId={}, count={}", userId, result.size());
+            // 응답 데이터 구성
+            Map<String, Object> result = new HashMap<>();
+            result.put("count", subscriptions.size());
+            result.put("subscriptions", subscriptions);
+            result.put("preferredCategories", preferredCategories);
+            result.put("userId", userId);
+            result.put("timestamp", LocalDateTime.now().toString());
+            
+            log.info("활성 구독 목록 조회 완료: userId={}, count={}", userId, subscriptions.size());
             return ResponseEntity.ok(ApiResponse.success(result, "구독 목록 조회가 완료되었습니다."));
             
         } catch (Exception e) {
@@ -247,7 +257,13 @@ public class NewsletterController extends BaseController {
             String category = (String) request.get("category");
             Boolean isActive = (Boolean) request.get("isActive");
             
-            log.info("구독 상태 변경 시작: userId={}, category={}, isActive={}", userId, category, isActive);
+            // isActive가 null인 경우 기본값으로 true 설정 (구독 요청의 경우)
+            final Boolean finalIsActive = (isActive == null) ? true : isActive;
+            if (isActive == null) {
+                log.info("isActive 값이 null이므로 기본값 true로 설정");
+            }
+            
+            log.info("구독 상태 변경 시작: userId={}, category={}, isActive={}", userId, category, finalIsActive);
             
             // 입력값 검증
             if (category == null || category.trim().isEmpty()) {
@@ -256,40 +272,34 @@ public class NewsletterController extends BaseController {
                     .body(ApiResponse.error("INVALID_CATEGORY", "카테고리가 필요합니다."));
             }
             
-            if (isActive == null) {
-                log.warn("isActive 값이 null입니다: isActive={}", isActive);
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("INVALID_ACTIVE_STATUS", "활성화 상태가 필요합니다."));
-            }
-            
             // 타임아웃 체크를 위한 CompletableFuture 사용
             CompletableFuture<Map<String, Object>> future = CompletableFuture.supplyAsync(() -> {
                 try {
-                    // 기존 구독 정보 확인
-                    Optional<UserNewsletterSubscription> existing = subscriptionRepository.findByUserIdAndCategory(userId, category);
+                    // 기존 구독 정보 확인 (다중 구독 지원)
+                    List<UserNewsletterSubscription> existing = subscriptionRepository.findAllByUserIdAndCategory(userId, category);
                     
-                    if (existing.isPresent()) {
-                        // 기존 구독 정보 업데이트
-                        int updatedRows = subscriptionRepository.updateSubscriptionStatus(userId, category, isActive);
+                    if (!existing.isEmpty()) {
+                        // 기존 구독 정보 업데이트 (카테고리별 모든 구독)
+                        int updatedRows = subscriptionRepository.updateSubscriptionStatus(userId, category, finalIsActive);
                         log.info("구독 상태 업데이트 완료: userId={}, category={}, isActive={}, updatedRows={}", 
-                                userId, category, isActive, updatedRows);
+                                userId, category, finalIsActive, updatedRows);
                     } else {
                         // 새로운 구독 정보 생성
                         UserNewsletterSubscription newSubscription = UserNewsletterSubscription.builder()
                             .userId(userId)
                             .category(category)
-                            .isActive(isActive)
+                            .isActive(finalIsActive)
                             .subscribedAt(LocalDateTime.now())
                             .build();
                         subscriptionRepository.save(newSubscription);
-                        log.info("새 구독 정보 생성 완료: userId={}, category={}, isActive={}", userId, category, isActive);
+                        log.info("새 구독 정보 생성 완료: userId={}, category={}, isActive={}", userId, category, finalIsActive);
                     }
                     
                     // 업데이트된 구독자 수 조회 (fallback 처리)
                     Long updatedSubscriberCount = getSubscriberCountWithFallback(category);
                     
                     Map<String, Object> result = new HashMap<>();
-                    result.put("message", isActive ? "구독이 활성화되었습니다." : "구독이 비활성화되었습니다.");
+                    result.put("message", finalIsActive ? "구독이 활성화되었습니다." : "구독이 비활성화되었습니다.");
                     result.put("category", category);
                     result.put("subscriberCount", updatedSubscriberCount);
                     result.put("isFallback", false);
@@ -417,19 +427,17 @@ public class NewsletterController extends BaseController {
             for (int i = 0; i < Math.min(3, categories.length); i++) {
                 String category = categories[i];
                 
-                // 기존 구독 정보가 없으면 생성
-                if (!subscriptionRepository.existsByUserIdAndCategory(userId, category)) {
-                    UserNewsletterSubscription subscription = UserNewsletterSubscription.builder()
-                        .userId(userId)
-                        .category(category)
-                        .isActive(true)
-                        .subscribedAt(LocalDateTime.now())
-                        .build();
-                    
-                    subscriptionRepository.save(subscription);
-                    createdCount++;
-                    log.info("테스트 구독 데이터 생성: userId={}, category={}", userId, category);
-                }
+                // 다중 구독 허용하므로 항상 새 구독 생성
+                UserNewsletterSubscription subscription = UserNewsletterSubscription.builder()
+                    .userId(userId)
+                    .category(category)
+                    .isActive(true)
+                    .subscribedAt(LocalDateTime.now())
+                    .build();
+                
+                subscriptionRepository.save(subscription);
+                createdCount++;
+                log.info("테스트 구독 데이터 생성: userId={}, category={}", userId, category);
             }
             
             // 생성된 구독 정보 조회
@@ -1800,6 +1808,287 @@ public class NewsletterController extends BaseController {
     }
     
     
+    /**
+     * 디버깅용: 사용자 구독 상태 상세 조회
+     */
+    @GetMapping("/debug/subscriptions/{userId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> debugUserSubscriptions(@PathVariable Long userId) {
+        try {
+            log.info("디버깅: 사용자 {} 구독 상태 상세 조회", userId);
+            
+            // 모든 구독 조회 (활성/비활성 포함)
+            List<UserNewsletterSubscription> allSubscriptions = subscriptionRepository.findByUserId(userId);
+            
+            // 활성 구독만 조회
+            List<UserNewsletterSubscription> activeSubscriptions = subscriptionRepository.findActiveSubscriptionsByUserId(userId);
+            
+            Map<String, Object> debugInfo = new HashMap<>();
+            debugInfo.put("userId", userId);
+            debugInfo.put("totalSubscriptions", allSubscriptions.size());
+            debugInfo.put("activeSubscriptions", activeSubscriptions.size());
+            
+            // 모든 구독 상세 정보
+            List<Map<String, Object>> allSubsDetail = allSubscriptions.stream()
+                .map(sub -> {
+                    Map<String, Object> detail = new HashMap<>();
+                    detail.put("id", sub.getId());
+                    detail.put("category", sub.getCategory());
+                    detail.put("isActive", sub.getIsActive());
+                    detail.put("subscribedAt", sub.getSubscribedAt());
+                    detail.put("updatedAt", sub.getUpdatedAt());
+                    return detail;
+                })
+                .collect(Collectors.toList());
+            
+            debugInfo.put("allSubscriptions", allSubsDetail);
+            
+            // 활성 구독만 상세 정보
+            List<Map<String, Object>> activeSubsDetail = activeSubscriptions.stream()
+                .map(sub -> {
+                    Map<String, Object> detail = new HashMap<>();
+                    detail.put("id", sub.getId());
+                    detail.put("category", sub.getCategory());
+                    detail.put("isActive", sub.getIsActive());
+                    detail.put("subscribedAt", sub.getSubscribedAt());
+                    detail.put("updatedAt", sub.getUpdatedAt());
+                    return detail;
+                })
+                .collect(Collectors.toList());
+            
+            debugInfo.put("activeSubscriptions", activeSubsDetail);
+            
+            return ResponseEntity.ok(ApiResponse.success(debugInfo, "구독 상태 디버깅 정보"));
+            
+        } catch (Exception e) {
+            log.error("구독 상태 디버깅 중 오류 발생: userId={}", userId, e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("DEBUG_ERROR", "구독 상태 디버깅 중 오류가 발생했습니다."));
+        }
+    }
+
+    /**
+     * 디버깅용: 경제 카테고리 구독 추가
+     */
+    @PostMapping("/debug/subscribe-economy/{userId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> debugSubscribeEconomy(@PathVariable Long userId) {
+        try {
+            log.info("디버깅: 사용자 {} 경제 카테고리 구독 추가", userId);
+            
+            // 이미 경제 카테고리 구독이 있는지 확인
+            Optional<UserNewsletterSubscription> existingEconomySub = subscriptionRepository
+                .findByUserIdAndCategory(userId, "ECONOMY");
+            
+            if (existingEconomySub.isPresent()) {
+                // 기존 구독이 있으면 활성화
+                UserNewsletterSubscription existingSub = existingEconomySub.get();
+                existingSub.setIsActive(true);
+                existingSub.setUpdatedAt(LocalDateTime.now());
+                subscriptionRepository.save(existingSub);
+                
+                log.info("기존 경제 구독 활성화: subscriptionId={}", existingSub.getId());
+                
+                Map<String, Object> result = new HashMap<>();
+                result.put("action", "activated_existing");
+                result.put("subscriptionId", existingSub.getId());
+                result.put("category", "ECONOMY");
+                result.put("isActive", true);
+                
+                return ResponseEntity.ok(ApiResponse.success(result, "기존 경제 구독이 활성화되었습니다."));
+            } else {
+                // 새로운 구독 생성
+                UserNewsletterSubscription newSubscription = new UserNewsletterSubscription();
+                newSubscription.setUserId(userId);
+                newSubscription.setCategory("ECONOMY");
+                newSubscription.setIsActive(true);
+                newSubscription.setSubscribedAt(LocalDateTime.now());
+                newSubscription.setUpdatedAt(LocalDateTime.now());
+                
+                UserNewsletterSubscription savedSubscription = subscriptionRepository.save(newSubscription);
+                
+                log.info("새로운 경제 구독 생성: subscriptionId={}", savedSubscription.getId());
+                
+                Map<String, Object> result = new HashMap<>();
+                result.put("action", "created_new");
+                result.put("subscriptionId", savedSubscription.getId());
+                result.put("category", "ECONOMY");
+                result.put("isActive", true);
+                
+                return ResponseEntity.ok(ApiResponse.success(result, "새로운 경제 구독이 생성되었습니다."));
+            }
+            
+        } catch (Exception e) {
+            log.error("경제 카테고리 구독 추가 중 오류 발생: userId={}", userId, e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("SUBSCRIPTION_ERROR", "경제 카테고리 구독 추가 중 오류가 발생했습니다."));
+        }
+    }
+
+    /**
+     * 카테고리별 구독/해지 API
+     */
+    @PostMapping("/subscription/category/{category}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> toggleCategorySubscription(
+            @PathVariable String category,
+            @RequestParam(defaultValue = "true") boolean subscribe,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            // 임시로 테스트용 userId 사용 (실제 환경에서는 JWT에서 추출)
+            Long userId = 1L;
+            log.info("카테고리 구독 상태 변경 요청: userId={}, category={}, subscribe={}", userId, category, subscribe);
+            
+            // 카테고리 유효성 검사
+            String englishCategory = convertCategoryToEnglish(category);
+            if (englishCategory == null) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("INVALID_CATEGORY", "유효하지 않은 카테고리입니다."));
+            }
+            
+            // 기존 구독 확인
+            Optional<UserNewsletterSubscription> existingSubscription = subscriptionRepository
+                .findByUserIdAndCategory(userId, englishCategory);
+            
+            Map<String, Object> result = new HashMap<>();
+            
+            if (subscribe) {
+                // 구독 요청
+                if (existingSubscription.isPresent()) {
+                    // 기존 구독이 있으면 활성화
+                    UserNewsletterSubscription sub = existingSubscription.get();
+                    if (sub.getIsActive()) {
+                        result.put("action", "already_subscribed");
+                        result.put("message", "이미 구독 중인 카테고리입니다.");
+                    } else {
+                        sub.setIsActive(true);
+                        sub.setUpdatedAt(LocalDateTime.now());
+                        subscriptionRepository.save(sub);
+                        result.put("action", "reactivated");
+                        result.put("message", "구독이 재활성화되었습니다.");
+                    }
+                } else {
+                    // 새로운 구독 생성
+                    UserNewsletterSubscription newSubscription = new UserNewsletterSubscription();
+                    newSubscription.setUserId(userId);
+                    newSubscription.setCategory(englishCategory);
+                    newSubscription.setIsActive(true);
+                    newSubscription.setSubscribedAt(LocalDateTime.now());
+                    newSubscription.setUpdatedAt(LocalDateTime.now());
+                    
+                    UserNewsletterSubscription savedSubscription = subscriptionRepository.save(newSubscription);
+                    result.put("action", "subscribed");
+                    result.put("message", "구독이 완료되었습니다.");
+                    result.put("subscriptionId", savedSubscription.getId());
+                }
+            } else {
+                // 구독 해지 요청
+                if (existingSubscription.isPresent()) {
+                    UserNewsletterSubscription sub = existingSubscription.get();
+                    if (!sub.getIsActive()) {
+                        result.put("action", "already_unsubscribed");
+                        result.put("message", "이미 구독 해지된 카테고리입니다.");
+                    } else {
+                        sub.setIsActive(false);
+                        sub.setUpdatedAt(LocalDateTime.now());
+                        subscriptionRepository.save(sub);
+                        result.put("action", "unsubscribed");
+                        result.put("message", "구독이 해지되었습니다.");
+                    }
+                } else {
+                    result.put("action", "not_subscribed");
+                    result.put("message", "구독하지 않은 카테고리입니다.");
+                }
+            }
+            
+            // 결과에 카테고리 정보 추가
+            result.put("category", englishCategory);
+            result.put("categoryKo", category);
+            result.put("userId", userId);
+            result.put("timestamp", LocalDateTime.now().toString());
+            
+            // 현재 활성 구독 수 조회
+            List<UserNewsletterSubscription> activeSubscriptions = subscriptionRepository
+                .findActiveSubscriptionsByUserId(userId);
+            result.put("totalActiveSubscriptions", activeSubscriptions.size());
+            
+            log.info("카테고리 구독 상태 변경 완료: userId={}, category={}, action={}", 
+                userId, englishCategory, result.get("action"));
+            
+            return ResponseEntity.ok(ApiResponse.success(result, "구독 상태가 변경되었습니다."));
+            
+        } catch (Exception e) {
+            log.error("카테고리 구독 상태 변경 중 오류 발생: category={}, subscribe={}", category, subscribe, e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("SUBSCRIPTION_TOGGLE_ERROR", "구독 상태 변경 중 오류가 발생했습니다."));
+        }
+    }
+
+    /**
+     * 카테고리별 구독 상태 조회 API
+     */
+    @GetMapping("/subscription/category/{category}/status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getCategorySubscriptionStatus(
+            @PathVariable String category,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            // 임시로 테스트용 userId 사용 (실제 환경에서는 JWT에서 추출)
+            Long userId = 1L;
+            log.info("카테고리 구독 상태 조회: userId={}, category={}", userId, category);
+            
+            String englishCategory = convertCategoryToEnglish(category);
+            if (englishCategory == null) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("INVALID_CATEGORY", "유효하지 않은 카테고리입니다."));
+            }
+            
+            Optional<UserNewsletterSubscription> subscription = subscriptionRepository
+                .findByUserIdAndCategory(userId, englishCategory);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("category", englishCategory);
+            result.put("categoryKo", category);
+            result.put("userId", userId);
+            
+            if (subscription.isPresent()) {
+                UserNewsletterSubscription sub = subscription.get();
+                result.put("isSubscribed", sub.getIsActive());
+                result.put("subscriptionId", sub.getId());
+                result.put("subscribedAt", sub.getSubscribedAt());
+                result.put("updatedAt", sub.getUpdatedAt());
+            } else {
+                result.put("isSubscribed", false);
+                result.put("subscriptionId", null);
+                result.put("subscribedAt", null);
+                result.put("updatedAt", null);
+            }
+            
+            return ResponseEntity.ok(ApiResponse.success(result, "구독 상태 조회 완료"));
+            
+        } catch (Exception e) {
+            log.error("카테고리 구독 상태 조회 중 오류 발생: category={}", category, e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("SUBSCRIPTION_STATUS_ERROR", "구독 상태 조회 중 오류가 발생했습니다."));
+        }
+    }
+
+    /**
+     * 카테고리명을 영어로 변환하는 헬퍼 메서드
+     */
+    private String convertCategoryToEnglish(String categoryKo) {
+        Map<String, String> categoryMap = Map.of(
+            "정치", "POLITICS",
+            "경제", "ECONOMY",
+            "사회", "SOCIETY",
+            "생활", "LIFE",
+            "세계", "INTERNATIONAL",
+            "IT/과학", "IT_SCIENCE",
+            "자동차/교통", "VEHICLE",
+            "여행/음식", "TRAVEL_FOOD",
+            "예술", "ART"
+        );
+        return categoryMap.get(categoryKo);
+    }
+
     /**
      * 액세스 토큰 추출 헬퍼 메서드
      */

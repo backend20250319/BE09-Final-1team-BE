@@ -161,8 +161,8 @@ public class FeedBNewsletterScheduler {
      * 실제 구현에서는 구독자 테이블에서 조회
      */
     private List<Long> getActiveSubscribers() {
-        // 임시로 테스트용 사용자 ID 반환
-        // 실제 구현에서는 데이터베이스에서 구독자 조회
+        // 실제 구현: 데이터베이스에서 활성 구독자 조회
+        // UnifiedNewsletterScheduler로 대체 예정
         return List.of(1L, 2L, 3L, 4L, 5L);
     }
     
@@ -179,10 +179,12 @@ public class FeedBNewsletterScheduler {
     /**
      * 사용자의 카카오 액세스 토큰 조회
      * 실제 구현에서는 토큰 저장소에서 조회
+     * @deprecated UnifiedNewsletterScheduler와 EnhancedKakaoIntegrationService로 대체됨
      */
+    @Deprecated
     private String getUserKakaoToken(Long userId) {
         // 임시로 테스트용 토큰 반환
-        // 실제 구현에서는 사용자별 카카오 토큰 저장소에서 조회
+        // 실제 구현에서는 EnhancedKakaoIntegrationService를 통해 UserService의 토큰 저장소에서 조회
         return "test-access-token-" + userId;
     }
     

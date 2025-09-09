@@ -1,4 +1,4 @@
-// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전
+// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (PowerShell로 안정성 확보)
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]
@@ -35,24 +35,22 @@ pipeline {
         stage('Detect All Services') {
             steps {
                 script {
-                    echo "Detecting all services to build using findFiles..."
+                    echo "Detecting all services to build using PowerShell..."
                     def allServices = new HashSet<String>()
 
-                    // [수정됨] bat 명령어 대신 Jenkins 내장 기능인 findFiles를 사용하여 안정적으로 Dockerfile을 찾습니다.
-                    // '**/Dockerfile'은 모든 하위 디렉토리에서 Dockerfile을 찾으라는 의미입니다.
-                    def dockerfiles = findFiles(glob: '**/Dockerfile')
+                    // [수정됨] dir 명령어와 findFiles 대신, 안정적인 PowerShell 명령어로 Dockerfile의 부모 폴더 경로를 직접 가져옵니다.
+                    def psCommand = 'powershell -Command "Get-ChildItem -Path . -Recurse -Filter Dockerfile | ForEach-Object { $_.Directory.FullName }"'
+                    def servicePathsOutput = bat(returnStdout: true, script: psCommand).trim()
 
-                    def validServicePaths = dockerfiles.collect { file ->
-                        // findFiles가 반환한 파일 객체에서 경로를 가져와 부모 디렉토리를 추출합니다.
-                        // Windows와 Linux 경로 구분자를 모두 처리하기 위해 replaceAll을 사용합니다.
-                        def parentDir = new File(file.path).getParent().replaceAll('\\\\', '/')
-                        return parentDir
-                    }
+                    // PowerShell 출력은 매우 깔끔하므로, 줄바꿈으로 나누기만 하면 됩니다.
+                    def validServicePaths = servicePathsOutput.split('\r\n').findAll { it.trim() != '' }
 
-                    echo "Found all relative service paths: ${validServicePaths}"
+                    def workspacePath = env.WORKSPACE
+                    def relativeServicePaths = validServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
+                    echo "Found all relative service paths: ${relativeServicePaths}"
 
                     echo "Pipeline configured to build all services on every run."
-                    allServices.addAll(validServicePaths)
+                    allServices.addAll(relativeServicePaths)
 
                     if (allServices.isEmpty()) {
                         echo "No services with a Dockerfile were found. Skipping subsequent stages."
@@ -76,14 +74,13 @@ pipeline {
                         def currentService = servicePath
                         parallelStages["Build & Push ${currentService}"] = {
                         try {
-                            // 경로 구분자가 '/'로 통일되었으므로 split('/')을 사용합니다.
-                            def serviceName = currentService.split('/').last()
+                            def serviceName = currentService.split('\\\\').last()
                                 def fullTag = "${serviceName}-${IMAGE_TAG}"
                                 buildAndPush(serviceName, currentService, fullTag)
                                 buildResults.succeeded.add(serviceName)
                             } catch (e) {
                             echo "ERROR during build or push for ${currentService}: ${e.toString()}"
-                                buildResults.failed.add(currentService.split('/').last())
+                                buildResults.failed.add(currentService.split('\\\\').last())
                             }
                         }
                     }
@@ -182,3 +179,4 @@ def buildAndPush(String serviceName, String servicePath, String fullTag) {
         bat "docker push ${image}"
     }
 }
+

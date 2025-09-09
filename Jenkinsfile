@@ -1,4 +1,4 @@
-// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (findFiles 사용)
+// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]

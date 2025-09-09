@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
  
 import org.springframework.http.HttpStatus;
-=======
+
 import org.springframework.validation.annotation.Validated;
   
 
@@ -33,7 +33,7 @@ public class FeignTimeoutConfig {
     @Bean
     public feign.Request.Options feignOptions() {
         return new feign.Request.Options(5000, 10000); // (connectTimeout, readTimeout)
-=======
+
      * Feign 재시도 설정 - 더 강력한 재시도 메커니즘
      */
     @Bean

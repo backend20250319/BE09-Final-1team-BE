@@ -94,7 +94,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     boolean isPublicSearchPath = path.startsWith("/api/search");
 
  
-=======
+
     // /api/trending/ 경로는 트렌딩 기능으로 공개 접근 허용
     boolean isPublicTrendingPath = path.startsWith("/api/trending");
 
@@ -121,7 +121,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             || isPublicNewsPath
             || isPublicSearchPath
  
-=======
+
             || isPublicTrendingPath
             || isPublicCategoriesPath
             || isPublicNewsletterPath

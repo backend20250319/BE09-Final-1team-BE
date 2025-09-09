@@ -5,7 +5,7 @@ import com.newsletterservice.common.exception.NewsletterException;
 import com.newsletterservice.dto.NewsletterContent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-=======
+
 import com.newsletterservice.dto.*;
 import org.springframework.util.StringUtils;
 import com.newsletterservice.exception.KakaoMessageException;
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 
  
 import java.util.Map;
-=======
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,7 +32,7 @@ import java.util.concurrent.CompletableFuture;
  
 public final class KakaoMessageService {
 
-=======
+
 public class KakaoMessageService {
 
     private final RestTemplate restTemplate;
@@ -119,7 +119,7 @@ public class KakaoMessageService {
 
  
     private void sendMessage(Long templateId, Map<String, String> templateArgs) {
-=======
+
     
     public void sendMessage(String accessToken, Long templateId, Map<String, Object> templateArgs) {
         if (!messageEnabled) {
@@ -174,7 +174,7 @@ public class KakaoMessageService {
  
             log.error("JSON 변환 실패", e);
             return "{}";
-=======
+
             log.error("친구들에게 뉴스레터 전송 실패: title={}", content.getTitle(), e);
             throw new NewsletterException("친구들에게 뉴스레터 전송에 실패했습니다.", "KAKAO_SEND_TO_FRIENDS_ERROR");
         }

@@ -56,35 +56,35 @@ public class SecurityConfig {
                                 "/news-swagger-ui.html"  // 새로운 Swagger UI 경로 추가
                         ).permitAll()
                         .requestMatchers(
-                                "/news/summary",        // 본문(텍스트) 요약
-                                "/news/summary/**",
-                                "/news/*/summary"       // ID 요약: /api/news/{id}/summary
+                                "/api/news/summary",        // 본문(텍스트) 요약
+                                "/api/news/summary/**",
+                                "/api/news/*/summary"       // ID 요약: /api/news/{id}/summary
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST,
-                                "/news/summary",
-                                "/news/summary/**",
-                                "/news/*/summary"
+                                "/api/news/summary",
+                                "/api/news/summary/**",
+                                "/api/news/*/summary"
                         ).permitAll()
-                        .requestMatchers("/summarizer/**").permitAll()
+                        .requestMatchers("/api/summarizer/**").permitAll()
 
                         // 3-2. 특정 리소스 (컬렉션, 마이페이지 뉴스) 관련 경로는 반드시 인증이 필요
                         // "/api/collections/**": 모든 컬렉션 관련 API
                         // "/api/news/mypage/**": 마이페이지 뉴스 관련 API (예: 내가 스크랩한 뉴스)
-                        .requestMatchers("/collections/**", "/news/mypage/**").authenticated()
+                        .requestMatchers("/api/collections/**", "/api/news/mypage/**").authenticated()
 
                         // 3-3. 뉴스 목록 조회, 상세 조회 등 GET 요청은 누구나 가능하도록 허용합니다.
                         // "/api/news/**" 경로에 대한 GET 요청만 허용합니다. (예: /api/news/list, /api/news/123)
-                        .requestMatchers(HttpMethod.GET, "/news/**").permitAll() // GET 요청은 모든 사용자에게 접근 허용
-                        
+                        .requestMatchers(HttpMethod.GET, "/api/news/**").permitAll() // GET 요청은 모든 사용자에게 접근 허용
+
                         // 3-4. 트렌딩 관련 API는 누구나 접근 가능하도록 허용합니다.
-                        .requestMatchers(HttpMethod.GET, "/trending/**").permitAll() // 트렌딩 API는 모든 사용자에게 접근 허용
-                        
+                        .requestMatchers(HttpMethod.GET, "/api/trending/**").permitAll() // 트렌딩 API는 모든 사용자에게 접근 허용
+
                         // 3-5. 카테고리 관련 API는 누구나 접근 가능하도록 허용합니다.
-                        .requestMatchers(HttpMethod.GET, "/categories/**").permitAll() // 카테고리 API는 모든 사용자에게 접근 허용
-                        
+                        .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll() // 카테고리 API는 모든 사용자에게 접근 허용
+
                         // 3-6. 검색 관련 API는 누구나 접근 가능하도록 허용합니다.
-                        .requestMatchers(HttpMethod.GET, "/search/**").permitAll() // 검색 API는 모든 사용자에게 접근 허용
-                        
+                        .requestMatchers(HttpMethod.GET, "/api/search/**").permitAll() // 검색 API는 모든 사용자에게 접근 허용
+
                         .anyRequest().authenticated()
                 )
 

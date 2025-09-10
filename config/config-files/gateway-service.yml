@@ -14,15 +14,15 @@ spring:
             - id: user-service-route
               uri: lb://USER-SERVICE
               predicates:  # ingress에 맞춰 경로 수정
-                - Path=/users/**, /auth/**, /user-api-docs/**
+                - Path=/api/users/**, /api/auth/**, /user-api-docs/**
             - id: news-service-route
               uri: lb://NEWS-SERVICE
               predicates:
-                - Path=/news/**, /news-api-docs/**
+                - Path=/api/news/**, /news-api-docs/**
             - id: newsletter-service-route
               uri: lb://NEWSLETTER-SERVICE
               predicates:
-                - Path=/newsletter/**, /newsletters/**, /kakao/**, /newsletter-api-docs/*
+                - Path=/api/newsletter/**, /api/newsletters/**, /api/kakao/**, /api/newsletter-api-docs/*
           globalcors:
             cors-configurations:
               '[/**]':

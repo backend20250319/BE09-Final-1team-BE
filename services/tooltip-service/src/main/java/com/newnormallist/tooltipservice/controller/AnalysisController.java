@@ -35,6 +35,7 @@ public class AnalysisController {
             @ApiResponse(responseCode = "200", description = "분석 완료 (성공 또는 실패 시 원본 반환)"),
             @ApiResponse(responseCode = "500", description = "서버 오류")
     })
+    // process news content and add tooltip markup
     @PostMapping("/process")
     public ResponseEntity<ProcessContentResponse> processNewsContent(
             @Parameter(description = "뉴스 ID와 원본 내용", required = true) @RequestBody ProcessContentRequest request) {

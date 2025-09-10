@@ -145,39 +145,36 @@ pipeline {
 
     post {
         always {
-            node {  // FilePath 컨텍스트를 제공하기 위해 node 블록으로 감싸기
-                script {
+            script {
                 echo '--- Summary ---'
-                    if (!buildResults.succeeded.isEmpty()) {
+                if (!buildResults.succeeded.isEmpty()) {
                     echo "✅ Succeeded builds: ${buildResults.succeeded.join(', ')}"
-                    }
-                    if (!buildResults.failed.isEmpty()) {
-                    echo "❌ Failed builds: ${buildResults.failed.join(', ')}"
-                    }
-                    if (currentBuild.result == 'NOT_BUILT') {
-                    echo "- No services were built as no services with a Dockerfile were found."
-                    }
-                    echo '---------------'
                 }
+                if (!buildResults.failed.isEmpty()) {
+                    echo "❌ Failed builds: ${buildResults.failed.join(', ')}"
+                }
+                if (currentBuild.result == 'NOT_BUILT') {
+                    echo "- No services were built as no services with a Dockerfile were found."
+                }
+                echo '---------------'
 
-                // cleanWs와 디렉토리 정리
-                cleanWs()
-
-                script {
+                // 워크스페이스와 디렉토리 정리 (try-catch로 감싸서 오류 방지)
                 try {
-                    bat "if exist manifests-repo ( rmdir /s /q manifests-repo )"
-                    } catch (Exception e) {
-                    echo "Warning: Could not clean manifests-repo directory: ${e.message}"
+                    if (env.WORKSPACE) {
+                        dir(env.WORKSPACE) {
+                            bat "if exist manifests-repo ( rmdir /s /q manifests-repo )"
+                            deleteDir()  // cleanWs() 대신 deleteDir() 사용
+                        }
                     }
+                } catch (Exception e) {
+                    echo "Warning: Could not clean workspace: ${e.message}"
                 }
             }
         }
 
         failure {
-            node {
-                script {
-                    echo "Pipeline failed. Check the logs above for details."
-                }
+            script {
+                echo "Pipeline failed. Check the logs above for details."
             }
         }
     }

@@ -1,4 +1,4 @@
-// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (flaskapi 디버깅)
+// Jenkinsfile: Argo CD 연동을 위한 최종 GitOps 버전 (오류 수정)
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]
@@ -81,7 +81,6 @@ pipeline {
                                 buildResults.succeeded.add(serviceName)
                             } catch (e) {
                             echo "ERROR during build or push for ${currentService}: ${e.toString()}"
-                                // [수정됨] e.printStackTrace() 대신 Jenkins 보안 정책에 맞는 e.message를 사용합니다.
                                 echo "Detailed Error: ${e.message}"
                                 buildResults.failed.add(currentService.split('\\\\').last())
                             }
@@ -102,18 +101,13 @@ pipeline {
                 script {
                     echo "Updating manifests for successfully built services: ${buildResults.succeeded.join(', ')}"
 
-                    checkout([
-                        $class: 'GitSCM',
-                        branches: [[name: '*/main']],
-                        userRemoteConfigs: [[
-                            url: MANIFEST_REPO_URL,
-                            credentialsId: GIT_CREDENTIALS_ID
-                        ]],
-                        extensions: [[
-                            $class: 'RelativeTargetDirectory',
-                            relativeTargetDir: 'manifests-repo'
-                        ]]
-                    ])
+                    // SSH 에이전트를 사용하여 Git 클론 수행
+                    sshagent([GIT_CREDENTIALS_ID]) {
+                        bat """
+                            set GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=no
+                            git clone ${MANIFEST_REPO_URL} manifests-repo
+                        """
+                    }
 
                     dir('manifests-repo') {
                         buildResults.succeeded.each { serviceName ->
@@ -122,18 +116,25 @@ pipeline {
                             def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
                             def serviceManifestFile = "k8s-${serviceName}.yml"
 
+                            // 파일 존재 확인 후 업데이트
+                            if (fileExists(serviceManifestFile)) {
                             bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
+                            } else {
+                            echo "Warning: Manifest file ${serviceManifestFile} not found"
+                            }
                         }
 
                         echo "Pushing updated manifests to Git repository..."
-                        withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
+                        sshagent([GIT_CREDENTIALS_ID]) {
                             bat """
-                                set GIT_SSH_COMMAND=ssh -i "%GIT_KEY%" -o StrictHostKeyChecking=no
+                                set GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=no
                                 git config --global user.email "jenkins@example.com"
                                 git config --global user.name "Jenkins CI"
                                 git add .
-                                git commit -m "Deploy: Update image tags for all services [Build #${env.BUILD_NUMBER}]"
-                                git push origin HEAD:main
+                                git diff --staged --quiet || (
+                                    git commit -m "Deploy: Update image tags for all services [Build #${env.BUILD_NUMBER}]"
+                                    git push origin HEAD:main
+                                )
                             """
                         }
                     }
@@ -144,21 +145,39 @@ pipeline {
 
     post {
         always {
-            script {
+            node {  // FilePath 컨텍스트를 제공하기 위해 node 블록으로 감싸기
+                script {
                 echo '--- Summary ---'
-                if (!buildResults.succeeded.isEmpty()) {
+                    if (!buildResults.succeeded.isEmpty()) {
                     echo "✅ Succeeded builds: ${buildResults.succeeded.join(', ')}"
-                }
-                if (!buildResults.failed.isEmpty()) {
+                    }
+                    if (!buildResults.failed.isEmpty()) {
                     echo "❌ Failed builds: ${buildResults.failed.join(', ')}"
-                }
-                if (currentBuild.result == 'NOT_BUILT') {
+                    }
+                    if (currentBuild.result == 'NOT_BUILT') {
                     echo "- No services were built as no services with a Dockerfile were found."
+                    }
+                    echo '---------------'
                 }
-                echo '---------------'
 
+                // cleanWs와 디렉토리 정리
                 cleanWs()
-                bat "if exist manifests-repo ( rmdir /s /q manifests-repo )"
+
+                script {
+                try {
+                    bat "if exist manifests-repo ( rmdir /s /q manifests-repo )"
+                    } catch (Exception e) {
+                    echo "Warning: Could not clean manifests-repo directory: ${e.message}"
+                    }
+                }
+            }
+        }
+
+        failure {
+            node {
+                script {
+                    echo "Pipeline failed. Check the logs above for details."
+                }
             }
         }
     }
@@ -175,6 +194,7 @@ def buildAndPush(String serviceName, String servicePath, String fullTag) {
         }
         bat "docker build -t ${image} ."
     }
+
     withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
         def loginCmd = "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
         bat(script: loginCmd)

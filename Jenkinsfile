@@ -81,8 +81,8 @@ pipeline {
                                 buildResults.succeeded.add(serviceName)
                             } catch (e) {
                             echo "ERROR during build or push for ${currentService}: ${e.toString()}"
-                                // [수정됨] 상세한 에러 로그를 출력하여 디버깅을 돕습니다.
-                                e.printStackTrace()
+                                // [수정됨] e.printStackTrace() 대신 Jenkins 보안 정책에 맞는 e.message를 사용합니다.
+                                echo "Detailed Error: ${e.message}"
                                 buildResults.failed.add(currentService.split('\\\\').last())
                             }
                         }

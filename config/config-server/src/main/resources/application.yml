@@ -24,3 +24,7 @@ management:
       exposure:
         # ⭐️ health와 info 엔드포인트를 외부에 노출시킵니다.
         include: health,info
+  metrics:
+    binder:
+        processor:
+            enabled: false

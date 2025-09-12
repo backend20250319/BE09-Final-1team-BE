@@ -32,10 +32,10 @@ public class KakaoTokenService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${kakao.client-id}")
+    @Value("${newsletter.kakao.client-id}")
     private String kakaoClientId;
 
-    @Value("${kakao.client-secret}")
+    @Value("${newsletter.kakao.client-secret}")
     private String kakaoClientSecret;
 
     private static final String KAKAO_TOKEN_URL = "https://kauth.kakao.com/oauth/token";

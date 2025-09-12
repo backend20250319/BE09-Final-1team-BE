@@ -19,13 +19,6 @@ spring:
           timeout: 60
 
 management:
-  metrics:
-    enable:
-      system.cpu: false
-      process.cpu : false
-      jvm: true
-      system: false
-      process: false
   endpoints:
     web:
       exposure:

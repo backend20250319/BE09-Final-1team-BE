@@ -19,12 +19,16 @@ spring:
           timeout: 60
 
 management:
+  metrics:
+    enable:
+      system.cpu: false
+      process.cpu : false
+      jvm: true
+      system: false
+      process: false
   endpoints:
     web:
       exposure:
         # ⭐️ health와 info 엔드포인트를 외부에 노출시킵니다.
         include: health,info
-  metrics:
-    binder:
-        processor:
-            enabled: false
+

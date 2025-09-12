@@ -17,10 +17,6 @@ services:
       - SPRING_CLOUD_CONFIG_SERVER_GIT_SEARCH_PATHS=config/config-files
       - SPRING_CLOUD_CONFIG_SERVER_GIT_CLONE_ON_START=true
       - SPRING_CLOUD_CONFIG_SERVER_GIT_TIMEOUT=60
-#      - MANAGEMENT_METRICS_BINDER_PROCESSOR_ENABLED=false
-    command: >
-      java -jar /app/app.jar
-      --management.metrics.binder.processor.enabled=false
     healthcheck:
       # 컨테이너 이미지에 curl이 없을 수 있으니 CMD-SHELL로 처리
       test: ["CMD-SHELL", "curl -fsS http://localhost:8888/actuator/health || wget -qO- http://localhost:8888/actuator/health > /dev/null"]
@@ -48,7 +44,6 @@ services:
       - EUREKA_CLIENT_FETCH_REGISTRY=false
       - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
       # (선택) 관리/헬스 엔드포인트 노출 제어가 필요하면 Config에 두고, 임시 테스트면 아래처럼 가능
-      # - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8761/actuator/health || wget -qO- http://localhost:8761/actuator/health > /dev/null"]
       interval: 30s

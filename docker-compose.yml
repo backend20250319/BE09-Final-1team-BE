@@ -43,17 +43,12 @@ services:
     environment:
       - TZ=Asia/Seoul
       - SPRING_APPLICATION_NAME=discovery-service
-      # Config Server로부터 설정을 가져오도록 (실패해도 부팅되게 optional:)
-      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       # Eureka 서버 자신은 레지스트리에 등록/조회하지 않도록(서버 전용 구성일 때 권장)
       - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
       - EUREKA_CLIENT_FETCH_REGISTRY=false
       - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
       # (선택) 관리/헬스 엔드포인트 노출 제어가 필요하면 Config에 두고, 임시 테스트면 아래처럼 가능
       # - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info
-    depends_on:
-      config-server:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8761/actuator/health || wget -qO- http://localhost:8761/actuator/health > /dev/null"]
       interval: 30s

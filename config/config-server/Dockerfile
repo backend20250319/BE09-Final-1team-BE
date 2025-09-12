@@ -16,6 +16,9 @@ RUN gradle build --no-daemon -x test
 # 2단계: 실제 실행 환경을 구성하는 최종 스테이지
 # =================================================================
 FROM openjdk:17-slim
+
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # 빌드 스테이지(builder)에서 생성된 JAR 파일만 최종 이미지로 복사합니다.

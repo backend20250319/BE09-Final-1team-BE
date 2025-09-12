@@ -3,12 +3,12 @@ server:
   port: 8086
 
 # 2. Eureka 클라이언트 설정
-eureka:
-  client:
-    service-url:
-      defaultZone: http://discovery-service-service:8761/eureka/
-  instance:
-    prefer-ip-address: true
+#eureka:
+#  client:
+#    service-url:
+#      defaultZone: http://discovery-service-service:8761/eureka/
+#  instance:
+#    prefer-ip-address: true
 
 # 3. Actuator 엔드포인트 노출 설정
 management:

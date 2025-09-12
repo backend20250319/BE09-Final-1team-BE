@@ -46,18 +46,18 @@ management:
       exposure:
         include: '*'
 
-eureka:
-  client:
-    service-url:
-      # localhost 대신 K8s 서비스 이름 사용
-      defaultZone: http://discovery-service-service:8761/eureka/
-    initial-instance-info-replication-interval-seconds: 40
-    instance-info-replication-interval-seconds: 30
-    register-with-eureka: true
-    fetch-registry: true
-  instance:
-    # Docker 환경에서 중요한 설정
-    prefer-ip-address: true
+#eureka:
+#  client:
+#    service-url:
+#      # localhost 대신 K8s 서비스 이름 사용
+#      defaultZone: http://discovery-service-service:8761/eureka/
+#    initial-instance-info-replication-interval-seconds: 40
+#    instance-info-replication-interval-seconds: 30
+#    register-with-eureka: true
+#    fetch-registry: true
+#  instance:
+#    # Docker 환경에서 중요한 설정
+#    prefer-ip-address: true
 
 logging:
   level:

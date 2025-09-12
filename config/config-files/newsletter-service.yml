@@ -7,12 +7,12 @@ server:
       enabled: true
       force: true
 
-eureka:
-  client:
-    service-url:
-      defaultZone: http://discovery-service-service:8761/eureka/
-  instance:
-    prefer-ip-address: true
+#eureka:
+#  client:
+#    service-url:
+#      defaultZone: http://discovery-service-service:8761/eureka/
+#  instance:
+#    prefer-ip-address: true
 
 spring:
   application:

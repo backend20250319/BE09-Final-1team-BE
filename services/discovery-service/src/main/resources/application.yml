@@ -20,6 +20,10 @@ eureka:
     eviction-interval-timer-in-ms: 10000
 
 management:
+  metrics:
+    binder:
+      processor:
+        enabled: false
   endpoints:
     web:
       exposure:

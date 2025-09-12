@@ -21,7 +21,7 @@ WORKDIR /app
 COPY --from=builder /home/gradle/src/build/libs/*.jar app.jar
 
 # 각 서비스에 맞는 포트를 노출합니다.
-EXPOSE 8761 # <-- 이 포트는 각 서비스에 맞게 수정해주세요.
+EXPOSE 8761
 
 # 컨테이너가 시작될 때 JAR 파일을 실행합니다. (Cgroup 오류 해결 옵션 추가)
 ENTRYPOINT ["java", "-Djava.security.properties=/dev/null", "-jar", "/app/app.jar"]

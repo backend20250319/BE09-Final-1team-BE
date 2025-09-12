@@ -2,9 +2,15 @@
 server:
   port: 8761
 
+
+
 spring:
   application:
     name: discovery-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.actuate.autoconfigure.metrics.SystemMetricsAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.metrics.JvmMetricsAutoConfiguration
 
 eureka:
   instance:
@@ -20,11 +26,20 @@ eureka:
     eviction-interval-timer-in-ms: 10000
 
 management:
+  observations.enabled: false
+  tracing.enabled: false
   metrics:
-    binder:
-      processor:
-        enabled: false
+    enable:
+      all: false
   endpoints:
     web:
       exposure:
         include: health,info,metrics
+  simple:
+    metrics:
+      export:
+        enabled: false
+  prometheus:
+    metrics:
+      export:
+        enabled: false

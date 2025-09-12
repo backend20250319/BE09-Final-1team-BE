@@ -21,16 +21,18 @@ ext {
     set('springCloudVersion', "2025.0.0")
 }
 
-configurations {
-    all {
-        exclude group: 'io.micrometer'
-    }
-}
+//configurations {
+//    all {
+//        exclude group: 'io.micrometer'
+//    }
+//}
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-server'
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation ('org.springframework.boot:spring-boot-starter-actuator') {
+        exclude group: 'io.micrometer', module: 'micrometer-core'
+    }
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

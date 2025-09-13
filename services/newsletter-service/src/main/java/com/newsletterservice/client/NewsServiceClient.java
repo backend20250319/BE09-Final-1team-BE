@@ -30,7 +30,7 @@ public interface NewsServiceClient {
             @RequestParam(defaultValue = "10") int limit
     );
 
-    @GetMapping("/api/categories/{categoryName}/news")
+    @GetMapping("/api/news/categories/{categoryName}/news")
     ApiResponse<Page<NewsResponse>> getNewsByCategory(
             @PathVariable("categoryName") String categoryName,
             @RequestParam(defaultValue = "0") int page,
@@ -71,10 +71,10 @@ public interface NewsServiceClient {
     // 카테고리 및 통계
     // ========================================
 
-    @GetMapping("/api/categories")
+    @GetMapping("/api/news/categories")
     ApiResponse<List<CategoryDto>> getCategories();
 
-    @GetMapping("/api/categories/{categoryName}/count")
+    @GetMapping("/api/news/categories/{categoryName}/count")
     ApiResponse<Long> getNewsCountByCategory(@PathVariable("categoryName") String categoryName);
 
     // ========================================

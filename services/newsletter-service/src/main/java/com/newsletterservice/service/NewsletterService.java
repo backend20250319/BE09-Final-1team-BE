@@ -150,8 +150,8 @@ public class NewsletterService {
     public List<NewsResponse> getCategoryArticles(String category, int limit) {
         try {
             String englishCategory = convertCategoryToEnglish(category);
-            ApiResponse<Page<NewsResponse>> response = newsServiceClient.getNewsByCategory(englishCategory, 0, limit);
-            return response != null && response.getData() != null ? response.getData().getContent() : new ArrayList<>();
+            Page<NewsResponse> response = newsServiceClient.getNewsByCategory(englishCategory, 0, limit);
+            return response != null ? response.getContent() : new ArrayList<>();
         } catch (Exception e) {
             log.error("카테고리별 기사 조회 실패: category={}", category, e);
             return new ArrayList<>();
@@ -160,10 +160,11 @@ public class NewsletterService {
 
     public List<String> getTrendingKeywords(int limit) {
         try {
-            ApiResponse<List<TrendingKeywordDto>> response = newsServiceClient.getTrendingKeywords(limit, "24h", 24);
-            if (response != null && response.getData() != null) {
+            ApiResponse<List<TrendingKeywordDto>> response = newsServiceClient.getTrendingKeywordsByCategory("GENERAL", limit, "24h", 24);
+            if (response != null && response.isSuccess() && response.getData() != null && !response.getData().isEmpty()) {
                 return response.getData().stream()
                         .map(TrendingKeywordDto::getKeyword)
+                        .filter(Objects::nonNull)
                         .filter(this::isValidKeywordForNewsletter)
                         .collect(Collectors.toList());
             }

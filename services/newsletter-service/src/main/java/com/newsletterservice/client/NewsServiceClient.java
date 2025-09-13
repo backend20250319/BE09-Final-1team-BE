@@ -14,7 +14,7 @@ import java.util.List;
 
 @FeignClient(
         name = "news-service",
-        url = "${news.base-url:http://localhost:8082}",
+        url = "http://localhost:8082",  // 직접 URL 지정
         contextId = "newsletterNewsServiceClient",
         configuration = FeignTimeoutConfig.class
 )
@@ -30,9 +30,9 @@ public interface NewsServiceClient {
             @RequestParam(defaultValue = "10") int limit
     );
 
-    @GetMapping("/api/news/categories/{categoryName}/news")
-    ApiResponse<Page<NewsResponse>> getNewsByCategory(
-            @PathVariable("categoryName") String categoryName,
+    @GetMapping("/api/news")
+    Page<NewsResponse> getNewsByCategory(
+            @RequestParam("category") String categoryName,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     );
@@ -81,8 +81,8 @@ public interface NewsServiceClient {
     // 트렌딩 키워드
     // ========================================
 
-    @GetMapping("/api/trending/trending-keywords")
-    ApiResponse<List<TrendingKeywordDto>> getTrendingKeywords(
+    @GetMapping("/api/news/trending")
+    Page<NewsResponse> getTrendingKeywords(
             @RequestParam(defaultValue = "10") int limit,
             @RequestParam(defaultValue = "24h") String period,
             @RequestParam(required = false) Integer hours

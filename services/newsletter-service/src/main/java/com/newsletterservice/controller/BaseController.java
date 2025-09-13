@@ -2,16 +2,18 @@ package com.newsletterservice.controller;
 
 import com.newsletterservice.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.LoggerFactory;
 
-@Slf4j
 @RequiredArgsConstructor
 public abstract class BaseController {
 
     @Autowired
     protected JwtUtil jwtUtil;
+    
+    // protected logger for subclasses
+    protected final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(this.getClass());
 
     /**
      * JWT 토큰에서 사용자 ID 추출 (개선된 버전)

@@ -379,21 +379,29 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
         log.info("카테고리 헤드라인 조회: category={}, limit={}", category, limit);
         
         try {
-            String englishCategory = convertCategoryToEnglish(category);
-            NewsCategory newsCategory = NewsCategory.valueOf(englishCategory);
+            String englishCategory = convertToEnglishCategory(category);
+            log.info("변환된 영어 카테고리: {}", englishCategory);
             
-            ApiResponse<Page<NewsResponse>> newsResponse = newsServiceClient.getNewsByCategory(newsCategory.name(), 0, limit);
-            Page<NewsResponse> newsPage = newsResponse.getData();
-            List<NewsResponse> newsList = newsPage.getContent();
+            ApiResponse<Page<NewsResponse>> newsResponse = newsServiceClient.getNewsByCategory(englishCategory, 0, limit);
+            log.info("뉴스 서비스 응답: success={}", newsResponse.isSuccess());
             
-            return newsList.stream()
-                    .map(news -> NewsletterContent.Article.builder()
-                            .title(news.getTitle())
-                            .summary(news.getContent())
-                            .url(news.getLink())
-                            .publishedAt(news.getPublishedAt())
-                            .build())
-                    .collect(Collectors.toList());
+            if (newsResponse.isSuccess() && newsResponse.getData() != null) {
+                Page<NewsResponse> newsPage = newsResponse.getData();
+                List<NewsResponse> newsList = newsPage.getContent();
+                log.info("조회된 뉴스 수: {}", newsList.size());
+                
+                return newsList.stream()
+                        .map(news -> NewsletterContent.Article.builder()
+                                .title(news.getTitle())
+                                .summary(news.getContent())
+                                .url(news.getLink())
+                                .publishedAt(news.getPublishedAt())
+                                .build())
+                        .collect(Collectors.toList());
+            } else {
+                log.warn("뉴스 서비스 응답 실패 또는 데이터 없음: {}", newsResponse);
+                return new ArrayList<>();
+            }
         } catch (Exception e) {
             log.error("카테고리 헤드라인 조회 실패: category={}", category, e);
             return new ArrayList<>();
@@ -1047,32 +1055,25 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
     }
     
     /**
-     * 한국어 카테고리를 영어 카테고리로 변환
+     * 한국어 카테고리를 영어 카테고리로 변환 (뉴스 서비스 API용)
+     * 데이터베이스에서 동적으로 카테고리 정보를 가져옴
      */
     private String convertToEnglishCategory(String koreanCategory) {
-        switch (koreanCategory) {
-            case "정치":
-                return "politics";
-            case "경제":
-                return "economy";
-            case "사회":
-                return "society";
-            case "IT/과학":
-                return "technology";
-            case "스포츠":
-                return "sports";
-            case "연예":
-                return "entertainment";
-            case "문화":
-                return "culture";
-            case "국제":
-                return "international";
-            case "생활":
-                return "lifestyle";
-            case "건강":
-                return "health";
-            default:
-                return "general";
+        try {
+            ApiResponse<List<CategoryDto>> response = newsServiceClient.getCategories();
+            if (response != null && response.isSuccess() && response.getData() != null) {
+                return response.getData().stream()
+                        .filter(category -> koreanCategory.equals(category.getCategoryName()))
+                        .map(CategoryDto::getCategoryCode)
+                        .findFirst()
+                        .orElse("POLITICS"); // 기본값
+            }
+        } catch (Exception e) {
+            log.warn("카테고리 정보 조회 실패, 기본값 사용: {}", e.getMessage());
         }
+        
+        // 폴백: 기본값 반환
+        return "POLITICS";
     }
+    
 }

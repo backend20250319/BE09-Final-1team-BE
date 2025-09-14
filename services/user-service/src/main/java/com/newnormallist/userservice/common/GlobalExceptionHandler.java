@@ -24,15 +24,21 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class})
-    public ResponseEntity<ApiResult<String>> handleValidationException(BindException e) {
+    public ResponseEntity<ApiResult<String>> handleValidationException(Exception e) {
         log.error("Validation Exception: {}", e.getMessage());
 
-        // 1. BindingResult에서 첫 번째 오류 메시지를 추출
-        BindingResult bindingResult = e.getBindingResult();
+        BindingResult bindingResult = null;
+        
+        // MethodArgumentNotValidException과 BindException 모두 처리
+        if (e instanceof MethodArgumentNotValidException) {
+            bindingResult = ((MethodArgumentNotValidException) e).getBindingResult();
+        } else if (e instanceof BindException) {
+            bindingResult = ((BindException) e).getBindingResult();
+        }
 
         // 2. 여러 에러 중 첫 번째 에러 메시지를 가져옴
         String errorMessage = "유효성 검증에 실패했습니다."; // 기본 메시지
-        if (bindingResult.hasErrors()) {
+        if (bindingResult != null && bindingResult.hasErrors()) {
             FieldError fieldError = bindingResult.getFieldError(); // 첫 번째 오류 가져오기
             if (fieldError != null) {
                 errorMessage = fieldError.getDefaultMessage(); // DTO에 정의된 validation 오류 메시지

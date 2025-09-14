@@ -19,9 +19,9 @@ public class NewsResponse {
     private String imageUrl;
     private String link;
     private String categoryName;
-    private LocalDateTime publishedAt;
-    private LocalDateTime createdAt;
-    private Long viewCount;
+    private String publishedAt;
+    private String createdAt;
+    private Integer viewCount;
     private Long shareCount;
     
     public String getCategory() {

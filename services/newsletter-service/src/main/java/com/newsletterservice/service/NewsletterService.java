@@ -6,6 +6,7 @@ import com.newsletterservice.common.ApiResponse;
 import com.newsletterservice.common.exception.NewsletterException;
 import com.newsletterservice.dto.*;
 import com.newsletterservice.entity.*;
+import com.newsletterservice.repository.UserNewsletterSubscriptionRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +26,6 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional
 public class NewsletterService {
 
     // ========================================
@@ -40,12 +40,32 @@ public class NewsletterService {
     
     private final NewsServiceClient newsServiceClient;
     private final UserServiceClient userServiceClient;
+    private final UserNewsletterSubscriptionRepository subscriptionRepository;
 
     // ========================================
     // 1. 뉴스레터 발송 관리
     // ========================================
 
     // 구독 확인 기능은 user-service에서 처리됩니다.
+    
+    /**
+     * 뉴스레터 구독 생성 (트랜잭션 처리)
+     */
+    @Transactional
+    public UserNewsletterSubscription createSubscription(Long userId, String category, 
+            String frequency, String sendTime, Boolean isPersonalized, String keywords) {
+        UserNewsletterSubscription subscription = UserNewsletterSubscription.builder()
+                .userId(userId)
+                .category(category)
+                .isActive(true)
+                .frequency(frequency)
+                .sendTime(sendTime)
+                .isPersonalized(isPersonalized)
+                .keywords(keywords)
+                .build();
+        
+        return subscriptionRepository.save(subscription);
+    }
 
     // ========================================
     // 2. 콘텐츠 생성 (위임)
@@ -130,8 +150,8 @@ public class NewsletterService {
     public List<NewsResponse> getCategoryArticles(String category, int limit) {
         try {
             String englishCategory = convertCategoryToEnglish(category);
-            ApiResponse<Page<NewsResponse>> response = newsServiceClient.getNewsByCategory(englishCategory, 0, limit);
-            return response != null && response.getData() != null ? response.getData().getContent() : new ArrayList<>();
+            Page<NewsResponse> response = newsServiceClient.getNewsByCategory(englishCategory, 0, limit);
+            return response != null ? response.getContent() : new ArrayList<>();
         } catch (Exception e) {
             log.error("카테고리별 기사 조회 실패: category={}", category, e);
             return new ArrayList<>();
@@ -140,10 +160,11 @@ public class NewsletterService {
 
     public List<String> getTrendingKeywords(int limit) {
         try {
-            ApiResponse<List<TrendingKeywordDto>> response = newsServiceClient.getTrendingKeywords(limit, "24h", 24);
-            if (response != null && response.getData() != null) {
+            ApiResponse<List<TrendingKeywordDto>> response = newsServiceClient.getTrendingKeywordsByCategory("GENERAL", limit, "24h", 24);
+            if (response != null && response.isSuccess() && response.getData() != null && !response.getData().isEmpty()) {
                 return response.getData().stream()
                         .map(TrendingKeywordDto::getKeyword)
+                        .filter(Objects::nonNull)
                         .filter(this::isValidKeywordForNewsletter)
                         .collect(Collectors.toList());
             }

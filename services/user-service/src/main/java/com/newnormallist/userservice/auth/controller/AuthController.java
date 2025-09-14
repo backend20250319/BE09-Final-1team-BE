@@ -42,7 +42,7 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "잘못된 요청(형식/필수값 누락)"),
     })
     @PostMapping("/login")
-    public ResponseEntity<ApiResult<LoginResponseDto>> login(@RequestBody LoginRequestDto loginRequestDto,
+    public ResponseEntity<ApiResult<LoginResponseDto>> login(@Valid @RequestBody LoginRequestDto loginRequestDto,
                                                              HttpServletResponse response) {
         LoginResponseDto loginResponse = authService.login(loginRequestDto);
 

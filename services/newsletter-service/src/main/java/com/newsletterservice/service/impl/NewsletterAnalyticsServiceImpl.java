@@ -22,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -314,8 +316,8 @@ public class NewsletterAnalyticsServiceImpl implements NewsletterAnalyticsServic
         for (String category : categoryScores.keySet()) {
             try {
                 String englishCategory = convertCategoryToEnglish(category);
-                ApiResponse<Page<NewsResponse>> response = newsServiceClient.getNewsByCategory(englishCategory, 0, limit / categoryScores.size() + 1);
-                Page<NewsResponse> newsPage = response.getData();
+                Page<NewsResponse> response = newsServiceClient.getNewsByCategory(englishCategory, 0, limit / categoryScores.size() + 1);
+                Page<NewsResponse> newsPage = response;
                 
                 List<NewsResponse> categoryNews = newsPage != null && newsPage.getContent() != null ? 
                     newsPage.getContent() : new ArrayList<>();
@@ -336,7 +338,7 @@ public class NewsletterAnalyticsServiceImpl implements NewsletterAnalyticsServic
                 .summary(news.getSummary())
                 .category(news.getCategoryName())
                 .url(news.getLink())
-                .publishedAt(news.getPublishedAt())
+                .publishedAt(parsePublishedAt(news.getPublishedAt()))
                 .imageUrl(news.getImageUrl())
                 .personalizedScore(1.0)
                 .build();
@@ -382,6 +384,42 @@ public class NewsletterAnalyticsServiceImpl implements NewsletterAnalyticsServic
                 yield "POLITICS";
             }
         };
+    }
+    
+    /**
+     * String을 LocalDateTime으로 변환하는 유틸리티 메서드
+     */
+    private LocalDateTime parsePublishedAt(String publishedAtStr) {
+        if (publishedAtStr == null || publishedAtStr.trim().isEmpty()) {
+            return LocalDateTime.now();
+        }
+        
+        try {
+            // ISO 8601 형식 시도
+            return LocalDateTime.parse(publishedAtStr);
+        } catch (DateTimeParseException e1) {
+            try {
+                // 다른 일반적인 형식들 시도
+                DateTimeFormatter[] formatters = {
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                };
+                
+                for (DateTimeFormatter formatter : formatters) {
+                    try {
+                        return LocalDateTime.parse(publishedAtStr, formatter);
+                    } catch (DateTimeParseException ignored) {
+                        // 다음 포맷 시도
+                    }
+                }
+            } catch (Exception e2) {
+                log.warn("날짜 파싱 실패: {}, 현재 시간 사용", publishedAtStr);
+            }
+        }
+        
+        return LocalDateTime.now();
     }
 
 }

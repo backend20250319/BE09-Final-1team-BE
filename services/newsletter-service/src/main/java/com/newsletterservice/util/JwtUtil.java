@@ -2,6 +2,7 @@ package com.newsletterservice.util;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,7 +10,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
 import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 /**
@@ -26,13 +26,40 @@ public class JwtUtil {
     @Value("${jwt.expiration:86400000}") // 24시간
     private long expiration;
 
+    // JWT 생성 시 서명할 키
+    private SecretKey signingKey;
+
     /**
-     * JWT 토큰에서 사용자 ID 추출
+     * JWT 시크릿 키 초기화 (User Service와 동일한 방식)
+     */
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        try {
+            // BASE64 디코딩된 시크릿 키 사용 (User Service와 동일한 방식)
+            byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+            signingKey = Keys.hmacShaKeyFor(keyBytes);
+            log.debug("JWT 시크릿 키 초기화 완료");
+        } catch (Exception e) {
+            log.warn("BASE64 디코딩 실패, 일반 문자열로 시크릿 키 생성: {}", e.getMessage());
+            // BASE64 디코딩 실패 시 기존 방식 사용
+            byte[] keyBytes = secretKey.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            signingKey = Keys.hmacShaKeyFor(keyBytes);
+        }
+    }
+
+    /**
+     * JWT 토큰에서 사용자 ID 추출 (User Service와 동일한 방식)
      */
     public String extractUserId(String token) {
         try {
             Claims claims = extractAllClaims(token);
-            return claims.getSubject(); // JWT의 subject는 보통 userId
+            // User Service에서는 userId 클레임을 사용하므로 동일하게 처리
+            Long userId = claims.get("userId", Long.class);
+            if (userId != null) {
+                return userId.toString();
+            }
+            // userId 클레임이 없으면 subject 사용 (fallback)
+            return claims.getSubject();
         } catch (Exception e) {
             log.error("JWT 토큰에서 사용자 ID 추출 실패", e);
             return null;
@@ -44,7 +71,7 @@ public class JwtUtil {
      */
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
-                .verifyWith(getSigningKey())
+                .verifyWith(signingKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
@@ -70,19 +97,13 @@ public class JwtUtil {
         return claims.getExpiration().before(new Date());
     }
 
-    /**
-     * 서명 키 생성
-     */
-    private SecretKey getSigningKey() {
-        byte[] keyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
-        return Keys.hmacShaKeyFor(keyBytes);
-    }
 
     /**
      * JWT 토큰에서 사용자 ID 추출 (안전한 방식)
      */
     public String extractUserIdSafely(String token) {
         if (token == null || token.trim().isEmpty()) {
+            log.debug("JWT 토큰이 null이거나 빈 문자열입니다.");
             return null;
         }
 
@@ -90,6 +111,18 @@ public class JwtUtil {
             // Bearer 접두사 제거
             if (token.startsWith("Bearer ")) {
                 token = token.substring(7);
+            }
+
+            // 토큰이 여전히 비어있는지 확인
+            if (token.trim().isEmpty()) {
+                log.debug("Bearer 접두사 제거 후 토큰이 비어있습니다.");
+                return null;
+            }
+
+            // JWT 토큰 형식 검증 (최소한의 형식 체크)
+            if (!isValidJwtFormat(token)) {
+                log.warn("유효하지 않은 JWT 토큰 형식: {}", token.length() > 20 ? token.substring(0, 20) + "..." : token);
+                return null;
             }
 
             // 토큰 유효성 검증
@@ -103,5 +136,18 @@ public class JwtUtil {
             log.error("JWT 토큰 처리 중 오류 발생", e);
             return null;
         }
+    }
+
+    /**
+     * JWT 토큰 형식 검증 (기본적인 형식 체크)
+     */
+    private boolean isValidJwtFormat(String token) {
+        if (token == null || token.trim().isEmpty()) {
+            return false;
+        }
+        
+        // JWT는 최소 3개의 부분(header.payload.signature)으로 구성되어야 함
+        String[] parts = token.split("\\.");
+        return parts.length == 3;
     }
 }

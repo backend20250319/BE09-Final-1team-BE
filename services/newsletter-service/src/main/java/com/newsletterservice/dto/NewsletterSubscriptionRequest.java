@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
 
 /**
@@ -18,6 +19,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class NewsletterSubscriptionRequest {
     
     /**
@@ -58,4 +60,9 @@ public class NewsletterSubscriptionRequest {
      * 인증 여부 (프론트엔드에서 전달)
      */
     private Boolean hasAuth;
+    
+    /**
+     * 이메일 뉴스레터 구독 여부 (프론트엔드에서 전달)
+     */
+    private Boolean emailNewsletter;
 }

@@ -7,7 +7,7 @@ def changedServicePaths = []
 pipeline {
     agent any
 
-    // 🚨 [수정] JDK Tool 설정을 명시적으로 추가
+    // 젠킨스 Tools에 설정된 JDK를 사용하도록 명시
     tools {
         jdk 'jdk17'
     }
@@ -43,7 +43,7 @@ pipeline {
                     echo "Detecting changed services on Windows..."
                     def changedServices = new HashSet<String>()
 
-                    // ▼▼▼ [오류 수정] Windows에서 안정적으로 Dockerfile 경로를 찾는 방식으로 수정 ▼▼▼
+                    // Windows에서 안정적으로 Dockerfile 경로를 찾는 방식으로 수정
                     def findDockerfilesCmd = 'where /r . Dockerfile'
                     def allServicePathsOutput = bat(returnStdout: true, script: findDockerfilesCmd).trim()
                     def allServicePaths = allServicePathsOutput.split('\r\n').findAll { it.trim() != '' }.collect { it.replace('\\Dockerfile', '') }
@@ -111,7 +111,6 @@ pipeline {
             }
         }
 
-        // ... 나머지 stage는 동일 ...
         stage('Deploy to EKS') {
             when { expression { !buildResults.succeeded.isEmpty() } }
             steps {

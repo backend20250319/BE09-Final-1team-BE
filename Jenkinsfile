@@ -80,22 +80,12 @@ pipeline {
 
     // [개선] 매니페스트 리포지토리를 미리 한 번만 클론하는 스테이지
     stage('Prepare Manifests') {
-        when { expression { !changedServicePaths.isEmpty() } }
         steps {
-            script {
-                echo "Cloning manifests repository..."
-                def gitPaths = 'C:\\\\Program Files\\\\Git\\\\usr\\\\bin;C:\\\\Program Files\\\\Git\\\\mingw64\\\\bin'
-                withEnv(["PATH=${gitPaths};${env.PATH}"]) {
-                    withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
-                        // [수정] ssh.exe 경로에 따옴표를 추가하고 withEnv를 사용하여 안정적으로 실행
-                        withEnv([
-                            'GIT_SSH_COMMAND="\"C:\\Program Files\\Git\\usr\\bin\\ssh.exe\" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o IdentitiesOnly=yes -i \"%GIT_KEY%\""'
-                        ]) {
-                            bat "if exist ${MANIFEST_REPO_DIR} ( rmdir /s /q ${MANIFEST_REPO_DIR} )"
-                            bat "git clone ${MANIFEST_REPO_URL} ${MANIFEST_REPO_DIR}"
-                        }
-                    }
-                }
+            sshagent(credentials: ['BE09-Final-1team-k8s-manifests-ssh-key']) {
+                bat '''
+                if exist manifests-repo (rmdir /s /q manifests-repo)
+                git clone git@github.com:Berry-mas/my-k8s.git manifests-repo
+                '''
             }
         }
     }

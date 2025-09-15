@@ -210,9 +210,12 @@ def buildAndPush(String serviceName, String servicePath, String fullTag) {
     if (fileExists('gradlew.bat')) { bat "gradlew.bat clean build -x test --no-daemon" }
     bat "docker build -t ${image} ."
   }
-  withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
-    bat "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
-    echo "Pushing ${image} to ECR..."
-    bat "docker push ${image}"
+  withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
+    // bat 단계에서 바로 ssh 명령 실행
+    bat """
+    set "GIT_SSH_COMMAND=C:\\Program Files\\Git\\usr\\bin\\ssh.exe -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o IdentitiesOnly=yes -i %GIT_KEY%"
+    if exist ${MANIFEST_REPO_DIR} ( rmdir /s /q ${MANIFEST_REPO_DIR} )
+    git clone ${MANIFEST_REPO_URL} ${MANIFEST_REPO_DIR}
+    """
   }
 }

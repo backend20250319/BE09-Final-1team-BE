@@ -78,16 +78,18 @@ pipeline {
       }
     }
 
-    // [개선] 매니페스트 리포지토리를 미리 한 번만 클론하는 스테이지
+    // [수정] sshagent 제거 → withCredentials + GIT_SSH_COMMAND 사용
     stage('Prepare Manifests') {
-        steps {
-            sshagent(credentials: ['BE09-Final-1team-k8s-manifests-ssh-key']) {
-                bat '''
-                if exist manifests-repo (rmdir /s /q manifests-repo)
-                git clone git@github.com:Berry-mas/my-k8s.git manifests-repo
-                '''
-            }
+      steps {
+        withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID,
+                                           keyFileVariable: 'SSH_KEY',
+                                           usernameVariable: 'GIT_USER')]) {
+          bat """
+          if exist ${MANIFEST_REPO_DIR} (rmdir /s /q ${MANIFEST_REPO_DIR})
+          git -c core.sshCommand="ssh -i %SSH_KEY% -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL" clone ${MANIFEST_REPO_URL} ${MANIFEST_REPO_DIR}
+          """
         }
+      }
     }
 
     stage('Build and Push Changed Services') {
@@ -126,8 +128,6 @@ pipeline {
             echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
             bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
-            // [개선] Git clone 로직 제거 (위 'Prepare Manifests' 스테이지에서 이미 수행함)
-
             // 네임스페이스/SA/ConfigMap/ConfigServer
             bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-namespace.yml"
             bat "if exist ${MANIFEST_REPO_DIR}\\k8s-service-account.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-service-account.yml"
@@ -135,10 +135,10 @@ pipeline {
             bat "if exist ${MANIFEST_REPO_DIR}\\k8s-dedup-service-configmap.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-dedup-service-configmap.yml"
             bat "if exist ${MANIFEST_REPO_DIR}\\k8s-config-server.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-config-server.yml"
 
-            // SecretProviderClass (CSI Driver 선행 설치되어 있어야 함)
+            // SecretProviderClass
             bat "for %i in (${MANIFEST_REPO_DIR}\\k8s-*-spc.yml) do kubectl apply -f %i"
 
-            // Services / Deployments (묶음 파일)
+            // Services / Deployments
             bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-all-services.yml"
             bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-all-deployments.yml"
 
@@ -196,18 +196,15 @@ pipeline {
 }
 
 // ---------------- helpers ----------------
-// [개선] buildAndPush 함수에서 git clone 제거 및 docker push 로직 추가
 def buildAndPush(String serviceName, String servicePath, String fullTag) {
   def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
 
-  // 1. 소스코드 빌드 및 Docker 이미지 빌드
   echo "Building ${serviceName} from path ${servicePath}..."
   dir(servicePath) {
     if (fileExists('gradlew.bat')) { bat "gradlew.bat clean build -x test --no-daemon" }
     bat "docker build -t ${image} ."
   }
 
-  // 2. ECR에 로그인하고 이미지 푸시
   echo "Pushing image ${image} to ECR..."
   withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
       bat "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"

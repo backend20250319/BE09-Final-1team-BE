@@ -1,4 +1,4 @@
-// Jenkinsfile: 모든 오류를 수정한 최종 안정화 버전
+// Jenkinsfile: sshagent 적용 최종 안정화 버전
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]
@@ -19,25 +19,25 @@ pipeline {
     environment {
         // AWS 설정
         AWS_DEFAULT_REGION = 'ap-northeast-2'
-        AWS_ACCOUNT_ID = '783648732440'
-        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+        AWS_ACCOUNT_ID     = '783648732440'
+        ECR_REGISTRY       = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
 
         // 단일 ECR 리포지토리 이름
-        UNIFIED_ECR_REPO = 'my-back'
+        UNIFIED_ECR_REPO   = 'my-back'
 
         // Jenkins Credentials ID
         AWS_CREDENTIALS_ID = 'aws-credentials'
-        GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key'
+        GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key'  // ← SSH Username with private key
 
-        // Kubernetes Manifests 리포지토리 정보
-        MANIFEST_REPO_URL = 'git@github.com:Berry-mas/my-k8s.git'
+        // Kubernetes Manifests 리포지토리 정보 (SSH URL)
+        MANIFEST_REPO_URL  = 'git@github.com:Berry-mas/my-k8s.git'
 
         // EKS 설정
-        EKS_CLUSTER_NAME = 'my-msa-cluster'
-        EKS_NAMESPACE = 'msa-namespace'
+        EKS_CLUSTER_NAME   = 'my-msa-cluster'
+        EKS_NAMESPACE      = 'msa-namespace'
 
         // Docker 이미지 태그 (빌드번호 + 커밋해시)
-        IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
+        IMAGE_TAG          = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
     }
 
     stages {
@@ -47,6 +47,7 @@ pipeline {
                     echo "Detecting changed services on Windows..."
                     def changedServices = new HashSet<String>()
 
+                    // 모든 Dockerfile 경로 검색
                     def findDockerfilesCmd = 'where /r . Dockerfile'
                     def allServicePathsOutput = bat(returnStdout: true, script: findDockerfilesCmd).trim()
 
@@ -54,6 +55,7 @@ pipeline {
                         return line.trim() != '' && !line.startsWith('>') && line.contains('\\Dockerfile')
                     }.collect { it.replace('\\Dockerfile', '') }
 
+                    // 워크스페이스 상대 경로로 정규화
                     def workspacePath = pwd().replace('/', '\\')
                     def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
                     echo "Found all service paths: ${relativeServicePaths}"
@@ -65,10 +67,11 @@ pipeline {
                         echo "First build. Building all services."
                         changedServices.addAll(relativeServicePaths)
                     } else {
+                        // 마지막 커밋 기준 변경 파일 감지
                         def changedFilesOutput = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim()
                         def changedFiles = changedFilesOutput.split('\r\n').findAll { line ->
-                            def trimmedLine = line.trim()
-                            return trimmedLine != '' && !trimmedLine.contains('git diff --name-only')
+                            def t = line.trim()
+                            return t != '' && !t.contains('git diff --name-only')
                         }
                         echo "Changed files in last commit: ${changedFiles}"
 
@@ -105,7 +108,7 @@ pipeline {
                         parallelStages["Build & Push ${currentService}"] = {
                             try {
                                 def serviceName = currentService.split('\\\\').last()
-                                def fullTag = "${serviceName}-${IMAGE_TAG}"
+                                def fullTag    = "${serviceName}-${IMAGE_TAG}"
                                 buildAndPush(serviceName, currentService, fullTag)
                                 buildResults.succeeded.add(serviceName)
                             } catch (e) {
@@ -130,14 +133,18 @@ pipeline {
                     script {
                         echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
 
+                        // EKS kubeconfig 세팅 (Jenkins Windows 서비스 계정 프로필에 저장됨)
                         bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
-                        withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
-                            // 🚨 [최종 수정] git clone 명령어를 더 안정적인 환경 변수 방식으로 변경합니다.
-                            withEnv(["GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=no -i ${GIT_KEY}"]) {
-                                bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
-                            }
+                        // ── 여기서 sshagent 사용 ───────────────────────────────────────────
+                        sshagent(credentials: [GIT_CREDENTIALS_ID]) {
+                            // Git이 UTF-8 로그에서 깨지지 않도록 (선택)
+                            bat 'chcp 65001 >NUL'
+                            // OpenSSH Client가 PATH에 있어야 함 (C:\\Windows\\System32\\OpenSSH 포함)
+                            bat 'git --version'
+                            bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
                         }
+                        // ────────────────────────────────────────────────────────────────
 
                         def deploymentOrder = [
                             'config-server', 'discovery-service', 'gateway-service', 'user-service',
@@ -155,9 +162,10 @@ pipeline {
                             if (buildResults.succeeded.contains(serviceName)) {
                                 echo "--- Starting deployment for ${serviceName} (in order) ---"
                                 def fullTag = "${serviceName}-${IMAGE_TAG}"
-                                def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
+                                def image   = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
                                 def serviceManifestFile = "manifests-repo\\k8s-${serviceName}.yml"
 
+                                // 이미지 태그 치환 후 적용
                                 bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
                                 bat "kubectl apply -f ${serviceManifestFile}"
                             }
@@ -210,4 +218,3 @@ def buildAndPush(String serviceName, String servicePath, String fullTag) {
         bat "docker push ${image}"
     }
 }
-

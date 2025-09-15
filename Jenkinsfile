@@ -127,55 +127,58 @@ pipeline {
         }
 
         stage('Deploy to EKS') {
-            when { expression { !buildResults.succeeded.isEmpty() } }
-            steps {
-                withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
-                    script {
-                        echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
+          when { expression { !buildResults.succeeded.isEmpty() } }
+          steps {
+            withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
+              script {
+                echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
+                bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
-                        // EKS kubeconfig 세팅 (Jenkins Windows 서비스 계정 프로필에 저장됨)
-                        bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
+                // ✅ Git for Windows의 ssh-agent를 우선 사용하도록 PATH 선두에 추가
+                withEnv([
+                  // 설치 경로가 다르면 맞게 변경하세요.
+                  'PATH=C:\\Program Files\\Git\\usr\\bin;C:\\Program Files\\Git\\mingw64\\bin;%PATH%',
+                  // ✅ 첫 연결시 호스트키 프롬프트 방지
+                  'GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=no'
+                ]) {
+                  bat 'where ssh-agent'
+                  bat 'ssh -V'
 
-                        // ── 여기서 sshagent 사용 ───────────────────────────────────────────
-                        sshagent(credentials: [GIT_CREDENTIALS_ID]) {
-                            // Git이 UTF-8 로그에서 깨지지 않도록 (선택)
-                            bat 'chcp 65001 >NUL'
-                            // OpenSSH Client가 PATH에 있어야 함 (C:\\Windows\\System32\\OpenSSH 포함)
-                            bat 'git --version'
-                            bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
-                        }
-                        // ────────────────────────────────────────────────────────────────
-
-                        def deploymentOrder = [
-                            'config-server', 'discovery-service', 'gateway-service', 'user-service',
-                            'news-service', 'flaskapi', 'dedup-service', 'crawler-service',
-                            'newsletter-service', 'tooltip-service'
-                        ]
-
-                        echo "Applying global and prerequisite manifests..."
-                        bat "kubectl apply -f manifests-repo\\k8s-namespace.yml"
-                        bat "kubectl apply -f manifests-repo\\k8s-flaskapi-configmap.yml"
-
-                        bat "for %%i in (manifests-repo\\k8s-*-spc.yml) do kubectl apply -f %%i"
-
-                        deploymentOrder.each { serviceName ->
-                            if (buildResults.succeeded.contains(serviceName)) {
-                                echo "--- Starting deployment for ${serviceName} (in order) ---"
-                                def fullTag = "${serviceName}-${IMAGE_TAG}"
-                                def image   = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
-                                def serviceManifestFile = "manifests-repo\\k8s-${serviceName}.yml"
-
-                                // 이미지 태그 치환 후 적용
-                                bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
-                                bat "kubectl apply -f ${serviceManifestFile}"
-                            }
-                        }
-
-                        echo "Applying ingress manifest..."
-                        bat "kubectl apply -f manifests-repo\\k8s-ingress.yml"
-                    }
+                  sshagent(credentials: [GIT_CREDENTIALS_ID]) {
+                    bat 'chcp 65001 >NUL' // UTF-8 (옵션)
+                    bat "git --version"
+                    bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
+                  }
                 }
+
+                def deploymentOrder = [
+                  'config-server', 'discovery-service', 'gateway-service', 'user-service',
+                  'news-service', 'flaskapi', 'dedup-service', 'crawler-service',
+                  'newsletter-service', 'tooltip-service'
+                ]
+
+                echo "Applying global and prerequisite manifests..."
+                bat "kubectl apply -f manifests-repo\\k8s-namespace.yml"
+                bat "kubectl apply -f manifests-repo\\k8s-flaskapi-configmap.yml"
+                bat "for %%i in (manifests-repo\\k8s-*-spc.yml) do kubectl apply -f %%i"
+
+                deploymentOrder.each { serviceName ->
+                  if (buildResults.succeeded.contains(serviceName)) {
+                    echo "--- Starting deployment for ${serviceName} (in order) ---"
+                    def fullTag = "${serviceName}-${IMAGE_TAG}"
+                    def image   = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
+                    def serviceManifestFile = "manifests-repo\\k8s-${serviceName}.yml"
+
+                    bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
+                    bat "kubectl apply -f ${serviceManifestFile}"
+                  }
+                }
+
+                echo "Applying ingress manifest..."
+                bat "kubectl apply -f manifests-repo\\k8s-ingress.yml"
+              }
             }
+          }
         }
     }
 

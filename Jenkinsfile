@@ -12,6 +12,11 @@ pipeline {
         jdk 'jdk17'
     }
 
+    // 🚨 [최종 수정] 사용자가 전체 빌드를 강제로 실행할 수 있는 파라미터를 추가합니다.
+    parameters {
+        booleanParam(name: 'FORCE_FULL_BUILD', defaultValue: false, description: 'Check this to build all services, regardless of changes.')
+    }
+
     environment {
         // AWS 설정
         AWS_DEFAULT_REGION = 'ap-northeast-2'
@@ -54,12 +59,19 @@ pipeline {
                     def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
                     echo "Found all service paths: ${relativeServicePaths}"
 
-                    if (currentBuild.number == 1) {
+                    // 🚨 [최종 수정] 변경 감지 로직에 FORCE_FULL_BUILD 파라미터를 반영합니다.
+                    if (params.FORCE_FULL_BUILD) {
+                        echo "FORCE_FULL_BUILD is checked. Building all services."
+                        changedServices.addAll(relativeServicePaths)
+                    } else if (currentBuild.number == 1) {
                         echo "First build. Building all services."
                         changedServices.addAll(relativeServicePaths)
                     } else {
                         def changedFilesOutput = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim()
-                        def changedFiles = changedFilesOutput.split('\r\n').findAll { it.trim() != '' }
+                        def changedFiles = changedFilesOutput.split('\r\n').findAll { line ->
+                            def trimmedLine = line.trim()
+                            return trimmedLine != '' && !trimmedLine.contains('git diff --name-only')
+                        }
                         echo "Changed files in last commit: ${changedFiles}"
 
                         for (String file in changedFiles) {
@@ -116,12 +128,10 @@ pipeline {
         stage('Deploy to EKS') {
             when { expression { !buildResults.succeeded.isEmpty() } }
             steps {
-                // 🚨 [최종 수정] 이 스테이지에서도 AWS 자격 증명이 필요하므로 withCredentials로 감싸줍니다.
                 withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
                     script {
                         echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
 
-                        // 이제 이 명령어는 AWS 자격 증명을 찾을 수 있습니다.
                         bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
                         withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
@@ -137,6 +147,7 @@ pipeline {
                         echo "Applying global and prerequisite manifests..."
                         bat "kubectl apply -f manifests-repo\\k8s-namespace.yml"
                         bat "kubectl apply -f manifests-repo\\k8s-flaskapi-configmap.yml"
+
                         bat "for %%i in (manifests-repo\\k8s-*-spc.yml) do kubectl apply -f %%i"
 
                         deploymentOrder.each { serviceName ->
@@ -181,7 +192,6 @@ pipeline {
     }
 }
 
-// 헬퍼 함수는 이전과 동일합니다.
 def buildAndPush(String serviceName, String servicePath, String fullTag) {
     def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
 

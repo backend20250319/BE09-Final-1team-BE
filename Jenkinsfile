@@ -1,9 +1,7 @@
-// Jenkinsfile: Windows 노드용 (sshagent 미사용, GIT_SSH_COMMAND로 SSH 키 직접 사용)
+// Jenkinsfile: Windows 노드용 (sshagent 미사용, GIT_SSH_COMMAND 직접 사용)
 // - 변경된 서비스만 빌드/푸시
 // - manifests repo는 파이프라인 초기에 한 번만 클론
-// - 매니페스트 구조: k8s-namespace.yml, k8s-service-account.yml,
-//   k8s-*-spc.yml, k8s-config-server.yml, k8s-dedup-service-configmap.yml,
-//   k8s-flaskapi-configmap.yml, k8s-all-services.yml, k8s-all-deployments.yml, k8s-ingress.yml
+// - 매니페스트 적용은 구조에 맞춰 순차 실행
 
 def buildResults = [succeeded: [], failed: []]
 def changedServicePaths = []
@@ -23,7 +21,7 @@ pipeline {
     UNIFIED_ECR_REPO   = 'my-back'
 
     AWS_CREDENTIALS_ID = 'aws-credentials'
-    GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key' // SSH Username with private key
+    GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key'
 
     MANIFEST_REPO_URL  = 'git@github.com:Berry-mas/my-k8s.git'
     MANIFEST_REPO_DIR  = 'manifests-repo'
@@ -78,7 +76,6 @@ pipeline {
       }
     }
 
-    // [수정] sshagent 제거 → withCredentials + GIT_SSH_COMMAND 사용
     stage('Prepare Manifests') {
       steps {
         withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID,
@@ -128,21 +125,28 @@ pipeline {
             echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
             bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
-            // 네임스페이스/SA/ConfigMap/ConfigServer
+            // Namespace, SA, ConfigMaps
             bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-namespace.yml"
             bat "if exist ${MANIFEST_REPO_DIR}\\k8s-service-account.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-service-account.yml"
             bat "if exist ${MANIFEST_REPO_DIR}\\k8s-flaskapi-configmap.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-flaskapi-configmap.yml"
             bat "if exist ${MANIFEST_REPO_DIR}\\k8s-dedup-service-configmap.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-dedup-service-configmap.yml"
             bat "if exist ${MANIFEST_REPO_DIR}\\k8s-config-server.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-config-server.yml"
 
-            // SecretProviderClass
-            bat "for %i in (${MANIFEST_REPO_DIR}\\k8s-*-spc.yml) do kubectl apply -f %i"
+            // SecretProviderClass (각 파일 개별 적용)
+            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-crawler-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-crawler-service-spc.yml"
+            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-dedup-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-dedup-service-spc.yml"
+            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-flaskapi-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-flaskapi-spc.yml"
+            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-gateway-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-gateway-service-spc.yml"
+            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-news-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-news-service-spc.yml"
+            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-newsletter-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-newsletter-service-spc.yml"
+            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-tooltip-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-tooltip-service-spc.yml"
+            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-user-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-user-service-spc.yml"
 
-            // Services / Deployments
+            // Services & Deployments
             bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-all-services.yml"
             bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-all-deployments.yml"
 
-            // 변경된 서비스만 이미지 교체 + 롤아웃
+            // 이미지 교체 & 롤아웃
             buildResults.succeeded.each { svc ->
               def fullTag = "${svc}-${IMAGE_TAG}"
               def image   = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"

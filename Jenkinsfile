@@ -12,7 +12,6 @@ pipeline {
         jdk 'jdk17'
     }
 
-    // 🚨 [최종 수정] 사용자가 전체 빌드를 강제로 실행할 수 있는 파라미터를 추가합니다.
     parameters {
         booleanParam(name: 'FORCE_FULL_BUILD', defaultValue: false, description: 'Check this to build all services, regardless of changes.')
     }
@@ -31,7 +30,7 @@ pipeline {
         GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key'
 
         // Kubernetes Manifests 리포지토리 정보
-        MANIFEST_REPO_URL = 'git@github.com:Berry-mas/my-k8s.git'
+        MANIFEST_REPO_URL = 'git@github.com:Berry-mas/my-k8s.git
 
         // EKS 설정
         EKS_CLUSTER_NAME = 'my-msa-cluster'
@@ -59,7 +58,6 @@ pipeline {
                     def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
                     echo "Found all service paths: ${relativeServicePaths}"
 
-                    // 🚨 [최종 수정] 변경 감지 로직에 FORCE_FULL_BUILD 파라미터를 반영합니다.
                     if (params.FORCE_FULL_BUILD) {
                         echo "FORCE_FULL_BUILD is checked. Building all services."
                         changedServices.addAll(relativeServicePaths)
@@ -135,7 +133,8 @@ pipeline {
                         bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
                         withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
-                            bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
+                            // 🚨 [최종 수정] git clone 명령어에 SSH 보안 검사를 비활성화하는 옵션을 추가합니다.
+                            bat "git -c core.sshCommand=\\\"ssh -o StrictHostKeyChecking=no -i %GIT_KEY%\\\" clone ${MANIFEST_REPO_URL} manifests-repo"
                         }
 
                         def deploymentOrder = [

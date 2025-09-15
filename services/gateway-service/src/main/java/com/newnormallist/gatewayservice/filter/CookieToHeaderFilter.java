@@ -10,7 +10,7 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
-// 쿠키 헤더 필터링
+// 쿠키 헤더 필터링.
 @Slf4j
 @Component
 public class CookieToHeaderFilter implements GlobalFilter, Ordered {

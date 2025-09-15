@@ -1,7 +1,7 @@
 package com.newsletterservice.exception;
 
 /**
- * 카카오 메시지 전송 관련 예외 클래스
+ * 카카오 메시지 전송 관련 예외 클래스.
  */
 public class KakaoMessageException extends RuntimeException {
     

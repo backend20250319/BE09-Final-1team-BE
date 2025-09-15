@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.NoSuchElementException;
-// 툴팁 제공을 위한 컨트롤러.
+// 툴팁 제공을 위한 컨트롤러...
 @Tag(name = "News Analysis", description = "뉴스 본문 분석 및 단어 정의 조회 API")
 @RestController
 @RequestMapping("/api/news/analysis")

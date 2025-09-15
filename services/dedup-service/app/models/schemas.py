@@ -1,5 +1,5 @@
 """
-API 스키마 정의 - Java MSA와 호환되는 데이터 모델.
+API 스키마 정의 - Java MSA와 호환되는 데이터 모델..
 """
 
 from pydantic import BaseModel, Field

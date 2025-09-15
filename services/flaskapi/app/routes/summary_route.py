@@ -1,4 +1,4 @@
-# routes/summary_route.py
+# routes/summary_route.py입니다.
 from flask import Blueprint, request, jsonify, current_app, g
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime

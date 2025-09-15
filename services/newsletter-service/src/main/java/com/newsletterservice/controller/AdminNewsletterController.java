@@ -17,7 +17,7 @@ import java.util.Map;
 
 /**
  * 관리자용 뉴스레터 컨트롤러
- * 피드 B형 뉴스레터의 관리 및 수동 전송 기능을 제공합니다
+ * 피드 B형 뉴스레터의 관리 및 수동 전송 기능을 제공합니다.
  */
 @Tag(name = "Admin Newsletter", description = "관리자용 뉴스레터 API")
 @RestController

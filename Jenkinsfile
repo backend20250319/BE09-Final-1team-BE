@@ -82,12 +82,12 @@ pipeline {
     stage('Prepare Manifests') {
       steps {
         withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID,
-                                           keyFileVariable: 'SSH_KEY',
-                                           usernameVariable: 'GIT_USER')]) {
-          bat """
-          if exist ${MANIFEST_REPO_DIR} (rmdir /s /q ${MANIFEST_REPO_DIR})
-          git -c core.sshCommand="ssh -i %SSH_KEY% -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL" clone ${MANIFEST_REPO_URL} ${MANIFEST_REPO_DIR}
-          """
+                                           keyFileVariable: 'SSH_KEY')]) {
+            bat """
+            if exist ${MANIFEST_REPO_DIR} (rmdir /s /q ${MANIFEST_REPO_DIR})
+            set GIT_SSH_COMMAND=ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL
+            git clone ${MANIFEST_REPO_URL} ${MANIFEST_REPO_DIR}
+            """
         }
       }
     }

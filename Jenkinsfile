@@ -10,21 +10,21 @@ pipeline {
     environment {
         // AWS 설정
         AWS_DEFAULT_REGION = 'ap-northeast-2'
-        AWS_ACCOUNT_ID = '883467884806'
+        AWS_ACCOUNT_ID = '783648732440'
         ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
         
         // 단일 ECR 리포지토리 이름
-        UNIFIED_ECR_REPO = 'be09-final-1team-be'
-        
+        UNIFIED_ECR_REPO = 'my-back'
+
         // Jenkins Credentials ID
         AWS_CREDENTIALS_ID = 'aws-credentials'
         GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key'
 
         // Kubernetes Manifests 리포지토리 정보
-        MANIFEST_REPO_URL = 'git@github.com:backend20250319/BE09-Final-1team-k8s-manifests.git'
+        MANIFEST_REPO_URL = 'git@github.com:Berry-mas/my-k8s.git'
         
         // EKS 설정
-        EKS_CLUSTER_NAME = 'BE09-Final-1team-BE-cluster'
+        EKS_CLUSTER_NAME = 'my-msa-cluster'
         EKS_NAMESPACE = 'msa-namespace'
 
         // Docker 이미지 태그 (빌드번호 + 커밋해시)

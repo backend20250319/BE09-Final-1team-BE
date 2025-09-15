@@ -7,7 +7,7 @@ from ..models import News, NewsSummary
 from ..prompt_manager import PromptManager
 from ..services.summarizer import summarize
 
-# /summary로 시작하는 모든 요약 관련 엔드포인트
+# /summary로 시작하는 모든 요약 관련 엔드포인트.
 summary_bp = Blueprint("summary", __name__, url_prefix="/summary")
 
 # 안전장치: 한 번에 돌릴 프롬프트 개수 상한

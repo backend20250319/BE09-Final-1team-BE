@@ -3,6 +3,7 @@ package com.newsletterservice.controller;
 import com.newsletterservice.common.ApiResponse;
 import com.newsletterservice.entity.UserNewsletterSubscription;
 import com.newsletterservice.repository.UserNewsletterSubscriptionRepository;
+import com.newsletterservice.service.NewsletterService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -10,8 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 
 import java.util.HashMap;
 import java.util.List;
@@ -26,15 +25,12 @@ import java.util.Optional;
 public class NewsletterSubscriptionController extends BaseController {
 
     private final UserNewsletterSubscriptionRepository subscriptionRepository;
-    
-    @PersistenceContext
-    private EntityManager entityManager;
+    private final NewsletterService newsletterService;
 
     /**
      * 뉴스레터 구독
      */
     @PostMapping("/subscribe")
-    @Transactional
     public ResponseEntity<ApiResponse<Map<String, Object>>> subscribe(
             @Valid @RequestBody Map<String, Object> request,
             HttpServletRequest httpRequest) {
@@ -45,22 +41,15 @@ public class NewsletterSubscriptionController extends BaseController {
             
             log.info("뉴스레터 구독 요청: userId={}, category={}", userId, category);
             
-            // 기존 활성 구독 확인 (다중 구독 허용하므로 중복 체크 제거)
-            // 카테고리별로 여러 구독이 가능하므로 중복 체크를 하지 않음
-            
-            // 새 구독 생성 (다중 구독 지원)
-            UserNewsletterSubscription subscription = UserNewsletterSubscription.builder()
-                    .userId(userId)
-                    .category(category)
-                    .isActive(true)
-                    .frequency((String) request.getOrDefault("frequency", "DAILY"))
-                    .sendTime((String) request.getOrDefault("sendTime", "09:00"))
-                    .isPersonalized((Boolean) request.getOrDefault("isPersonalized", false))
-                    .keywords((String) request.getOrDefault("keywords", null))
-                    .build();
-            
-            subscriptionRepository.save(subscription);
-            entityManager.flush();
+            // 서비스 계층에서 트랜잭션 처리
+            UserNewsletterSubscription subscription = newsletterService.createSubscription(
+                userId, 
+                category, 
+                (String) request.getOrDefault("frequency", "DAILY"),
+                (String) request.getOrDefault("sendTime", "09:00"),
+                (Boolean) request.getOrDefault("isPersonalized", false),
+                (String) request.getOrDefault("keywords", null)
+            );
             
             log.info("뉴스레터 구독 생성 완료: subscriptionId={}, userId={}, category={}, isActive={}", 
                     subscription.getId(), userId, category, subscription.getIsActive());

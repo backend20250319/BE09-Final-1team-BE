@@ -66,6 +66,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/newsletter/category/*/subscribers").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/newsletter/categories/subscribers").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/newsletter/stats/subscribers").permitAll()
+                        
+                        // 2-5-1. 차별화된 뉴스레터 서비스 - 인증 불필요 (하이브리드)
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/enhanced").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/hybrid").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/smart-recommendations").permitAll()
 
                         // 2-6. 레거시 경로 지원
                         .requestMatchers(HttpMethod.GET, "/newsletter/trending-keywords").permitAll()
@@ -73,6 +78,7 @@ public class SecurityConfig {
 
                         // 2-7. 테스트 API - 인증 불필요
                         .requestMatchers("/api/newsletters/test-user-service/**").permitAll()
+                        .requestMatchers("/api/newsletter/debug/**").permitAll()
 
                         // 2-8. 관리자 기능 - 인증 필요
                         .requestMatchers("/api/newsletter/delivery/**").authenticated()

@@ -22,7 +22,7 @@ import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 @Service
-@Transactional
+@Transactional(readOnly = true)
 @Slf4j
 public class NewsServiceImpl implements NewsService {
 
@@ -41,8 +41,8 @@ public class NewsServiceImpl implements NewsService {
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
     
-    // 비동기 처리를 위한 Executor
-    private final Executor asyncExecutor = Executors.newFixedThreadPool(5);
+    // 비동기 처리를 위한 Executor (커넥션 풀과 균형 맞춤)
+    private final Executor asyncExecutor = Executors.newFixedThreadPool(3); // 5 → 3으로 감소
 
     @Autowired
     private KeywordSubscriptionRepository keywordSubscriptionRepository;
@@ -60,6 +60,7 @@ public class NewsServiceImpl implements NewsService {
 
     // 크롤링 관련 메서드들
     @Override
+    @Transactional
     public NewsCrawl saveCrawledNews(NewsCrawlDto dto) {
         // 중복 체크
         if (newsCrawlRepository.existsByLinkId(dto.getLinkId())) {
@@ -242,6 +243,7 @@ public class NewsServiceImpl implements NewsService {
     }
 
     @Override
+    @Transactional(readOnly = false)
     public void incrementViewCount(Long newsId) {
         try {
             String key = "news:viewcount:" + newsId;
@@ -742,6 +744,7 @@ public class NewsServiceImpl implements NewsService {
     }
 
     @Override
+    @Transactional(readOnly = false)
     public void reportNews(Long newsId, Long userId) {
         News news = newsRepository.findById(newsId)
                 .orElseThrow(() -> new NewsNotFoundException("뉴스를 찾을 수 없습니다: " + newsId));
@@ -768,6 +771,7 @@ public class NewsServiceImpl implements NewsService {
     }
 
     @Override
+    @Transactional(readOnly = false)
     public void scrapNews(Long newsId, Long userId) {
         News news = newsRepository.findById(newsId)
                 .orElseThrow(() -> new NewsNotFoundException("뉴스를 찾을 수 없습니다: " + newsId));
@@ -856,6 +860,7 @@ public class NewsServiceImpl implements NewsService {
     }
 
     @Override
+    @Transactional(readOnly = false)
     public void addNewsToCollection(Long userId, Integer collectionId, Long newsId) {
         // 1. 사용자의 보관함이 맞는지 확인
         scrapStorageRepository.findById(collectionId)
@@ -895,6 +900,7 @@ public class NewsServiceImpl implements NewsService {
     }
 
     @Override
+    @Transactional(readOnly = false)
     public void assignScrapToStorage(Long userId, Integer newsScrapId, Integer targetStorageId) {
         NewsScrap newsScrap = newsScrapRepository.findById(newsScrapId)
                 .orElseThrow(() -> new IllegalStateException("스크랩을 찾을 수 없습니다: " + newsScrapId));
@@ -955,6 +961,7 @@ public class NewsServiceImpl implements NewsService {
     }
 
     @Override
+    @Transactional(readOnly = false)
     public void deleteCollection(Long userId, Integer collectionId) {
         // 1. 보관함이 사용자의 소유인지 확인
         ScrapStorage scrapStorage = scrapStorageRepository.findById(collectionId)
@@ -971,6 +978,7 @@ public class NewsServiceImpl implements NewsService {
     }
 
     @Override
+    @Transactional(readOnly = false)
     public void deleteNewsFromCollection(Long userId, Integer collectionId, Long newsId) {
         // 1. 보관함이 사용자의 소유인지 확인
         scrapStorageRepository.findById(collectionId)

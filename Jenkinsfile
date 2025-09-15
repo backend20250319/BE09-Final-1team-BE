@@ -43,32 +43,32 @@ pipeline {
                     echo "Detecting changed services on Windows..."
                     def changedServices = new HashSet<String>()
 
-                    // ▼▼▼ [오류 수정] Windows CMD 출력에서 명령어 자체가 포함되는 문제를 필터링하도록 수정 ▼▼▼
                     def findDockerfilesCmd = 'where /r . Dockerfile'
                     def allServicePathsOutput = bat(returnStdout: true, script: findDockerfilesCmd).trim()
 
-                    // 명령어 자체나 빈 줄을 걸러내고, 순수한 경로만 남깁니다.
                     def allServicePaths = allServicePathsOutput.split('\r\n').findAll { line ->
                         return line.trim() != '' && !line.startsWith('>') && line.contains('\\Dockerfile')
                     }.collect { it.replace('\\Dockerfile', '') }
 
                     def workspacePath = pwd().replace('/', '\\')
                     def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
-                    echo "Found all relative service paths: ${relativeServicePaths}"
+                    echo "Found all service paths: ${relativeServicePaths}"
 
-                    if (currentBuild.changeSets.isEmpty()) {
-                        echo "No changesets found. Building all services."
+                    // ▼▼▼ [최종 수정] git diff 명령어를 사용하여 변경 감지 로직을 더 안정적으로 변경 ▼▼▼
+                    if (currentBuild.number == 1) {
+                        echo "First build. Building all services."
                         changedServices.addAll(relativeServicePaths)
                     } else {
-                        for (changeSet in currentBuild.changeSets) {
-                            for (item in changeSet.items) {
-                                for (path in item.affectedPaths) {
-                                    def windowsStyleFile = path.replace('/', '\\')
-                                    for (String servicePath in relativeServicePaths) {
-                                        if (windowsStyleFile.startsWith(servicePath + '\\')) {
-                                            changedServices.add(servicePath)
-                                        }
-                                    }
+                        // 이전 커밋과 현재 커밋 사이의 변경된 파일 목록을 가져옵니다.
+                        def changedFilesOutput = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim()
+                        def changedFiles = changedFilesOutput.split('\r\n').findAll { it.trim() != '' }
+                        echo "Changed files in last commit: ${changedFiles}"
+
+                        for (String file in changedFiles) {
+                            def windowsStyleFile = file.replace('/', '\\')
+                            for (String servicePath in relativeServicePaths) {
+                                if (windowsStyleFile.startsWith(servicePath + '\\')) {
+                                    changedServices.add(servicePath)
                                 }
                             }
                         }

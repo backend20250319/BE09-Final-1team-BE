@@ -33,7 +33,7 @@ import org.springframework.http.HttpStatus;
  * - GET /api/crawler/config: 크롤러 설정 조회
  * - GET /api/crawler/health: 헬스체크
  */
-/* 크롤링을 위한 기본 컨트롤러 !!!!!!! */
+/* 크롤링을 위한 기본 컨트롤러 1 */
 @Tag(name = "Crawler", description = "뉴스 크롤링 및 데이터 수집 API")
 @Slf4j
 @RestController

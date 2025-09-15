@@ -1,4 +1,4 @@
-// Jenkinsfile: manifests 구조 반영 + 변경 서비스만 롤아웃 + PATH 수정
+// Jenkinsfile: sshagent 권장 구성 (Git for Windows ssh/ssh-agent 우선) + 변경 서비스만 롤아웃
 
 def buildResults = [succeeded: [], failed: []]
 def changedServicePaths = []
@@ -13,21 +13,25 @@ pipeline {
   }
 
   environment {
+    // AWS / ECR
     AWS_DEFAULT_REGION = 'ap-northeast-2'
     AWS_ACCOUNT_ID     = '783648732440'
     ECR_REGISTRY       = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
-
     UNIFIED_ECR_REPO   = 'my-back'
 
+    // Jenkins Credentials
     AWS_CREDENTIALS_ID = 'aws-credentials'
-    GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key'
+    GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key' // SSH Username with private key
 
+    // Manifests repo (SSH)
     MANIFEST_REPO_URL  = 'git@github.com:Berry-mas/my-k8s.git'
     MANIFEST_REPO_DIR  = 'manifests-repo'
 
+    // EKS
     EKS_CLUSTER_NAME   = 'my-msa-cluster'
     EKS_NAMESPACE      = 'msa-namespace'
 
+    // Image tag
     IMAGE_TAG          = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
   }
 
@@ -39,9 +43,10 @@ pipeline {
           echo "Detecting changed services on Windows..."
           def changedServices = new HashSet<String>()
 
-          def out = bat(returnStdout: true, script: 'where /r . Dockerfile').trim()
-          def allServicePaths = out.split('\r\n').findAll { it?.trim() && it.contains('\\Dockerfile') }
-                                       .collect { it.replace('\\Dockerfile', '') }
+          def allServicePathsOutput = bat(returnStdout: true, script: 'where /r . Dockerfile').trim()
+          def allServicePaths = allServicePathsOutput.split('\r\n').findAll { line ->
+            line?.trim() && line.contains('\\Dockerfile')
+          }.collect { it.replace('\\Dockerfile', '') }
 
           def ws = pwd().replace('/', '\\')
           def relPaths = allServicePaths.collect { it.replace(ws, '').replaceAll('^\\\\', '') }
@@ -110,23 +115,22 @@ pipeline {
             echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
             bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
-            // ✅ PATH를 안전하게 확장 (기존 PATH 보존)
-            def origPath = env.PATH ?: ''
-            withEnv(["PATH=${origPath};C:\\\\Program Files\\\\Git\\\\usr\\\\bin;C:\\\\Program Files\\\\Git\\\\mingw64\\\\bin"]) {
+            // ✅ Git for Windows ssh/ssh-agent를 PATH 맨 앞에 프리펜드 (Windows OpenSSH보다 우선)
+            def gitPaths = 'C:\\\\Program Files\\\\Git\\\\usr\\\\bin;C:\\\\Program Files\\\\Git\\\\mingw64\\\\bin'
+            withEnv(["PATH=${gitPaths};${env.PATH}"]) {
 
-              // 참조용 버전 확인 (선택)
-              bat 'where ssh'
+              // 확인용
+              bat 'where ssh-agent'
               bat 'ssh -V'
               bat 'git --version'
 
-              // manifests repo clone (sshagent)
+              // sshagent 로 manifests repo clone
               sshagent(credentials: [GIT_CREDENTIALS_ID]) {
                 bat "if exist ${MANIFEST_REPO_DIR} ( rmdir /s /q ${MANIFEST_REPO_DIR} )"
                 bat "git clone ${MANIFEST_REPO_URL} ${MANIFEST_REPO_DIR}"
               }
 
-              // --- 적용 순서: NS/SA → Configs → SPC → Services → Deployments → (변경 서비스만) 이미지 태그 → Ingress ---
-
+              // --- 매니페스트 적용 순서 ---
               bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-namespace.yml"
               bat "if exist ${MANIFEST_REPO_DIR}\\k8s-service-account.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-service-account.yml"
 
@@ -134,10 +138,10 @@ pipeline {
               bat "if exist ${MANIFEST_REPO_DIR}\\k8s-dedup-service-configmap.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-dedup-service-configmap.yml"
               bat "if exist ${MANIFEST_REPO_DIR}\\k8s-config-server.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-config-server.yml"
 
-              // SecretProviderClass들
+              // SecretProviderClass
               bat "for %i in (${MANIFEST_REPO_DIR}\\k8s-*-spc.yml) do kubectl apply -f %i"
 
-              // Services / Deployments 일괄 적용
+              // Services / Deployments
               bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-all-services.yml"
               bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-all-deployments.yml"
 
@@ -174,7 +178,7 @@ pipeline {
               }
 
               bat "if exist ${MANIFEST_REPO_DIR}\\k8s-ingress.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-ingress.yml"
-            } // withEnv(PATH=...)
+            } // withEnv(PATH=gitPaths;env.PATH)
           }
         }
       }
@@ -196,7 +200,7 @@ pipeline {
   }
 }
 
-// helper
+// ---------------- helpers ----------------
 def buildAndPush(String serviceName, String servicePath, String fullTag) {
   def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
   echo "Building ${serviceName} from path ${servicePath}..."

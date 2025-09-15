@@ -1,4 +1,4 @@
-// Jenkinsfile: sshagent 적용 최종 안정화 버전
+// Jenkinsfile: sshagent 미사용(키파일 직접 지정) 최종 안정화 버전
 
 // 빌드/배포 결과를 저장하기 위한 전역 변수
 def buildResults = [succeeded: [], failed: []]
@@ -27,7 +27,7 @@ pipeline {
 
         // Jenkins Credentials ID
         AWS_CREDENTIALS_ID = 'aws-credentials'
-        GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key'  // ← SSH Username with private key
+        GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key'  // SSH Username with private key
 
         // Kubernetes Manifests 리포지토리 정보 (SSH URL)
         MANIFEST_REPO_URL  = 'git@github.com:Berry-mas/my-k8s.git'
@@ -134,23 +134,24 @@ pipeline {
                 echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
                 bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
-                // ✅ Git for Windows의 ssh-agent를 우선 사용하도록 PATH에 "추가" (덮어쓰기 금지)
-                withEnv([
-                  'PATH+GIT=C:\\Program Files\\Git\\usr\\bin;C:\\Program Files\\Git\\mingw64\\bin',
-                  'GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=no',
-                  // (안전장치) 혹시 모를 COMSPEC 문제 예방
-                  'COMSPEC=C:\\Windows\\System32\\cmd.exe'
-                ]) {
-                  bat 'where ssh-agent'
-                  bat 'ssh -V'
-
-                  sshagent(credentials: [GIT_CREDENTIALS_ID]) {
-                    bat 'chcp 65001 >NUL'
+                // ✅ ssh-agent 대신, 키파일 직접 지정 방식
+                withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
+                  withEnv([
+                    // Git for Windows 경로를 기존 PATH에 "추가" (덮어쓰기 금지)
+                    'PATH+GIT=C:\\Program Files\\Git\\usr\\bin;C:\\Program Files\\Git\\mingw64\\bin',
+                    // 첫 연결시 호스트키 프롬프트 방지
+                    'GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=no -i "%GIT_KEY%"',
+                    // 드물게 cmd 탐색 문제 예방
+                    'COMSPEC=C:\\Windows\\System32\\cmd.exe'
+                  ]) {
+                    bat 'where ssh'
+                    bat 'ssh -V'
                     bat 'git --version'
+
+                    // 여기서 SSH 키를 직접 사용하여 clone
                     bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
                   }
                 }
-
 
                 def deploymentOrder = [
                   'config-server', 'discovery-service', 'gateway-service', 'user-service',

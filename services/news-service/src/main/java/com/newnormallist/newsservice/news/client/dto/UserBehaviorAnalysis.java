@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * 사용자 행동 분석 응답 DTO입니다!!!!!!!
+ * 사용자 행동 분석 응답 DTO입니다!
  */
 @Data
 @Builder

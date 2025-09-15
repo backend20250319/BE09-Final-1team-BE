@@ -40,6 +40,7 @@ pipeline {
           echo "Detecting changed services on Windows..."
           def changedServices = new HashSet<String>()
 
+          // 전체 서비스 찾기
           def allServicePathsOutput = bat(returnStdout: true, script: 'where /r . Dockerfile').trim()
           def allServicePaths = allServicePathsOutput.split('\r\n').findAll { line ->
             line?.trim() && line.contains('\\Dockerfile')
@@ -49,10 +50,12 @@ pipeline {
           def relPaths = allServicePaths.collect { it.replace(ws, '').replaceAll('^\\\\', '') }
           echo "Found all service paths: ${relPaths}"
 
+          // 강제 전체 빌드 or 첫 빌드 → 모든 서비스 추가
           if (params.FORCE_FULL_BUILD || currentBuild.number == 1) {
             changedServices.addAll(relPaths)
             echo params.FORCE_FULL_BUILD ? 'FORCE_FULL_BUILD=true → all services' : 'First build → all services'
           } else {
+            // 변경된 파일 기반으로 서비스 탐지
             def diff = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim()
             def changedFiles = diff.split('\r\n').findAll { it?.trim() && !it.contains('git diff --name-only') }
             echo "Changed files in last commit: ${changedFiles}"

@@ -133,8 +133,10 @@ pipeline {
                         bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
                         withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
-                            // 🚨 [최종 수정] git clone 명령어에 SSH 보안 검사를 비활성화하는 옵션을 추가합니다.
-                            bat "git -c core.sshCommand=\\\"ssh -o StrictHostKeyChecking=no -i %GIT_KEY%\\\" clone ${MANIFEST_REPO_URL} manifests-repo"
+                            // 🚨 [최종 수정] git clone 명령어를 더 안정적인 환경 변수 방식으로 변경합니다.
+                            withEnv(["GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=no -i ${GIT_KEY}"]) {
+                                bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
+                            }
                         }
 
                         def deploymentOrder = [

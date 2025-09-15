@@ -134,22 +134,23 @@ pipeline {
                 echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
                 bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
-                // ✅ Git for Windows의 ssh-agent를 우선 사용하도록 PATH 선두에 추가
+                // ✅ Git for Windows의 ssh-agent를 우선 사용하도록 PATH에 "추가" (덮어쓰기 금지)
                 withEnv([
-                  // 설치 경로가 다르면 맞게 변경하세요.
-                  'PATH=C:\\Program Files\\Git\\usr\\bin;C:\\Program Files\\Git\\mingw64\\bin;%PATH%',
-                  // ✅ 첫 연결시 호스트키 프롬프트 방지
-                  'GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=no'
+                  'PATH+GIT=C:\\Program Files\\Git\\usr\\bin;C:\\Program Files\\Git\\mingw64\\bin',
+                  'GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=no',
+                  // (안전장치) 혹시 모를 COMSPEC 문제 예방
+                  'COMSPEC=C:\\Windows\\System32\\cmd.exe'
                 ]) {
                   bat 'where ssh-agent'
                   bat 'ssh -V'
 
                   sshagent(credentials: [GIT_CREDENTIALS_ID]) {
-                    bat 'chcp 65001 >NUL' // UTF-8 (옵션)
-                    bat "git --version"
+                    bat 'chcp 65001 >NUL'
+                    bat 'git --version'
                     bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
                   }
                 }
+
 
                 def deploymentOrder = [
                   'config-server', 'discovery-service', 'gateway-service', 'user-service',

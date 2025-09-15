@@ -7,158 +7,157 @@ def changedServicePaths = []
 pipeline {
     agent any
 
-    // 젠킨스 Tools에 설정된 JDK를 사용하도록 명시
     tools {
         jdk 'jdk17'
     }
 
     environment {
-        // AWS 설정
+        // ... (환경 변수는 이전과 동일) ...
         AWS_DEFAULT_REGION = 'ap-northeast-2'
         AWS_ACCOUNT_ID = '783648732440'
         ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
-
-        // 단일 ECR 리포지토리 이름
         UNIFIED_ECR_REPO = 'my-back'
-
-        // Jenkins Credentials ID
         AWS_CREDENTIALS_ID = 'aws-credentials'
         GIT_CREDENTIALS_ID = 'BE09-Final-1team-k8s-manifests-ssh-key'
-
-        // Kubernetes Manifests 리포지토리 정보
         MANIFEST_REPO_URL = 'git@github.com:Berry-mas/my-k8s.git'
-
-        // EKS 설정
         EKS_CLUSTER_NAME = 'my-msa-cluster'
         EKS_NAMESPACE = 'msa-namespace'
-
-        // Docker 이미지 태그 (빌드번호 + 커밋해시)
         IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
     }
 
+    // 🚨 [최종 수정] 파이프라인 전체를 withCredentials로 감싸서 모든 단계에서 AWS 자격 증명을 사용할 수 있도록 합니다.
     stages {
-        stage('Detect Changed Services') {
+        stage('Run Pipeline with AWS Credentials') {
             steps {
-                script {
-                    echo "Detecting changed services on Windows..."
-                    def changedServices = new HashSet<String>()
+                withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
+                    // 이제 이 안의 모든 stage에서 AWS CLI를 자유롭게 사용할 수 있습니다.
+                    stage('Detect Changed Services') {
+                        // ... (내용은 이전과 동일) ...
+                        steps {
+                            script {
+                                echo "Detecting changed services on Windows..."
+                                def changedServices = new HashSet<String>()
 
-                    def findDockerfilesCmd = 'where /r . Dockerfile'
-                    def allServicePathsOutput = bat(returnStdout: true, script: findDockerfilesCmd).trim()
+                                def findDockerfilesCmd = 'where /r . Dockerfile'
+                                def allServicePathsOutput = bat(returnStdout: true, script: findDockerfilesCmd).trim()
 
-                    def allServicePaths = allServicePathsOutput.split('\r\n').findAll { line ->
-                        return line.trim() != '' && !line.startsWith('>') && line.contains('\\Dockerfile')
-                    }.collect { it.replace('\\Dockerfile', '') }
+                                def allServicePaths = allServicePathsOutput.split('\r\n').findAll { line ->
+                                    return line.trim() != '' && !line.startsWith('>') && line.contains('\\Dockerfile')
+                                }.collect { it.replace('\\Dockerfile', '') }
 
-                    def workspacePath = pwd().replace('/', '\\')
-                    def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
-                    echo "Found all service paths: ${relativeServicePaths}"
+                                def workspacePath = pwd().replace('/', '\\')
+                                def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
+                                echo "Found all service paths: ${relativeServicePaths}"
 
-                    // ▼▼▼ [최종 수정] git diff 명령어를 사용하여 변경 감지 로직을 더 안정적으로 변경 ▼▼▼
-                    if (currentBuild.number == 1) {
-                        echo "First build. Building all services."
-                        changedServices.addAll(relativeServicePaths)
-                    } else {
-                        // 이전 커밋과 현재 커밋 사이의 변경된 파일 목록을 가져옵니다.
-                        def changedFilesOutput = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim()
-                        def changedFiles = changedFilesOutput.split('\r\n').findAll { it.trim() != '' }
-                        echo "Changed files in last commit: ${changedFiles}"
+                                if (currentBuild.number == 1) {
+                                    echo "First build. Building all services."
+                                    changedServices.addAll(relativeServicePaths)
+                                } else {
+                                    def changedFilesOutput = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim()
+                                    def changedFiles = changedFilesOutput.split('\r\n').findAll { it.trim() != '' }
+                                    echo "Changed files in last commit: ${changedFiles}"
 
-                        for (String file in changedFiles) {
-                            def windowsStyleFile = file.replace('/', '\\')
-                            for (String servicePath in relativeServicePaths) {
-                                if (windowsStyleFile.startsWith(servicePath + '\\')) {
-                                    changedServices.add(servicePath)
+                                    for (String file in changedFiles) {
+                                        def windowsStyleFile = file.replace('/', '\\')
+                                        for (String servicePath in relativeServicePaths) {
+                                            if (windowsStyleFile.startsWith(servicePath + '\\')) {
+                                                changedServices.add(servicePath)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (changedServices.isEmpty()) {
+                                    echo "No changes detected in service directories. Skipping subsequent stages."
+                                    currentBuild.result = 'NOT_BUILT'
+                                    return
+                                }
+
+                                echo "Services to be built: ${changedServices.toList()}"
+                                changedServicePaths = changedServices.toList()
+                            }
+                        }
+                    }
+
+                    stage('Build and Push Changed Services') {
+                        // ... (내용은 이전과 동일) ...
+                        when { expression { !changedServicePaths.isEmpty() } }
+                        steps {
+                            script {
+                                def parallelStages = [:]
+
+                                changedServicePaths.each { servicePath ->
+                                    def currentService = servicePath
+                                    parallelStages["Build & Push ${currentService}"] = {
+                                        try {
+                                            def serviceName = currentService.split('\\\\').last()
+                                            def fullTag = "${serviceName}-${IMAGE_TAG}"
+                                            buildAndPush(serviceName, currentService, fullTag)
+                                            buildResults.succeeded.add(serviceName)
+                                        } catch (e) {
+                                            echo "ERROR during build or push for ${currentService}: ${e.toString()}"
+                                            buildResults.failed.add(currentService.split('\\\\').last())
+                                        }
+                                    }
+                                }
+                                parallel parallelStages
+
+                                if (!buildResults.failed.isEmpty()) {
+                                    error("One or more services failed to build: ${buildResults.failed.join(', ')}")
                                 }
                             }
                         }
                     }
 
-                    if (changedServices.isEmpty()) {
-                        echo "No changes detected in service directories. Skipping subsequent stages."
-                        currentBuild.result = 'NOT_BUILT'
-                        return
-                    }
+                    stage('Deploy to EKS') {
+                        // ... (내용은 이전과 동일) ...
+                        when { expression { !buildResults.succeeded.isEmpty() } }
+                        steps {
+                            script {
+                                echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
 
-                    echo "Services to be built: ${changedServices.toList()}"
-                    changedServicePaths = changedServices.toList()
-                }
-            }
-        }
+                                bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
 
-        stage('Build and Push Changed Services') {
-            when { expression { !changedServicePaths.isEmpty() } }
-            steps {
-                script {
-                    def parallelStages = [:]
+                                withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
+                                    bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
+                                }
 
-                    changedServicePaths.each { servicePath ->
-                        def currentService = servicePath
-                        parallelStages["Build & Push ${currentService}"] = {
-                            try {
-                                def serviceName = currentService.split('\\\\').last()
-                                def fullTag = "${serviceName}-${IMAGE_TAG}"
-                                buildAndPush(serviceName, currentService, fullTag)
-                                buildResults.succeeded.add(serviceName)
-                            } catch (e) {
-                                echo "ERROR during build or push for ${currentService}: ${e.toString()}"
-                                buildResults.failed.add(currentService.split('\\\\').last())
+                                def deploymentOrder = [
+                                    'config-server', 'discovery-service', 'gateway-service', 'user-service',
+                                    'news-service', 'flaskapi', 'dedup-service', 'crawler-service',
+                                    'newsletter-service', 'tooltip-service'
+                                ]
+
+                                echo "Applying global and prerequisite manifests..."
+                                bat "kubectl apply -f manifests-repo\\k8s-namespace.yml"
+                                bat "kubectl apply -f manifests-repo\\k8s-flaskapi-configmap.yml"
+
+                                bat "for %%i in (manifests-repo\\k8s-*-spc.yml) do kubectl apply -f %%i"
+
+                                deploymentOrder.each { serviceName ->
+                                    if (buildResults.succeeded.contains(serviceName)) {
+                                        echo "--- Starting deployment for ${serviceName} (in order) ---"
+                                        def fullTag = "${serviceName}-${IMAGE_TAG}"
+                                        def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
+                                        def serviceManifestFile = "manifests-repo\\k8s-${serviceName}.yml"
+
+                                        bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
+                                        bat "kubectl apply -f ${serviceManifestFile}"
+                                    }
+                                }
+
+                                echo "Applying ingress manifest..."
+                                bat "kubectl apply -f manifests-repo\\k8s-ingress.yml"
                             }
                         }
                     }
-                    parallel parallelStages
-
-                    if (!buildResults.failed.isEmpty()) {
-                        error("One or more services failed to build: ${buildResults.failed.join(', ')}")
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to EKS') {
-            when { expression { !buildResults.succeeded.isEmpty() } }
-            steps {
-                script {
-                    echo "Deploying successfully built services: ${buildResults.succeeded.join(', ')}"
-
-                    bat "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}"
-
-                    withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID, keyFileVariable: 'GIT_KEY')]) {
-                        bat "git clone ${MANIFEST_REPO_URL} manifests-repo"
-                    }
-
-                    def deploymentOrder = [
-                        'config-server', 'discovery-service', 'gateway-service', 'user-service',
-                        'news-service', 'flaskapi', 'dedup-service', 'crawler-service',
-                        'newsletter-service', 'tooltip-service'
-                    ]
-
-                    echo "Applying global and prerequisite manifests..."
-                    bat "kubectl apply -f manifests-repo\\k8s-namespace.yml"
-                    bat "kubectl apply -f manifests-repo\\k8s-flaskapi-configmap.yml"
-
-                    bat "for %%i in (manifests-repo\\k8s-*-spc.yml) do kubectl apply -f %%i"
-
-                    deploymentOrder.each { serviceName ->
-                        if (buildResults.succeeded.contains(serviceName)) {
-                            echo "--- Starting deployment for ${serviceName} (in order) ---"
-                            def fullTag = "${serviceName}-${IMAGE_TAG}"
-                            def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
-                            def serviceManifestFile = "manifests-repo\\k8s-${serviceName}.yml"
-
-                            bat "powershell -Command \"(Get-Content '${serviceManifestFile}') -replace 'image:.*', 'image: ${image}' | Set-Content '${serviceManifestFile}'\""
-                            bat "kubectl apply -f ${serviceManifestFile}"
-                        }
-                    }
-
-                    echo "Applying ingress manifest..."
-                    bat "kubectl apply -f manifests-repo\\k8s-ingress.yml"
                 }
             }
         }
     }
 
     post {
+        // ... (내용은 이전과 동일) ...
         always {
             script {
                 echo '--- Summary ---'
@@ -180,6 +179,7 @@ pipeline {
     }
 }
 
+// 🚨 [최종 수정] 이 함수에서는 withCredentials 블록을 제거합니다.
 def buildAndPush(String serviceName, String servicePath, String fullTag) {
     def image = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
 
@@ -190,11 +190,10 @@ def buildAndPush(String serviceName, String servicePath, String fullTag) {
         }
         bat "docker build -t ${image} ."
     }
-    withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
-        def loginCmd = "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
-        bat(script: loginCmd)
-        echo "Pushing ${image} to ECR..."
-        bat "docker push ${image}"
-    }
+
+    def loginCmd = "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
+    bat(script: loginCmd)
+    echo "Pushing ${image} to ECR..."
+    bat "docker push ${image}"
 }
 

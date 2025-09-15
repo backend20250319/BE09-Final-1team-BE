@@ -2,6 +2,7 @@ package com.newsletterservice.controller;
 
 import com.newsletterservice.common.ApiResponse;
 import com.newsletterservice.dto.KakaoFriend;
+import com.newsletterservice.common.exception.NewsletterException;
 import com.newsletterservice.dto.KakaoTokenInfo;
 import com.newsletterservice.dto.KakaoUserInfo;
 import com.newsletterservice.service.KakaoApiService;

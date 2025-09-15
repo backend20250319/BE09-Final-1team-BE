@@ -11,12 +11,14 @@ services:
     environment:
       - TZ=Asia/Seoul
       - SPRING_APPLICATION_NAME=config-server
-      - SPRING_PROFILES_ACTIVE=git # Git 프로필 활성화
+      - SPRING_PROFILES_ACTIVE=git,native # Git 프로필 활성화
       - SPRING_CLOUD_CONFIG_SERVER_GIT_URI=https://github.com/backend20250319/BE09-Final-1team-BE.git
       - SPRING_CLOUD_CONFIG_SERVER_GIT_DEFAULT_LABEL=feature/chaehee
       - SPRING_CLOUD_CONFIG_SERVER_GIT_SEARCH_PATHS=config/config-files
       - SPRING_CLOUD_CONFIG_SERVER_GIT_CLONE_ON_START=true
       - SPRING_CLOUD_CONFIG_SERVER_GIT_TIMEOUT=60
+    volumes:
+      - ./config/config-files:/config-files
     healthcheck:
       # 컨테이너 이미지에 curl이 없을 수 있으니 CMD-SHELL로 처리
       test: ["CMD-SHELL", "curl -fsS http://localhost:8888/actuator/health || wget -qO- http://localhost:8888/actuator/health > /dev/null"]

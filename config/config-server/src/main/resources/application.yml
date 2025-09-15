@@ -7,7 +7,7 @@ spring:
   application:
     name: config-server
   profiles:
-    active: git
+    active: git, native
   cloud:
     config:
       server:
@@ -17,6 +17,8 @@ spring:
           search-paths: config/config-files
           clone-on-start: true
           timeout: 60
+        native:
+          search-locations: file:///config-files
 
 management:
   endpoints:

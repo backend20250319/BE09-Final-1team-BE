@@ -61,15 +61,13 @@ public class NewsletterController extends BaseController {
             HttpServletRequest httpRequest) {
         
         try {
-            log.info("뉴스레터 구독 요청: email={}, frequency={}, categories={}, hasAuth={}", 
-                    request.getEmail(), request.getFrequency(), request.getPreferredCategories(), request.getHasAuth());
+            log.info("뉴스레터 구독 요청: email={}, hasAuth={}", request.getEmail(), request.getHasAuth());
             
             // 사용자 ID 추출 (인증된 경우)
             Long userId = null;
             if (request.getHasAuth() != null && request.getHasAuth()) {
                 try {
                     userId = super.extractUserIdFromToken(httpRequest);
-                    log.info("인증된 사용자 구독: userId={}", userId);
                 } catch (Exception e) {
                     log.warn("토큰에서 사용자 ID 추출 실패, 비인증 구독으로 처리: {}", e.getMessage());
                 }
@@ -102,70 +100,54 @@ public class NewsletterController extends BaseController {
     }
 
     /**
-     * 내 구독 목록 조회 (활성화된 구독만 반환)
+     * 내 구독 목록 조회 (활성 구독) - 응답 스펙 정합화
+     * 응답: { success: true, data: { subscriptions: [...] } }
      */
     @GetMapping("/subscription/my")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getMySubscriptions(
             HttpServletRequest httpRequest) {
-        
+
+        long started = System.currentTimeMillis();
         try {
             Long userId = super.extractUserIdFromToken(httpRequest);
             log.info("내 구독 목록 조회 요청 - userId: {}", userId);
-            
-            // 활성화된 구독 정보만 조회
+
+            // 활성화된 구독 정보
             List<UserNewsletterSubscription> activeSubscriptions = subscriptionRepository.findActiveSubscriptionsByUserId(userId);
-            
-            // 카테고리 매핑
-            Map<String, String> categoryNames = Map.of(
-                "POLITICS", "정치",
-                "ECONOMY", "경제", 
-                "SOCIETY", "사회",
-                "LIFE", "생활",
-                "INTERNATIONAL", "세계",
-                "IT_SCIENCE", "IT/과학",
-                "VEHICLE", "자동차/교통",
-                "TRAVEL_FOOD", "여행/음식",
-                "ART", "예술"
-            );
-            
+
+            // 카테고리 매핑 (영문 코드 -> 한글명)
+            Map<String, String> categoryKoByCode = Arrays.stream(NewsCategory.values())
+                .collect(Collectors.toMap(NewsCategory::name, NewsCategory::getCategoryName));
+
             List<Map<String, Object>> subscriptions = new ArrayList<>();
-            List<String> preferredCategories = new ArrayList<>();
-            
-            // 활성화된 구독만 카드 형태로 반환
-            for (UserNewsletterSubscription subscription : activeSubscriptions) {
-                String categoryCode = subscription.getCategory();
-                String categoryName = categoryNames.getOrDefault(categoryCode, categoryCode);
-                
-                Map<String, Object> subscriptionCard = new HashMap<>();
-                subscriptionCard.put("id", subscription.getId());
-                subscriptionCard.put("subscriptionId", subscription.getId());
-                subscriptionCard.put("categoryId", categoryCode.hashCode());
-                subscriptionCard.put("category", categoryName);
-                subscriptionCard.put("categoryName", categoryCode);
-                subscriptionCard.put("categoryNameKo", categoryName);
-                subscriptionCard.put("isActive", subscription.getIsActive());
-                subscriptionCard.put("subscribedAt", subscription.getSubscribedAt().toString());
-                subscriptionCard.put("updatedAt", subscription.getUpdatedAt() != null ? subscription.getUpdatedAt().toString() : null);
-                
-                // 구독자 수 조회 (fallback 처리)
-                Long subscriberCount = getSubscriberCountWithFallback(categoryCode);
-                subscriptionCard.put("subscriberCount", subscriberCount);
-                
-                subscriptions.add(subscriptionCard);
-                preferredCategories.add(categoryCode);
+
+            for (UserNewsletterSubscription sub : activeSubscriptions) {
+                String code = sub.getCategory(); // e.g. POLITICS
+                String ko = categoryKoByCode.getOrDefault(code, code);
+
+                Map<String, Object> item = new HashMap<>();
+                item.put("categoryId", code.hashCode());
+                item.put("categoryName", code);           // 영문 Enum 코드
+                item.put("categoryNameKo", ko);           // 한글 라벨
+                item.put("isActive", sub.getIsActive());
+                item.put("keywords", sub.getKeywords());
+                item.put("sendTime", sub.getSendTime());
+                item.put("isPersonalized", sub.getIsPersonalized());
+                item.put("subscribedAt", sub.getSubscribedAt());
+                item.put("lastSentAt", null);             // 추후 delivery 연동 가능
+                item.put("createdAt", sub.getSubscribedAt());
+                item.put("userId", sub.getUserId());
+
+                subscriptions.add(item);
             }
-            
-            // 응답 데이터 구성
+
             Map<String, Object> result = new HashMap<>();
-            result.put("count", subscriptions.size());
             result.put("subscriptions", subscriptions);
-            result.put("preferredCategories", preferredCategories);
-            result.put("userId", userId);
-            result.put("timestamp", LocalDateTime.now().toString());
-            
-            log.info("활성 구독 목록 조회 완료: userId={}, count={}", userId, subscriptions.size());
-            return ResponseEntity.ok(ApiResponse.success(result, "구독 목록 조회가 완료되었습니다."));
-            
+
+            long tookMs = System.currentTimeMillis() - started;
+            log.info("구독 목록 조회 완료: userId={}, count={}, took={}ms", userId, subscriptions.size(), tookMs);
+            return ResponseEntity.ok(ApiResponse.success(result));
+
         } catch (Exception e) {
             log.error("구독 목록 조회 중 오류 발생", e);
             return ResponseEntity.badRequest()
@@ -195,18 +177,12 @@ public class NewsletterController extends BaseController {
                     row -> (Long) row[1]
                 ));
             
-            // 카테고리 매핑
-            Map<String, String> categoryNames = Map.of(
-                "POLITICS", "정치",
-                "ECONOMY", "경제", 
-                "SOCIETY", "사회",
-                "LIFE", "생활",
-                "INTERNATIONAL", "세계",
-                "IT_SCIENCE", "IT/과학",
-                "VEHICLE", "자동차/교통",
-                "TRAVEL_FOOD", "여행/음식",
-                "ART", "예술"
-            );
+            // 카테고리 매핑 (NewsCategory enum 사용)
+            Map<String, String> categoryNames = Arrays.stream(NewsCategory.values())
+                .collect(Collectors.toMap(
+                    NewsCategory::name,
+                    NewsCategory::getCategoryName
+                ));
             
             List<Map<String, Object>> result = new ArrayList<>();
             
@@ -256,17 +232,23 @@ public class NewsletterController extends BaseController {
         long startTime = System.currentTimeMillis();
         
         try {
-            Long userId = super.extractUserIdFromToken(httpRequest);
+            // 토큰에서 사용자 ID 추출
+            Long userId;
+            try {
+                userId = super.extractUserIdFromToken(httpRequest);
+            } catch (Exception e) {
+                log.error("토큰에서 사용자 ID 추출 실패: {}", e.getMessage());
+                return ResponseEntity.status(401)
+                    .body(ApiResponse.error("TOKEN_EXTRACTION_ERROR", "토큰에서 사용자 ID를 추출할 수 없습니다."));
+            }
+            
             String category = (String) request.get("category");
             Boolean isActive = (Boolean) request.get("isActive");
             
             // isActive가 null인 경우 기본값으로 true 설정 (구독 요청의 경우)
             final Boolean finalIsActive = (isActive == null) ? true : isActive;
-            if (isActive == null) {
-                log.info("isActive 값이 null이므로 기본값 true로 설정");
-            }
             
-            log.info("구독 상태 변경 시작: userId={}, category={}, isActive={}", userId, category, finalIsActive);
+            log.info("구독 상태 변경: userId={}, category={}, isActive={}", userId, category, finalIsActive);
             
             // 입력값 검증
             if (category == null || category.trim().isEmpty()) {
@@ -278,24 +260,30 @@ public class NewsletterController extends BaseController {
             // 타임아웃 체크를 위한 CompletableFuture 사용
             CompletableFuture<Map<String, Object>> future = CompletableFuture.supplyAsync(() -> {
                 try {
+                    log.info("구독 처리 시작: userId={}, category={}, isActive={}", userId, category, finalIsActive);
+                    
                     // 기존 구독 정보 확인 (다중 구독 지원)
                     List<UserNewsletterSubscription> existing = subscriptionRepository.findAllByUserIdAndCategory(userId, category);
+                    log.info("기존 구독 정보 조회 완료: userId={}, category={}, existingCount={}", userId, category, existing.size());
                     
                     if (!existing.isEmpty()) {
                         // 기존 구독 정보 업데이트 (카테고리별 모든 구독)
+                        log.info("기존 구독 정보 업데이트 시작: userId={}, category={}, isActive={}", userId, category, finalIsActive);
                         int updatedRows = subscriptionRepository.updateSubscriptionStatus(userId, category, finalIsActive);
                         log.info("구독 상태 업데이트 완료: userId={}, category={}, isActive={}, updatedRows={}", 
                                 userId, category, finalIsActive, updatedRows);
                     } else {
                         // 새로운 구독 정보 생성
+                        log.info("새 구독 정보 생성 시작: userId={}, category={}, isActive={}", userId, category, finalIsActive);
                         UserNewsletterSubscription newSubscription = UserNewsletterSubscription.builder()
                             .userId(userId)
                             .category(category)
                             .isActive(finalIsActive)
                             .subscribedAt(LocalDateTime.now())
                             .build();
-                        subscriptionRepository.save(newSubscription);
-                        log.info("새 구독 정보 생성 완료: userId={}, category={}, isActive={}", userId, category, finalIsActive);
+                        UserNewsletterSubscription savedSubscription = subscriptionRepository.save(newSubscription);
+                        log.info("새 구독 정보 생성 완료: userId={}, category={}, isActive={}, subscriptionId={}", 
+                                userId, category, finalIsActive, savedSubscription.getId());
                     }
                     
                     // 업데이트된 구독자 수 조회 (fallback 처리)
@@ -310,8 +298,9 @@ public class NewsletterController extends BaseController {
                     return result;
                     
                 } catch (Exception e) {
-                    log.error("구독 상태 변경 처리 중 오류: {}", e.getMessage());
-                    throw new RuntimeException(e);
+                    log.error("구독 상태 변경 처리 중 오류: userId={}, category={}, isActive={}, error={}", 
+                            userId, category, finalIsActive, e.getMessage(), e);
+                    throw new RuntimeException("구독 상태 변경 처리 중 오류: " + e.getMessage(), e);
                 }
             });
             
@@ -340,8 +329,8 @@ public class NewsletterController extends BaseController {
             
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;
-            log.error("구독 상태 변경 중 오류 발생: userId={}, category={}, duration={}ms", 
-                    request.get("userId"), request.get("category"), duration, e);
+            log.error("구독 상태 변경 중 오류 발생: userId={}, category={}, duration={}ms, error={}", 
+                    request.get("userId"), request.get("category"), duration, e.getMessage(), e);
             
             // 에러 발생 시에도 fallback 응답 제공
             Map<String, Object> errorResult = new HashMap<>();
@@ -350,11 +339,13 @@ public class NewsletterController extends BaseController {
             errorResult.put("subscriberCount", -1);
             errorResult.put("isFallback", true);
             errorResult.put("error", e.getMessage());
+            errorResult.put("errorType", e.getClass().getSimpleName());
             
             return ResponseEntity.status(500)
                 .body(ApiResponse.error("SUBSCRIPTION_TOGGLE_ERROR", "구독 상태 변경 중 오류가 발생했습니다.", errorResult));
         }
     }
+    
     
     /**
      * 구독자 수 조회 with Fallback
@@ -424,7 +415,9 @@ public class NewsletterController extends BaseController {
             log.info("테스트 구독 데이터 초기화 요청 - userId: {}", userId);
             
             // 기본 카테고리들에 대한 구독 정보 생성 (2-3개만 활성화)
-            String[] categories = {"POLITICS", "ECONOMY", "SOCIETY", "LIFE", "INTERNATIONAL", "IT_SCIENCE"};
+            String[] categories = Arrays.stream(NewsCategory.values())
+                .map(NewsCategory::name)
+                .toArray(String[]::new);
             int createdCount = 0;
             
             for (int i = 0; i < Math.min(3, categories.length); i++) {
@@ -483,18 +476,12 @@ public class NewsletterController extends BaseController {
             // 활성화된 구독 정보 조회
             List<UserNewsletterSubscription> activeSubscriptions = subscriptionRepository.findActiveSubscriptionsByUserId(userId);
             
-            // 카테고리 매핑
-            Map<String, String> categoryNames = Map.of(
-                "POLITICS", "정치",
-                "ECONOMY", "경제", 
-                "SOCIETY", "사회",
-                "LIFE", "생활",
-                "INTERNATIONAL", "세계",
-                "IT_SCIENCE", "IT/과학",
-                "VEHICLE", "자동차/교통",
-                "TRAVEL_FOOD", "여행/음식",
-                "ART", "예술"
-            );
+            // 카테고리 매핑 (NewsCategory enum 사용)
+            Map<String, String> categoryNames = Arrays.stream(NewsCategory.values())
+                .collect(Collectors.toMap(
+                    NewsCategory::name,
+                    NewsCategory::getCategoryName
+                ));
             
             List<Map<String, Object>> subscriptionCards = new ArrayList<>();
             
@@ -816,24 +803,162 @@ public class NewsletterController extends BaseController {
      * 개인화된 뉴스레터 콘텐츠 조회 (JSON)
      */
     @GetMapping("/{newsletterId}/content")
-    public ResponseEntity<ApiResponse<NewsletterContent>> getNewsletterContent(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getNewsletterContent(
             @PathVariable Long newsletterId,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "5") int limit,
             HttpServletRequest httpRequest) {
-        
+
+        long started = System.currentTimeMillis();
+        List<String> categoriesUsed = new ArrayList<>();
         try {
-            String userId = extractUserIdAsString(httpRequest);
-            log.info("퍼스널라이즈드 뉴스레터 콘텐츠 조회 - userId: {}, newsletterId: {}", userId, newsletterId);
-            
-            NewsletterContent content = newsletterService.buildPersonalizedContent(Long.valueOf(userId), newsletterId);
-            return ResponseEntity.ok(ApiResponse.success(content));
+            // 인증 토큰 우선, 없으면 쿼리 userId 사용
+            Long uid = null;
+            try {
+                uid = super.extractUserIdFromToken(httpRequest);
+            } catch (Exception ignored) {}
+            if (uid == null) uid = userId;
+
+            // limit 상한 적용
+            limit = Math.max(1, Math.min(limit, 20));
+
+            // 카테고리 선정: 요청 category > 사용자 구독 > 기본 카테고리
+            List<String> targetCategoriesKo = new ArrayList<>();
+            if (category != null && !category.isBlank()) {
+                targetCategoriesKo.add(category);
+            } else if (uid != null) {
+                try {
+                    List<UserNewsletterSubscription> subs = subscriptionRepository.findActiveSubscriptionsByUserId(uid);
+                    targetCategoriesKo = subs.stream()
+                        .map(s -> convertEnglishToKorean(s.getCategory()))
+                        .filter(Objects::nonNull)
+                        .toList();
+                } catch (Exception e) {
+                    log.warn("구독 카테고리 조회 실패: {}", e.getMessage());
+                }
+            }
+            if (targetCategoriesKo.isEmpty()) {
+                // 기본 2개 카테고리 폴백
+                targetCategoriesKo = Arrays.stream(NewsCategory.values())
+                        .limit(2)
+                        .map(NewsCategory::getCategoryName)
+                        .toList();
+            }
+            categoriesUsed.addAll(targetCategoriesKo);
+
+            // 섹션 구성: 카테고리별 기사 수집
+            List<Map<String, Object>> sections = new ArrayList<>();
+            for (String catKo : targetCategoriesKo) {
+                List<NewsletterContent.Article> articles = newsletterService.getCategoryHeadlines(catKo, limit);
+
+                // items 스펙으로 매핑 (카테고리는 한글 표기 보장, 키 이름 정합화)
+                List<Map<String, Object>> items = articles.stream().map(a -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("title", a.getTitle());
+                    m.put("summary", a.getSummary());
+                    m.put("category", convertEnglishToKorean(a.getCategory()) != null ? convertEnglishToKorean(a.getCategory()) : catKo);
+                    m.put("url", a.getUrl());
+                    m.put("publishedAt", a.getPublishedAt());
+                    m.put("image", a.getImageUrl());
+                    m.put("source", null); // 원본 필드 부재, 확장 여지
+                    m.put("author", null);
+                    return m;
+                }).toList();
+
+                Map<String, Object> section = new HashMap<>();
+                section.put("type", "article");
+                section.put("heading", catKo);
+                section.put("subtitle", null);
+                section.put("items", items);
+                sections.add(section);
+            }
+
+            // 상단 메타 및 본문 조립
+            String title = (uid != null)
+                    ? "회원님 맞춤 뉴스레터"
+                    : "맞춤형 뉴스 요약";
+            String desc;
+            if (categoriesUsed.size() == 1) {
+                desc = String.format("%s 카테고리의 맞춤 뉴스입니다", categoriesUsed.get(0));
+            } else {
+                desc = String.format("%s 등 %d개 카테고리의 맞춤 뉴스입니다",
+                        categoriesUsed.get(0), categoriesUsed.size());
+            }
+
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("id", newsletterId);
+            payload.put("title", title);
+            payload.put("description", desc);
+            payload.put("category", categoriesUsed.get(0)); // 대표 카테고리(한글)
+            payload.put("personalized", uid != null);
+            payload.put("sections", sections);
+
+            // 메타데이터(로깅/분석 보강 가능)
+            Map<String, Object> meta = new HashMap<>();
+            meta.put("userId", uid);
+            meta.put("categories", categoriesUsed);
+            meta.put("limit", limit);
+            meta.put("generatedAt", LocalDateTime.now().toString());
+            payload.put("metadata", meta);
+
+            long took = System.currentTimeMillis() - started;
+            log.info("콘텐츠 응답 준비 완료: userId={}, cats={}, limit={}, took={}ms", uid, categoriesUsed, limit, took);
+            return ResponseEntity.ok(ApiResponse.success(payload));
+
         } catch (NewsletterException e) {
             log.warn("뉴스레터 콘텐츠 조회 실패: {}", e.getMessage());
             return ResponseEntity.badRequest()
                 .body(ApiResponse.error(e.getErrorCode(), e.getMessage()));
         } catch (Exception e) {
             log.error("뉴스레터 콘텐츠 조회 중 오류 발생", e);
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("CONTENT_FETCH_ERROR", "뉴스레터 콘텐츠 조회 중 오류가 발생했습니다."));
+            // 폴백: 공개 콘텐츠 제공 + success: true 유지
+            try {
+                List<String> fallbackCats = Arrays.stream(NewsCategory.values())
+                        .limit(2)
+                        .map(NewsCategory::getCategoryName)
+                        .toList();
+
+                List<Map<String, Object>> sections = new ArrayList<>();
+                for (String cat : fallbackCats) {
+                    List<NewsletterContent.Article> articles = newsletterService.getCategoryHeadlines(cat, Math.min(limit, 5));
+                    List<Map<String, Object>> items = articles.stream().map(a -> {
+                        Map<String, Object> m = new HashMap<>();
+                        m.put("title", a.getTitle());
+                        m.put("summary", a.getSummary());
+                        m.put("category", convertEnglishToKorean(a.getCategory()) != null ? convertEnglishToKorean(a.getCategory()) : cat);
+                        m.put("url", a.getUrl());
+                        m.put("publishedAt", a.getPublishedAt());
+                        m.put("image", a.getImageUrl());
+                        m.put("source", null);
+                        m.put("author", null);
+                        return m;
+                    }).toList();
+                    Map<String, Object> section = new HashMap<>();
+                    section.put("type", "article");
+                    section.put("heading", cat);
+                    section.put("subtitle", null);
+                    section.put("items", items);
+                    sections.add(section);
+                }
+
+                Map<String, Object> payload = new HashMap<>();
+                payload.put("id", newsletterId);
+                payload.put("title", "일반 뉴스 요약");
+                payload.put("description", "공개 카테고리의 최신 뉴스입니다");
+                payload.put("category", fallbackCats.get(0));
+                payload.put("personalized", false);
+                payload.put("sections", sections);
+                payload.put("metadata", Map.of(
+                        "source", "fallback",
+                        "generatedAt", LocalDateTime.now().toString()
+                ));
+
+                return ResponseEntity.ok(ApiResponse.success(payload));
+            } catch (Exception ignore) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("CONTENT_FETCH_ERROR", "뉴스레터 콘텐츠 조회 중 오류가 발생했습니다."));
+            }
         }
     }
 
@@ -1140,7 +1265,7 @@ public class NewsletterController extends BaseController {
                 .title("테스트 뉴스 1: 최신 기술 동향")
                 .summary("인공지능과 머신러닝 기술의 최신 동향을 살펴봅니다.")
                 .url("https://example.com/news/1")
-                .category("IT/과학")
+                .category(NewsCategory.IT_SCIENCE.getCategoryName())
                 .publishedAt(LocalDateTime.now().minusHours(1))
                 .isPersonalized(false)
                 .build();
@@ -1149,7 +1274,7 @@ public class NewsletterController extends BaseController {
                 .title("테스트 뉴스 2: 경제 전망")
                 .summary("올해 경제 전망과 주요 이슈들을 분석합니다.")
                 .url("https://example.com/news/2")
-                .category("경제")
+                .category(NewsCategory.ECONOMY.getCategoryName())
                 .publishedAt(LocalDateTime.now().minusHours(2))
                 .isPersonalized(false)
                 .build();
@@ -1158,7 +1283,7 @@ public class NewsletterController extends BaseController {
                 .title("테스트 뉴스 3: 사회 이슈")
                 .summary("최근 사회적 관심사와 정책 변화를 다룹니다.")
                 .url("https://example.com/news/3")
-                .category("사회")
+                .category(NewsCategory.SOCIETY.getCategoryName())
                 .publishedAt(LocalDateTime.now().minusHours(3))
                 .isPersonalized(true)
                 .build();
@@ -1425,36 +1550,21 @@ public class NewsletterController extends BaseController {
     private String convertToBackendCategory(String frontendCategory) {
         if (frontendCategory == null || frontendCategory.trim().isEmpty()) {
             log.warn("프론트엔드 카테고리가 null이거나 비어있습니다: {}", frontendCategory);
-            return "POLITICS"; // 기본값
+            return NewsCategory.POLITICS.name(); // 기본값
         }
         
         String normalizedCategory = frontendCategory.trim();
         
-        return switch (normalizedCategory) {
-            case "정치" -> "POLITICS";
-            case "경제" -> "ECONOMY";
-            case "사회" -> "SOCIETY";
-            case "생활" -> "LIFE";
-            case "세계" -> "INTERNATIONAL";
-            case "IT/과학" -> "IT_SCIENCE";
-            case "자동차/교통" -> "VEHICLE";
-            case "여행/음식" -> "TRAVEL_FOOD";
-            case "예술" -> "ART";
-            // 이미 영어인 경우 대소문자 정규화
-            case "politics", "POLITICS" -> "POLITICS";
-            case "economy", "ECONOMY" -> "ECONOMY";
-            case "society", "SOCIETY" -> "SOCIETY";
-            case "life", "LIFE" -> "LIFE";
-            case "international", "INTERNATIONAL" -> "INTERNATIONAL";
-            case "it_science", "IT_SCIENCE" -> "IT_SCIENCE";
-            case "vehicle", "VEHICLE" -> "VEHICLE";
-            case "travel_food", "TRAVEL_FOOD" -> "TRAVEL_FOOD";
-            case "art", "ART" -> "ART";
-            default -> {
-                log.warn("알 수 없는 프론트엔드 카테고리: {}. 기본값 POLITICS 사용", normalizedCategory);
-                yield "POLITICS";
+        // NewsCategory enum에서 매칭되는 카테고리 찾기
+        for (NewsCategory category : NewsCategory.values()) {
+            if (category.getCategoryName().equals(normalizedCategory) || 
+                category.name().equalsIgnoreCase(normalizedCategory)) {
+                return category.name();
             }
-        };
+        }
+        
+        log.warn("알 수 없는 프론트엔드 카테고리: {}. 기본값 POLITICS 사용", normalizedCategory);
+        return NewsCategory.POLITICS.name();
     }
 
     /**
@@ -1562,22 +1672,6 @@ public class NewsletterController extends BaseController {
         }
     }
 
-    /**
-     * 뉴스레터 생성 테스트 (디버깅용)
-     */
-    @GetMapping("/test-generation/{userId}")
-    public ApiResponse<Map<String, Object>> testNewsletterGeneration(@PathVariable Long userId) {
-        try {
-            log.info("뉴스레터 생성 테스트 요청: userId={}", userId);
-            
-            Map<String, Object> result = newsletterService.testNewsletterGeneration(userId);
-            return ApiResponse.success(result);
-            
-        } catch (Exception e) {
-            log.error("뉴스레터 생성 테스트 실패: userId={}", userId, e);
-            return ApiResponse.error("뉴스레터 생성 테스트 중 오류가 발생했습니다.", "TEST_ERROR");
-        }
-    }
 
     // ========================================
     // 10. 이메일 뉴스레터 전송 기능
@@ -1811,120 +1905,7 @@ public class NewsletterController extends BaseController {
     }
     
     
-    /**
-     * 디버깅용: 사용자 구독 상태 상세 조회
-     */
-    @GetMapping("/debug/subscriptions/{userId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> debugUserSubscriptions(@PathVariable Long userId) {
-        try {
-            log.info("디버깅: 사용자 {} 구독 상태 상세 조회", userId);
-            
-            // 모든 구독 조회 (활성/비활성 포함)
-            List<UserNewsletterSubscription> allSubscriptions = subscriptionRepository.findByUserId(userId);
-            
-            // 활성 구독만 조회
-            List<UserNewsletterSubscription> activeSubscriptions = subscriptionRepository.findActiveSubscriptionsByUserId(userId);
-            
-            Map<String, Object> debugInfo = new HashMap<>();
-            debugInfo.put("userId", userId);
-            debugInfo.put("totalSubscriptions", allSubscriptions.size());
-            debugInfo.put("activeSubscriptions", activeSubscriptions.size());
-            
-            // 모든 구독 상세 정보
-            List<Map<String, Object>> allSubsDetail = allSubscriptions.stream()
-                .map(sub -> {
-                    Map<String, Object> detail = new HashMap<>();
-                    detail.put("id", sub.getId());
-                    detail.put("category", sub.getCategory());
-                    detail.put("isActive", sub.getIsActive());
-                    detail.put("subscribedAt", sub.getSubscribedAt());
-                    detail.put("updatedAt", sub.getUpdatedAt());
-                    return detail;
-                })
-                .collect(Collectors.toList());
-            
-            debugInfo.put("allSubscriptions", allSubsDetail);
-            
-            // 활성 구독만 상세 정보
-            List<Map<String, Object>> activeSubsDetail = activeSubscriptions.stream()
-                .map(sub -> {
-                    Map<String, Object> detail = new HashMap<>();
-                    detail.put("id", sub.getId());
-                    detail.put("category", sub.getCategory());
-                    detail.put("isActive", sub.getIsActive());
-                    detail.put("subscribedAt", sub.getSubscribedAt());
-                    detail.put("updatedAt", sub.getUpdatedAt());
-                    return detail;
-                })
-                .collect(Collectors.toList());
-            
-            debugInfo.put("activeSubscriptions", activeSubsDetail);
-            
-            return ResponseEntity.ok(ApiResponse.success(debugInfo, "구독 상태 디버깅 정보"));
-            
-        } catch (Exception e) {
-            log.error("구독 상태 디버깅 중 오류 발생: userId={}", userId, e);
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("DEBUG_ERROR", "구독 상태 디버깅 중 오류가 발생했습니다."));
-        }
-    }
 
-    /**
-     * 디버깅용: 경제 카테고리 구독 추가
-     */
-    @PostMapping("/debug/subscribe-economy/{userId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> debugSubscribeEconomy(@PathVariable Long userId) {
-        try {
-            log.info("디버깅: 사용자 {} 경제 카테고리 구독 추가", userId);
-            
-            // 이미 경제 카테고리 구독이 있는지 확인
-            Optional<UserNewsletterSubscription> existingEconomySub = subscriptionRepository
-                .findByUserIdAndCategory(userId, "ECONOMY");
-            
-            if (existingEconomySub.isPresent()) {
-                // 기존 구독이 있으면 활성화
-                UserNewsletterSubscription existingSub = existingEconomySub.get();
-                existingSub.setIsActive(true);
-                existingSub.setUpdatedAt(LocalDateTime.now());
-                subscriptionRepository.save(existingSub);
-                
-                log.info("기존 경제 구독 활성화: subscriptionId={}", existingSub.getId());
-                
-                Map<String, Object> result = new HashMap<>();
-                result.put("action", "activated_existing");
-                result.put("subscriptionId", existingSub.getId());
-                result.put("category", "ECONOMY");
-                result.put("isActive", true);
-                
-                return ResponseEntity.ok(ApiResponse.success(result, "기존 경제 구독이 활성화되었습니다."));
-            } else {
-                // 새로운 구독 생성
-                UserNewsletterSubscription newSubscription = new UserNewsletterSubscription();
-                newSubscription.setUserId(userId);
-                newSubscription.setCategory("ECONOMY");
-                newSubscription.setIsActive(true);
-                newSubscription.setSubscribedAt(LocalDateTime.now());
-                newSubscription.setUpdatedAt(LocalDateTime.now());
-                
-                UserNewsletterSubscription savedSubscription = subscriptionRepository.save(newSubscription);
-                
-                log.info("새로운 경제 구독 생성: subscriptionId={}", savedSubscription.getId());
-                
-                Map<String, Object> result = new HashMap<>();
-                result.put("action", "created_new");
-                result.put("subscriptionId", savedSubscription.getId());
-                result.put("category", "ECONOMY");
-                result.put("isActive", true);
-                
-                return ResponseEntity.ok(ApiResponse.success(result, "새로운 경제 구독이 생성되었습니다."));
-            }
-            
-        } catch (Exception e) {
-            log.error("경제 카테고리 구독 추가 중 오류 발생: userId={}", userId, e);
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("SUBSCRIPTION_ERROR", "경제 카테고리 구독 추가 중 오류가 발생했습니다."));
-        }
-    }
 
     /**
      * 카테고리별 구독/해지 API
@@ -2078,18 +2059,13 @@ public class NewsletterController extends BaseController {
      * 카테고리명을 영어로 변환하는 헬퍼 메서드
      */
     private String convertCategoryToEnglish(String categoryKo) {
-        Map<String, String> categoryMap = Map.of(
-            "정치", "POLITICS",
-            "경제", "ECONOMY",
-            "사회", "SOCIETY",
-            "생활", "LIFE",
-            "세계", "INTERNATIONAL",
-            "IT/과학", "IT_SCIENCE",
-            "자동차/교통", "VEHICLE",
-            "여행/음식", "TRAVEL_FOOD",
-            "예술", "ART"
-        );
-        return categoryMap.get(categoryKo);
+        // NewsCategory enum에서 매칭되는 카테고리 찾기
+        for (NewsCategory category : NewsCategory.values()) {
+            if (category.getCategoryName().equals(categoryKo)) {
+                return category.name();
+            }
+        }
+        return NewsCategory.POLITICS.name(); // 기본값
     }
 
     /**
@@ -2450,7 +2426,10 @@ public class NewsletterController extends BaseController {
             
             // 4. 카테고리별 뉴스 수집 (안전한 방법)
             Map<String, Object> categoryData = new HashMap<>();
-            String[] categories = {"정치", "경제", "사회"};
+            String[] categories = Arrays.stream(NewsCategory.values())
+                .limit(3) // 처음 3개 카테고리만 사용
+                .map(NewsCategory::getCategoryName)
+                .toArray(String[]::new);
             
             for (String category : categories) {
                 try {
@@ -2618,7 +2597,10 @@ public class NewsletterController extends BaseController {
             
             // 단계 4: 실제 뉴스 데이터 수집
             Map<String, Object> categoryData = new HashMap<>();
-            String[] categories = {"정치", "경제", "사회"};
+            String[] categories = Arrays.stream(NewsCategory.values())
+                .limit(3) // 처음 3개 카테고리만 사용
+                .map(NewsCategory::getCategoryName)
+                .toArray(String[]::new);
             
             for (String category : categories) {
                 try {
@@ -2923,19 +2905,19 @@ public class NewsletterController extends BaseController {
      */
     private List<String> getTrendingKeywordsSafely(int limit) {
         try {
-            // NewsServiceClient를 통한 트렌딩 키워드 조회
-            ApiResponse<List<TrendingKeywordDto>> response = newsServiceClient.getTrendingKeywordsByCategory("GENERAL", limit, "24h", 24);
+            // NewsServiceClient를 통한 트렌딩 키워드 조회 (일단 비활성화 - 400 오류 발생)
+            // ApiResponse<List<TrendingKeywordDto>> response = newsServiceClient.getTrendingKeywordsByCategory("GENERAL", limit, "24h", 24);
                 
-            if (response != null && response.isSuccess() && response.getData() != null && !response.getData().isEmpty()) {
-                return response.getData().stream()
-                    .map(TrendingKeywordDto::getKeyword)
-                    .filter(Objects::nonNull)
-                    .limit(limit)
-                    .collect(Collectors.toList());
-            } else {
-                log.warn("트렌딩 뉴스 서비스 응답 실패");
+            // if (response != null && response.isSuccess() && response.getData() != null && !response.getData().isEmpty()) {
+            //     return response.getData().stream()
+            //         .map(TrendingKeywordDto::getKeyword)
+            //         .filter(Objects::nonNull)
+            //         .limit(limit)
+            //         .collect(Collectors.toList());
+            // } else {
+                log.warn("트렌딩 키워드 API 호출 비활성화 (400 오류 발생) - fallback 사용");
                 return createFallbackKeywords(limit);
-            }
+            // }
             
         } catch (Exception e) {
             log.warn("트렌딩 뉴스 조회 실패: {}", e.getMessage());
@@ -3070,9 +3052,13 @@ public class NewsletterController extends BaseController {
      * 폴백 키워드 생성
      */
     private List<String> createFallbackKeywords(int limit) {
-        List<String> fallbackKeywords = Arrays.asList(
-            "경제", "정치", "사회", "기술", "문화", "스포츠", "국제", "환경", "교육", "건강"
-        );
+        // NewsCategory enum에서 카테고리명을 가져와서 사용
+        List<String> fallbackKeywords = Arrays.stream(NewsCategory.values())
+            .map(NewsCategory::getCategoryName)
+            .collect(Collectors.toList());
+        
+        // 추가 키워드들
+        fallbackKeywords.addAll(Arrays.asList("기술", "문화", "스포츠", "국제", "환경", "교육", "건강"));
         
         return fallbackKeywords.stream()
             .limit(limit)
@@ -3133,7 +3119,10 @@ public class NewsletterController extends BaseController {
                 if (serviceLevel == com.newsletterservice.enums.ServiceLevel.PERSONALIZED_PREMIUM) {
                     // 개인화된 콘텐츠 생성
                     result = new HashMap<>();
-                    String[] categories = {"정치", "경제", "사회", "생활", "IT/과학", "세계"};
+                    String[] categories = Arrays.stream(NewsCategory.values())
+                        .limit(6) // 처음 6개 카테고리만 사용
+                        .map(NewsCategory::getCategoryName)
+                        .toArray(String[]::new);
                     Map<String, Object> categoryData = getPersonalizedCategoryData(userId, limit, categories);
                     List<String> trendingKeywords = getPersonalizedTrendingKeywords(userId, 8);
                     
@@ -3144,7 +3133,10 @@ public class NewsletterController extends BaseController {
                 } else {
                     // 인증 기본 콘텐츠 생성
                     result = new HashMap<>();
-                    String[] categories = {"정치", "경제", "사회", "생활", "IT/과학", "세계"};
+                    String[] categories = Arrays.stream(NewsCategory.values())
+                        .limit(6) // 처음 6개 카테고리만 사용
+                        .map(NewsCategory::getCategoryName)
+                        .toArray(String[]::new);
                     Map<String, Object> categoryData = getStandardCategoryData(categories, limit);
                     List<String> trendingKeywords = getPersonalizedTrendingKeywords(userId, 8);
                     
@@ -3157,7 +3149,10 @@ public class NewsletterController extends BaseController {
             } else {
                 // 📰 공개 서비스 제공
                 result = new HashMap<>();
-                String[] categories = {"정치", "경제", "사회", "IT/과학", "세계"};
+                String[] categories = Arrays.stream(NewsCategory.values())
+                    .limit(5) // 처음 5개 카테고리만 사용
+                    .map(NewsCategory::getCategoryName)
+                    .toArray(String[]::new);
                 Map<String, Object> categoryData = getStandardCategoryData(categories, limit);
                 List<String> trendingKeywords = getPersonalizedTrendingKeywords(null, 8);
                 
@@ -3409,87 +3404,31 @@ public class NewsletterController extends BaseController {
     /**
      * 카테고리별 기본 키워드를 반환하는 헬퍼 메서드
      */
-    /**
-     * 디버깅용: 뉴스 서비스 연결 테스트
-     */
-    @GetMapping("/debug/news-service-test")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> testNewsServiceConnection() {
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            log.info("뉴스 서비스 연결 테스트 시작");
-            
-            // 1. 카테고리 조회 테스트
-            try {
-                ApiResponse<List<CategoryDto>> categoriesResponse = newsServiceClient.getCategories();
-                result.put("categoriesTest", Map.of(
-                    "success", categoriesResponse != null,
-                    "hasData", categoriesResponse != null && categoriesResponse.getData() != null,
-                    "count", categoriesResponse != null && categoriesResponse.getData() != null ? 
-                        categoriesResponse.getData().size() : 0
-                ));
-            } catch (Exception e) {
-                result.put("categoriesTest", Map.of(
-                    "success", false,
-                    "error", e.getMessage()
-                ));
-            }
-            
-            // 2. 뉴스 조회 테스트 (직접 영어 카테고리 사용)
-            try {
-                Page<NewsResponse> newsResponse = newsServiceClient.getNewsByCategory("POLITICS", 0, 5);
-                result.put("newsTest", Map.of(
-                    "success", newsResponse != null,
-                    "hasData", newsResponse != null && !newsResponse.getContent().isEmpty(),
-                    "count", newsResponse != null ? newsResponse.getContent().size() : 0
-                ));
-            } catch (Exception e) {
-                result.put("newsTest", Map.of(
-                    "success", false,
-                    "error", e.getMessage()
-                ));
-            }
-            
-            // 3. 트렌딩 키워드 테스트
-            try {
-                ApiResponse<List<TrendingKeywordDto>> keywordsResponse = newsServiceClient.getTrendingKeywordsByCategory("GENERAL", 5, "24h", 24);
-                result.put("keywordsTest", Map.of(
-                    "success", keywordsResponse != null && keywordsResponse.isSuccess(),
-                    "hasData", keywordsResponse != null && keywordsResponse.isSuccess() && keywordsResponse.getData() != null && !keywordsResponse.getData().isEmpty(),
-                    "count", keywordsResponse != null && keywordsResponse.isSuccess() && keywordsResponse.getData() != null ? keywordsResponse.getData().size() : 0
-                ));
-            } catch (Exception e) {
-                result.put("keywordsTest", Map.of(
-                    "success", false,
-                    "error", e.getMessage()
-                ));
-            }
-            
-            result.put("timestamp", LocalDateTime.now().toString());
-            
-            return ResponseEntity.ok(ApiResponse.success(result, "뉴스 서비스 연결 테스트 완료"));
-            
-        } catch (Exception e) {
-            log.error("뉴스 서비스 연결 테스트 실패", e);
-            result.put("error", e.getMessage());
-            return ResponseEntity.internalServerError()
-                .body(ApiResponse.error("NEWS_SERVICE_TEST_ERROR", "뉴스 서비스 연결 테스트 실패", result));
-        }
-    }
+    @Deprecated
 
     private List<String> getDefaultCategoryKeywords(String category) {
-        Map<String, List<String>> categoryKeywordMap = Map.of(
-            "정치", List.of("대통령", "국회", "선거", "정당", "정책", "외교", "국방", "안보"),
-            "경제", List.of("주식", "부동산", "금리", "인플레이션", "GDP", "고용", "기업", "투자"),
-            "사회", List.of("교육", "의료", "복지", "범죄", "교통", "환경", "노동", "문화"),
-            "생활", List.of("건강", "요리", "육아", "여행", "쇼핑", "패션", "뷰티", "취미"),
-            "세계", List.of("미국", "중국", "일본", "유럽", "러시아", "북한", "국제", "글로벌"),
-            "IT/과학", List.of("AI", "반도체", "스마트폰", "게임", "소프트웨어", "하드웨어", "연구", "기술"),
-            "자동차/교통", List.of("전기차", "자율주행", "교통", "대중교통", "도로", "주차", "운전", "모터쇼"),
-            "여행/음식", List.of("해외여행", "국내여행", "맛집", "레스토랑", "카페", "호텔", "항공", "관광"),
-            "예술", List.of("영화", "음악", "미술", "연극", "뮤지컬", "전시", "공연", "문화")
-        );
+        Map<String, List<String>> categoryKeywordMap = new HashMap<>();
+        
+        // NewsCategory enum을 사용하여 키워드 매핑
+        categoryKeywordMap.put(NewsCategory.POLITICS.getCategoryName(), 
+            List.of("대통령", "국회", "선거", "정당", "정책", "외교", "국방", "안보"));
+        categoryKeywordMap.put(NewsCategory.ECONOMY.getCategoryName(), 
+            List.of("주식", "부동산", "금리", "인플레이션", "GDP", "고용", "기업", "투자"));
+        categoryKeywordMap.put(NewsCategory.SOCIETY.getCategoryName(), 
+            List.of("교육", "의료", "복지", "범죄", "교통", "환경", "노동", "문화"));
+        categoryKeywordMap.put(NewsCategory.LIFE.getCategoryName(), 
+            List.of("건강", "요리", "육아", "여행", "쇼핑", "패션", "뷰티", "취미"));
+        categoryKeywordMap.put(NewsCategory.INTERNATIONAL.getCategoryName(), 
+            List.of("미국", "중국", "일본", "유럽", "러시아", "북한", "국제", "글로벌"));
+        categoryKeywordMap.put(NewsCategory.IT_SCIENCE.getCategoryName(), 
+            List.of("AI", "반도체", "스마트폰", "게임", "소프트웨어", "하드웨어", "연구", "기술"));
+        categoryKeywordMap.put(NewsCategory.VEHICLE.getCategoryName(), 
+            List.of("전기차", "자율주행", "교통", "대중교통", "도로", "주차", "운전", "모터쇼"));
+        categoryKeywordMap.put(NewsCategory.TRAVEL_FOOD.getCategoryName(), 
+            List.of("해외여행", "국내여행", "맛집", "레스토랑", "카페", "호텔", "항공", "관광"));
+        categoryKeywordMap.put(NewsCategory.ART.getCategoryName(), 
+            List.of("영화", "음악", "미술", "연극", "뮤지컬", "전시", "공연", "문화"));
+        
         return categoryKeywordMap.getOrDefault(category, new ArrayList<>());
     }
 }
-

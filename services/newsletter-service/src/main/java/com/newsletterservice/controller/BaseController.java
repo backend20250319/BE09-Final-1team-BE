@@ -4,7 +4,6 @@ import com.newsletterservice.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.slf4j.LoggerFactory;
 
 @RequiredArgsConstructor
 public abstract class BaseController {
@@ -20,28 +19,37 @@ public abstract class BaseController {
      */
     protected Long extractUserIdFromToken(HttpServletRequest request) {
         try {
+            // Authorization 헤더에서 토큰 확인
             String authHeader = request.getHeader("Authorization");
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 String token = authHeader.substring(7);
+                log.debug("Authorization 헤더에서 토큰 발견, 길이: {}", token.length());
                 String userId = jwtUtil.extractUserIdSafely(token);
                 if (userId != null) {
                     return Long.valueOf(userId);
                 }
+            } else {
+                log.debug("Authorization 헤더가 없거나 Bearer 형식이 아닙니다: {}", authHeader);
             }
             
             // 쿠키에서도 토큰 확인
             if (request.getCookies() != null) {
                 for (jakarta.servlet.http.Cookie cookie : request.getCookies()) {
                     if ("access-token".equals(cookie.getName())) {
+                        log.debug("쿠키에서 토큰 발견, 길이: {}", cookie.getValue().length());
                         String userId = jwtUtil.extractUserIdSafely(cookie.getValue());
                         if (userId != null) {
                             return Long.valueOf(userId);
                         }
                     }
                 }
+            } else {
+                log.debug("쿠키가 없습니다.");
             }
             
-            log.warn("유효한 토큰을 찾을 수 없습니다.");
+            log.warn("유효한 토큰을 찾을 수 없습니다. Authorization 헤더: {}, 쿠키 개수: {}", 
+                    authHeader != null ? "있음" : "없음", 
+                    request.getCookies() != null ? request.getCookies().length : 0);
             return 1L; // 기본값 (개발용)
             
         } catch (Exception e) {

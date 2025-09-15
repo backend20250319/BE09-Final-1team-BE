@@ -43,10 +43,14 @@ pipeline {
                     echo "Detecting changed services on Windows..."
                     def changedServices = new HashSet<String>()
 
-                    // Windows에서 안정적으로 Dockerfile 경로를 찾는 방식으로 수정
+                    // ▼▼▼ [오류 수정] Windows CMD 출력에서 명령어 자체가 포함되는 문제를 필터링하도록 수정 ▼▼▼
                     def findDockerfilesCmd = 'where /r . Dockerfile'
                     def allServicePathsOutput = bat(returnStdout: true, script: findDockerfilesCmd).trim()
-                    def allServicePaths = allServicePathsOutput.split('\r\n').findAll { it.trim() != '' }.collect { it.replace('\\Dockerfile', '') }
+
+                    // 명령어 자체나 빈 줄을 걸러내고, 순수한 경로만 남깁니다.
+                    def allServicePaths = allServicePathsOutput.split('\r\n').findAll { line ->
+                        return line.trim() != '' && !line.startsWith('>') && line.contains('\\Dockerfile')
+                    }.collect { it.replace('\\Dockerfile', '') }
 
                     def workspacePath = pwd().replace('/', '\\')
                     def relativeServicePaths = allServicePaths.collect { it.replace(workspacePath, '').replaceAll('^\\\\', '') }
@@ -71,7 +75,7 @@ pipeline {
                     }
 
                     if (changedServices.isEmpty()) {
-                        echo "No changes detected. Skipping subsequent stages."
+                        echo "No changes detected in service directories. Skipping subsequent stages."
                         currentBuild.result = 'NOT_BUILT'
                         return
                     }

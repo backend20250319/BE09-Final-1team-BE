@@ -12,7 +12,7 @@ import java.util.Map;
 
 /**
  * User Service를 위한 Feign Client
- * 다른 마이크로서비스에서 User Service의 API를 호출할 때 사용.
+ * 다른 마이크로서비스에서 User Service의 API를 호출할 때 사용합니다.
  */
 @FeignClient(name = "user-service", url = "${feign.client.user-service.url:http://localhost:8081}")
 public interface UserServiceClient {

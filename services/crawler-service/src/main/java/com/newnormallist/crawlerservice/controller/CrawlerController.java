@@ -71,7 +71,7 @@ public class CrawlerController {
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            log.error("배포 환경 최적화 크롤링 시작 실패: {}", e.getMessage(), e);
+            log.error("배포 환경 최적화 크롤링 시작 실패!!: {}", e.getMessage(), e);
             
             Map<String, Object> response = new HashMap<>();
             response.put("status", "error");

@@ -40,7 +40,6 @@ pipeline {
           echo "Detecting changed services on Windows..."
           def changedServices = new HashSet<String>()
 
-          // 전체 서비스 찾기
           def allServicePathsOutput = bat(returnStdout: true, script: 'where /r . Dockerfile').trim()
           def allServicePaths = allServicePathsOutput.split('\r\n').findAll { line ->
             line?.trim() && line.contains('\\Dockerfile')
@@ -50,12 +49,10 @@ pipeline {
           def relPaths = allServicePaths.collect { it.replace(ws, '').replaceAll('^\\\\', '') }
           echo "Found all service paths: ${relPaths}"
 
-          // 강제 전체 빌드 or 첫 빌드 → 모든 서비스 추가
           if (params.FORCE_FULL_BUILD || currentBuild.number == 1) {
             changedServices.addAll(relPaths)
             echo params.FORCE_FULL_BUILD ? 'FORCE_FULL_BUILD=true → all services' : 'First build → all services'
           } else {
-            // 변경된 파일 기반으로 서비스 탐지
             def diff = bat(returnStdout: true, script: 'git diff --name-only HEAD~1 HEAD').trim()
             def changedFiles = diff.split('\r\n').findAll { it?.trim() && !it.contains('git diff --name-only') }
             echo "Changed files in last commit: ${changedFiles}"
@@ -83,11 +80,11 @@ pipeline {
       steps {
         withCredentials([sshUserPrivateKey(credentialsId: GIT_CREDENTIALS_ID,
                                            keyFileVariable: 'SSH_KEY')]) {
-            bat """
-            if exist ${MANIFEST_REPO_DIR} (rmdir /s /q ${MANIFEST_REPO_DIR})
-            set GIT_SSH_COMMAND=ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL
-            git clone ${MANIFEST_REPO_URL} ${MANIFEST_REPO_DIR}
-            """
+          bat """
+          if exist ${MANIFEST_REPO_DIR} (rmdir /s /q ${MANIFEST_REPO_DIR})
+          set GIT_SSH_COMMAND=ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL
+          git clone ${MANIFEST_REPO_URL} ${MANIFEST_REPO_DIR}
+          """
         }
       }
     }
@@ -135,21 +132,17 @@ pipeline {
             bat "if exist ${MANIFEST_REPO_DIR}\\k8s-dedup-service-configmap.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-dedup-service-configmap.yml"
             bat "if exist ${MANIFEST_REPO_DIR}\\k8s-config-server.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-config-server.yml"
 
-            // SecretProviderClass (각 파일 개별 적용)
-            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-crawler-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-crawler-service-spc.yml"
-            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-dedup-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-dedup-service-spc.yml"
-            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-flaskapi-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-flaskapi-spc.yml"
-            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-gateway-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-gateway-service-spc.yml"
-            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-news-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-news-service-spc.yml"
-            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-newsletter-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-newsletter-service-spc.yml"
-            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-tooltip-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-tooltip-service-spc.yml"
-            bat "if exist ${MANIFEST_REPO_DIR}\\k8s-user-service-spc.yml kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-user-service-spc.yml"
+            // SecretProviderClass
+            ["crawler","dedup","flaskapi","gateway","news","newsletter","tooltip","user"].each { svc ->
+              def file = "${MANIFEST_REPO_DIR}\\k8s-${svc}-service-spc.yml"
+              bat "if exist ${file} kubectl apply -f ${file}"
+            }
 
             // Services & Deployments
             bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-all-services.yml"
             bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-all-deployments.yml"
 
-            // 이미지 교체 & 롤아웃
+            // 이미지 교체 & 롤아웃 (컨테이너 이름 지정)
             buildResults.succeeded.each { svc ->
               def fullTag = "${svc}-${IMAGE_TAG}"
               def image   = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"
@@ -161,7 +154,7 @@ pipeline {
 
                 \$names = (kubectl -n \$ns get deploy -l app=\$svc -o jsonpath='{.items[*].metadata.name}');
                 if([string]::IsNullOrEmpty(\$names)){
-                  \$candidates = @('${svc}','${svc}-deployment');
+                  \$candidates = @('\$svc','\$svc-deployment');
                   foreach(\$cand in \$candidates){
                     \$exists = (kubectl -n \$ns get deploy \$cand --ignore-not-found -o name);
                     if(-not [string]::IsNullOrEmpty(\$exists)){ \$names=\$cand; break }
@@ -171,9 +164,9 @@ pipeline {
 
                 foreach(\$d in \$names.Split(' ')){
                   if([string]::IsNullOrWhiteSpace(\$d)){ continue }
-                  Write-Host "→ set image deployment/\$d *=\$img";
-                  kubectl -n \$ns set image deployment/\$d *=\$img --record
-                  kubectl -n \$ns rollout status deployment/\$d --timeout=180s
+                  Write-Host "→ set image deployment/\$d \${svc}=\$img";
+                  kubectl -n \$ns set image deployment/\$d \${svc}=\$img --record
+                  kubectl -n \$ns rollout status deployment/\$d --timeout=300s
                 }
               """.stripIndent()
               bat "powershell -NoProfile -Command \"${ps.replace('\"','\\\"').replace('\n','; ')}\""
@@ -214,7 +207,7 @@ def buildAndPush(String serviceName, String servicePath, String fullTag) {
 
   echo "Pushing image ${image} to ECR..."
   withCredentials([aws(credentialsId: AWS_CREDENTIALS_ID)]) {
-      bat "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
-      bat "docker push ${image}"
+    bat "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
+    bat "docker push ${image}"
   }
 }

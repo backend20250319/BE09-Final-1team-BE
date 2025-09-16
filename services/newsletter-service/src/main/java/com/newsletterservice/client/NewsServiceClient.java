@@ -11,7 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-
+//
 @FeignClient(
         name = "news-service",
         url = "${news.base-url:http://localhost:8082}",

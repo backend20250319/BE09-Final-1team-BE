@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserHistoryController {
     private final UserHistoryService userHistoryService;
     /**
-     * 마이페이지 - 읽은 뉴스 목록 저장 API 입니다.
+     * 마이페이지 - 읽은 뉴스 목록 저장 API
      */
     @Operation(
             summary = "읽은 뉴스 저장",

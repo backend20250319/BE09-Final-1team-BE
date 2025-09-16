@@ -1,4 +1,4 @@
-# app/services/summarizer.py...
+# app/services/summarizer.py
 from openai import OpenAI
 from ..config import Config
 

@@ -12,7 +12,7 @@ import java.util.List;
 
 @Configuration
 public class OpenApiConfig {
-// swagger 설정입니다.
+// swagger 설정
     @Bean
     public OpenAPI openAPI() {
         return new OpenAPI()

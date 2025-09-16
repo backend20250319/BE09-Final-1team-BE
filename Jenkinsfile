@@ -1,7 +1,8 @@
 // Jenkinsfile: Windows 노드용 (sshagent 미사용, GIT_SSH_COMMAND 직접 사용)
 // - 변경된 서비스만 빌드/푸시
 // - manifests repo는 파이프라인 초기에 한 번만 클론
-// - 매니페스트 적용은 구조에 맞춰 순차 실행
+// - 매니페스트는 placeholder 이미지를 유지하고,
+//   실제 태그는 kubectl set image 단계에서 주입
 
 def buildResults = [succeeded: [], failed: []]
 def changedServicePaths = []
@@ -142,7 +143,7 @@ pipeline {
             bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-all-services.yml"
             bat "kubectl apply -f ${MANIFEST_REPO_DIR}\\k8s-all-deployments.yml"
 
-            // 이미지 교체 & 롤아웃 (컨테이너 이름 지정)
+            // 이미지 교체 & 롤아웃 (PLACEHOLDER → 실제 태그)
             buildResults.succeeded.each { svc ->
               def fullTag = "${svc}-${IMAGE_TAG}"
               def image   = "${ECR_REGISTRY}/${UNIFIED_ECR_REPO}:${fullTag}"

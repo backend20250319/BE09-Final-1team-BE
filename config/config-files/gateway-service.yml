@@ -27,6 +27,7 @@ spring:
             cors-configurations:
               '[/**]':
                 allowedOrigins:
+                  - '*.elasticbeanstalk.com'
                   - 'http://localhost:3000'
                   - 'https://be09-final-1team-fe.vercel.app'
                 allowedMethods:

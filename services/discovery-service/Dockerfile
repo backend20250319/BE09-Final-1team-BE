@@ -23,12 +23,10 @@ COPY --from=builder /home/gradle/src/build/libs/*.jar app.jar
 # 각 서비스에 맞는 포트를 노출합니다.
 EXPOSE 8761
 
-# 컨테이너가 시작될 때 JAR 파일을 실행합니다. (Cgroup 오류 해결 옵션 추가)
+# 컨테이너가 시작될 때 JAR 파일을 실행합니다. (JDK 17에 맞는 옵션으로 수정)
 ENTRYPOINT ["java", \
     "-XX:+UseContainerSupport", \
     "-XX:MaxRAMPercentage=75.0", \
-    "-XX:+UnlockExperimentalVMOptions", \
-    "-XX:+UseCGroupMemoryLimitForHeap", \
     "-Djava.security.egd=file:/dev/./urandom", \
     "-Dspring.profiles.active=docker", \
     "-jar", "/app/app.jar"]

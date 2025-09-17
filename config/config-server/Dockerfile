@@ -24,4 +24,11 @@ COPY --from=builder /home/gradle/src/build/libs/*.jar app.jar
 EXPOSE 8888
 
 # 컨테이너가 시작될 때 JAR 파일을 실행합니다. (Cgroup 오류 해결 옵션 추가)
-ENTRYPOINT ["java", "-Djava.security.properties=/dev/null", "-jar", "/app/app.jar"]
+ENTRYPOINT ["java", \
+    "-XX:+UseContainerSupport", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-XX:+UnlockExperimentalVMOptions", \
+    "-XX:+UseCGroupMemoryLimitForHeap", \
+    "-Djava.security.egd=file:/dev/./urandom", \
+    "-Dspring.profiles.active=docker", \
+    "-jar", "/app/app.jar"]

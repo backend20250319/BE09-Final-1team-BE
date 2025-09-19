@@ -1,0 +1,60 @@
+# ── Env files ─────────────────────────────────────────────
+.env
+.env.*
+!.env.example   # 예시 템플릿은 커밋 권장
+
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+
+# ── Virtual Envs ─────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+**/venv/
+**/.venv/
+**/env/
+**/ENV/
+
+# ── Flask/Runtime ────────────────────────────────────────
+instance/         # Flask 인스턴스 폴더(로컬 설정/업로드 등)
+*.db              # 개발용 SQLite 등
+*.sqlite
+*.sqlite3
+*.pid
+*.log
+logs/
+
+# ── Tests & Coverage ─────────────────────────────────────
+.pytest_cache/
+.coverage*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# ── Tooling / Editors ────────────────────────────────────
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# ── Node (혹시 함께 쓸 경우) ─────────────────────────────
+node_modules/
+
+# ── OS junk ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Local-only configs (개인 전용 프로필) ────────────────
+*-solo.yml

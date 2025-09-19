@@ -1,0 +1,78 @@
+server:
+  port: 8000
+  forward-headers-strategy: framework
+
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+          routes:
+            - id: user-service-route
+              uri: lb://USER-SERVICE
+              predicates:
+                - Path=/api/users/**, /api/auth/**, /user-api-docs/**
+            - id: news-service-route
+              uri: lb://NEWS-SERVICE
+              predicates:
+                - Path=/api/news/**, /news-api-docs/**
+            - id: newsletter-service-route
+              uri: lb://NEWSLETTER-SERVICE
+              predicates:
+                - Path=/api/newsletter/**, /api/newsletters/**, /api/kakao/**, /newsletter-api-docs/*
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOrigins:
+                  - 'http://localhost:3000'
+                  - 'https://be09-final-1team-fe.vercel.app'
+                allowedMethods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - PATCH
+                  - OPTIONS
+                allowedHeaders: '*'
+                allowCredentials: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+
+eureka:
+  client:
+    service-url:
+      # localhost 대신 Docker 서비스 이름 사용
+      defaultZone: http://discovery-service:8761/eureka/
+    #      defaultZone: http://localhost:8761/eureka/
+    initial-instance-info-replication-interval-seconds: 40
+    instance-info-replication-interval-seconds: 30
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    # Docker 환경에서 중요한 설정
+    prefer-ip-address: true
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+
+springdoc:
+  swagger-ui:
+    urls:
+      - name: 'user-service'
+        url: /user-api-docs
+      - name: 'news-service'
+        url: /news-api-docs
+      - name: 'newsletter-service'
+        url: /newsletter-api-docs
+
+api-docs:
+  groups:
+    enabled: true

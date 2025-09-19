@@ -1,0 +1,55 @@
+# 1. 서버 포트 설정
+server:
+  port: 8083
+
+# 2. Eureka 클라이언트 설정
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+# 3. Actuator 엔드포인트 노출 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+# 4. 로깅 레벨 설정
+logging:
+  level:
+    com.newnormallist.newsservice: DEBUG
+    org.springframework.security: WARN
+    com.newnormallist.crawlerservice: INFO
+    org.springframework.web: INFO
+    org.hibernate: OFF
+    org.springframework.orm: OFF
+    org.springframework.transaction: OFF
+    org.springframework.data: OFF
+    com.zaxxer.hikari: WARN
+    org.openqa.selenium: OFF
+    org.seleniumhq.selenium: OFF
+    root: WARN
+
+# 5. Swagger/OpenAPI 설정
+springdoc:
+  api-docs:
+    enabled: true
+    path: /crawler-api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui
+    display-request-duration: true
+    operations-sorter: method
+    tags-sorter: alpha
+  packages-to-scan: com.newnormallist.crawlerservice.controller
+  paths-to-match: /api/**
+
+# 6. 서비스 간 통신을 위한 URL 설정
+services:
+  user-service:
+    url: http://localhost:8081
+  news-service:
+    url: http://localhost:8082

@@ -1,0 +1,80 @@
+# IDE에서 직접 실행할 때만 적용될 설정
+spring:
+  config:
+    # Config Server의 주소를 localhost로 변경
+     import: optional:configserver:http://192.168.0.38:8888
+#    import: optional:configserver:http://localhost:8888
+    # import: configserver:http://dev.macacolabs.site:8888  #  다른 와이파이에서도 config와 연결 가능
+  retry:
+    enabled: true
+  # 로컬 개발 환경용 데이터베이스 연결 풀 설정 (엄격한 제한)
+  datasource:
+    hikari:
+      maximum-pool-size: 2
+      minimum-idle: 1
+      connection-timeout: 20000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  # DDL 자동 실행 비활성화로 연결 수 절약
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+
+eureka:
+  client:
+    serviceUrl:
+      # Eureka Server의 주소를 localhost로 변경
+#      defaultZone: http://192.168.0.38:8761/eureka/
+      defaultZone: http://localhost:8761/eureka/
+
+# Feign Client URL 설정
+news:
+  base-url: http://localhost:8082
+user:
+  base-url: http://localhost:8081
+
+# 환경변수 설정 (Feign Client에서 사용)
+USER_SERVICE_URL: http://localhost:8081
+NEWS_SERVICE_URL: http://localhost:8082
+
+# 카카오 API 공통 설정 (모든 환경에서 사용)
+kakao:
+  app-key: ${newsletter.kakao.app-key:your-app-key}
+  client-id: ${newsletter.kakao.client-id:your-client-id}
+  client-secret: ${newsletter.kakao.client-secret:your-client-secret}
+  redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:8085/api/kakao/redirect}
+  template-id: ${KAKAO_TEMPLATE_ID:123798}
+  
+  # 카카오 메시지 API 설정
+  api:
+    talk:
+      memo:
+        url: https://kapi.kakao.com/v2/api/talk/memo/send
+      friends:
+        url: https://kapi.kakao.com/v1/api/talk/friends/message/send
+  message:
+    enabled: false  # 로컬 개발 환경에서는 비활성화 (시뮬레이션 모드)
+  templates:
+    newsletter: ${KAKAO_TEMPLATE_ID:123798}
+    welcome: 2
+    feed-a: ${KAKAO_FEED_A_TEMPLATE_ID:123799}
+    feed-b: ${KAKAO_FEED_B_TEMPLATE_ID:123800}
+
+# 웹 푸시 알림 설정 (비활성화)
+webpush:
+  enabled: false  # 웹 푸시 기능 비활성화
+  vapid:
+    public-key: ${WEBPUSH_VAPID_PUBLIC_KEY:}
+    private-key: ${WEBPUSH_VAPID_PRIVATE_KEY:}
+  batch:
+    size: 500
+  retry:
+    attempts: 3
+
+# Firebase 설정 (웹 푸시 비활성화로 인해 사용하지 않음)
+firebase:
+  config:
+    path: firebase-service-account.json
+  project:
+    id: ${FIREBASE_PROJECT_ID:}

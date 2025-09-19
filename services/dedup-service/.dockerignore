@@ -1,0 +1,106 @@
+# =================
+# Python Service .dockerignore (보안 강화)
+# =================
+
+# 🔒 보안 파일들 (절대 업로드 금지)
+**/.env*
+.env.*
+**/.pem
+**/.rsa
+**/.key
+**/.p12
+**/.pfx
+**/.crt
+**/.cer
+**/.der
+**/.jks
+**/.keystore
+**/secrets/
+**/credentials/
+**/config/secrets/
+**/private/
+**/keys/
+
+# Git 관련
+**/.git
+**/.gitignore
+**/.gitattributes
+
+# IDE 관련
+**/.vscode/
+**/.idea/
+**/*.swp
+**/*.swo
+**/*~
+
+# Python 관련
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.Python
+**/build/
+**/develop-eggs/
+**/dist/
+**/downloads/
+**/eggs/
+**/.eggs/
+**/lib/
+**/lib64/
+**/parts/
+**/sdist/
+**/var/
+**/wheels/
+**/*.egg-info/
+**/.installed.cfg
+**/*.egg
+**/MANIFEST
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+**/.tox/
+**/.venv/
+**/venv/
+**/env/
+**/.env/
+
+# 로그 파일
+**/*.log
+**/logs/
+**/log/
+
+# 문서
+**/README.md
+**/*.md
+**/docs/
+**/documentation/
+
+# 테스트 관련
+**/test/
+**/tests/
+**/*_test.py
+**/*_tests.py
+**/test_*.py
+**/tests_*.py
+
+# 임시 파일
+**/*.tmp
+**/*.temp
+**/*.bak
+**/*.backup
+
+# OS 관련
+**/.DS_Store
+**/Thumbs.db
+**/desktop.ini
+
+# Docker 관련
+**/Dockerfile*
+**/docker-compose*.yml
+**/.dockerignore
+
+# 기타
+**/node_modules/
+**/.cache/
+**/.mypy_cache/
+**/.pytest_cache/

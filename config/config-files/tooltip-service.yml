@@ -1,0 +1,53 @@
+# 1. 서버 포트 설정
+server:
+  port: 8086
+
+# 2. Eureka 클라이언트 설정
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+# 3. Actuator 엔드포인트 노출 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+# 4. 로깅 레벨 설정
+logging:
+  level:
+    com.newnormallist.tooltipservice: DEBUG # DEBUG로 변경하여 상세 로그 확인
+    com.newnormallist.tooltipservice.service: DEBUG # 서비스 레이어 디버깅
+    org.springframework.cache: DEBUG
+    root: INFO
+
+# 5. Swagger/OpenAPI 설정
+springdoc:
+  api-docs:
+    enabled: true
+    path: /tooltip-api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui
+    display-request-duration: true
+    operations-sorter: method
+    tags-sorter: alpha
+  packages-to-scan: com.newnormallist.tooltipservice.controller
+  paths-to-match: /api/**
+
+# 6. Redis 캐시 설정
+spring:
+  cache:
+    type: redis
+    cache-names: processedContent,termDetails,difficultWords # 어려운 단어 캐시 추가
+    redis:
+      time-to-live: 24h
+      cache-null-values: false
+  data:
+    redis:
+      host: localhost
+      port: 6379

@@ -1,0 +1,73 @@
+# user
+# 1. 서버 포트 설정
+server:
+  port: 8081
+  forward-headers-strategy: framework
+
+# 2. Eureka 클라이언트 설정
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+# 3. Actuator 엔드포인트 노출 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+# 4. 로깅 레벨 설정
+logging:
+  level:
+    com.newnormallist.userservice: DEBUG
+
+# 5. swagger 설정
+springdoc:
+  forward-headers-enabled: true
+  api-docs:
+    path: /user-api-docs
+  swagger-ui:
+    path: /user-swagger-ui.html
+  group-configs:
+    - group: user-service
+      paths-to-match:
+        - /api/users/**
+        - /api/auth/**
+
+app:
+  gateway-url: http://localhost:8000
+
+# 6. oauth 설정 (민감 정보 제거됨)
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          kakao:
+            redirect-uri: 'http://localhost:8000/api/auth/login/oauth2/code/kakao'
+            authorization-grant-type: authorization_code
+            client-authentication-method: client_secret_post
+            scope:
+              - profile_nickname
+              - account_email
+          google:
+            redirect-uri: 'http://localhost:8000/api/auth/login/oauth2/code/google'
+            scope:
+              - email
+              - profile
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
+
+# 7. 프론트엔드 리디렉션 URL 설정
+oauth2:
+  redirect:
+    # 두 브랜치의 내용을 병합하고 경로를 통일
+    frontend-callback-url: http://localhost:3000/auth/oauth/kakao
+    frontend-additional-info-url: http://localhost:3000/auth/oauth/additional-info

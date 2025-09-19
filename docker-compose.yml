@@ -1,0 +1,282 @@
+# 실행하려는 서비스(컨테이너)들을 정의
+services:
+  # 1. Config Server
+  config-server:
+    build: ./config/config-server
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    dns:
+      - 8.8.8.8
+    environment:
+      - TZ=Asia/Seoul
+      - SPRING_APPLICATION_NAME=config-server
+      - SPRING_PROFILES_ACTIVE=git # Git 프로필 활성화
+      - SPRING_CLOUD_CONFIG_SERVER_GIT_URI=https://github.com/backend20250319/BE09-Final-1team-BE.git
+      - SPRING_CLOUD_CONFIG_SERVER_GIT_DEFAULT_LABEL=feature/chaehee
+      - SPRING_CLOUD_CONFIG_SERVER_GIT_SEARCH_PATHS=config/config-files
+      - SPRING_CLOUD_CONFIG_SERVER_GIT_CLONE_ON_START=true
+      - SPRING_CLOUD_CONFIG_SERVER_GIT_TIMEOUT=60
+    healthcheck:
+      # 컨테이너 이미지에 curl이 없을 수 있으니 CMD-SHELL로 처리
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8888/actuator/health || wget -qO- http://localhost:8888/actuator/health > /dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - msa-network
+
+# 2. Discovery Service (Eureka)
+  discovery-service:
+    build: ./services/discovery-service
+    container_name: discovery-service
+    ports:
+      - "8761:8761"
+    dns:
+      - 8.8.8.8
+    environment:
+      - TZ=Asia/Seoul
+      - SPRING_APPLICATION_NAME=discovery-service
+      # Config Server로부터 설정을 가져오도록 (실패해도 부팅되게 optional:)
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      # Eureka 서버 자신은 레지스트리에 등록/조회하지 않도록(서버 전용 구성일 때 권장)
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
+      - EUREKA_CLIENT_FETCH_REGISTRY=false
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+      # (선택) 관리/헬스 엔드포인트 노출 제어가 필요하면 Config에 두고, 임시 테스트면 아래처럼 가능
+      # - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info
+    depends_on:
+      config-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8761/actuator/health || wget -qO- http://localhost:8761/actuator/health > /dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - msa-network
+
+# 3. Gateway Service
+  gateway-service:
+    build: ./services/gateway-service
+    container_name: gateway-service
+    ports:
+      - "8000:8000"
+    dns:
+      - 8.8.8.8
+    environment:
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
+      - jwt.secret=${JWT_SECRET} # JWT 비밀키 설정
+      - jwt.expiration=${JWT_EXPIRATION} # JWT 만료 시간 설정
+      # (선택) Gateway 라우팅/보안 등은 Config Server 리포지토리(yml)에서 관리 권장
+    depends_on:
+      config-server:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/actuator/health || wget -qO- http://localhost:8000/actuator/health > /dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - msa-network
+
+  # 4. User Service
+  user-service:
+    build: ./services/user-service # ⭐️ 경로 수정
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    dns:
+      - 8.8.8.8
+    networks:
+      - msa-network
+    depends_on:
+      - discovery-service
+    environment:
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
+      # DB 연결 설정
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      # SMTP
+      - SPRING_MAIL_HOST=${SPRING_MAIL_HOST}
+      - SPRING_MAIL_PORT=${SPRING_MAIL_PORT}
+      - SPRING_MAIL_USERNAME=${SPRING_MAIL_USERNAME}
+      - SPRING_MAIL_PASSWORD=${SPRING_MAIL_PASSWORD}
+      # JWT
+      - jwt.secret=${JWT_SECRET}
+      - jwt.expiration=${JWT_EXPIRATION}
+
+  # 5. News Service
+  news-service:
+    build: ./services/news-service # ⭐️ 경로 수정
+    container_name: news-service
+    ports:
+      - "8082:8082"
+    dns:
+      - 8.8.8.8
+    networks:
+      - msa-network
+    depends_on:
+      - discovery-service
+    environment:
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
+      # DB 연결 설정
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      # SMTP
+      - SPRING_MAIL_HOST=${SPRING_MAIL_HOST}
+      - SPRING_MAIL_PORT=${SPRING_MAIL_PORT}
+      - SPRING_MAIL_USERNAME=${SPRING_MAIL_USERNAME}
+      - SPRING_MAIL_PASSWORD=${SPRING_MAIL_PASSWORD}
+      # JWT
+      - jwt.secret=${JWT_SECRET}
+      - jwt.expiration=${JWT_EXPIRATION}
+
+#  # 6. Flask API (최종 수정)
+  flaskapi:
+    build: ./services/flaskapi
+
+    #    ports: ["5000:5000"]                # ← 임시 외부 노출
+    networks: [msa-network]
+    environment:
+      # Flask 실행 포트
+      - PORT=5000
+      # 유레카 정보
+      - APP_NAME=FLASKAPI
+      - INSTANCE_HOST=flaskapi          # ★ 컨테이너명과 동일하게 (게이트웨이/유레카에서 접근 가능)
+      - EUREKA_SERVER=http://discovery-service:8761/eureka/
+      # 타임존
+      - TZ=Asia/Seoul
+      # 프런트에서 직접 5000 호출할 경우를 대비한 CORS
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:5000/health" ]
+      interval: 10s
+      timeout: 2s
+      retries: 12
+    restart: unless-stopped
+
+  # 7. Crawler Service
+  crawler-service:
+    build: ./services/crawler-service
+    container_name: crawler-service
+    ports:
+      - '8083:8083'
+    networks:
+      - msa-network
+    depends_on:
+      - discovery-service
+      - dedup-service
+    environment:
+      - SPRING_CONFIG_URI=http://config-server:8888
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka
+      # DB 연결 설정
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      # 파일서버 설정
+      - FILESERVER_BASE_PATH=http://dev.macacolabs.site:8008/1
+      # Python 중복제거 서비스 설정
+      - SERVICES_DEDUP_URL=http://dedup-service:8084
+      - SERVICES_DEDUP_FILESERVER_PATH=http://dev.macacolabs.site:8008/1
+      # Chrome 환경 설정 (Selenium)
+      - DISPLAY=:99
+      - CHROME_BIN=/usr/bin/google-chrome
+      - CHROME_PATH=/usr/bin/google-chrome
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8083/api/crawler/health']
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  # 8. Deduplication Service
+  dedup-service:
+    build: ./services/dedup-service
+    container_name: dedup-service
+    ports:
+      - '8084:8084'
+    networks:
+      - msa-network
+    environment:
+      # 서비스 설정
+      - SERVICE_NAME=dedup-service
+      - PORT=8084
+      - DEBUG=false
+      - ENVIRONMENT=docker
+      # 파일서버 설정
+      - FILESERVER_PATH=http://dev.macacolabs.site:8008/1
+      # SBERT 모델 설정
+      - SBERT_MODEL_NAME=snunlp/KR-SBERT-V40K-klueNLI-augSTS
+      - SBERT_DEVICE=cpu
+      - SBERT_BATCH_SIZE=32
+      # 중복제거 임계값
+      - THRESHOLD_TITLE=0.3
+      - THRESHOLD_CONTENT=0.8
+      - THRESHOLD_RELATED_MIN=0.4
+      # 성능 설정
+      - MAX_CONCURRENT_REQUESTS=10
+      - REQUEST_TIMEOUT_SECONDS=300
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8084/health']
+      interval: 30s
+      timeout: 10s
+      start_period: 120s # SBERT 모델 로딩 시간 고려
+      retries: 3
+
+# 9. newsletter-service
+  newsletter-service:
+    build: ./services/newsletter-service
+    container_name: newsletter-service
+    ports:
+      - "8085:8085"
+    networks:
+      - msa-network
+    depends_on:
+      - discovery-service
+    environment:
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
+      # DB 연결 설정
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      # SMTP
+      - SPRING_MAIL_HOST=${SPRING_MAIL_HOST}
+      - SPRING_MAIL_PORT=${SPRING_MAIL_PORT}
+      - SPRING_MAIL_USERNAME=${SPRING_MAIL_USERNAME}
+      - SPRING_MAIL_PASSWORD=${SPRING_MAIL_PASSWORD}
+      # JWT
+      - jwt.secret=${JWT_SECRET}
+      - jwt.expiration=${JWT_EXPIRATION}
+
+# 10. tooltip-service
+  tooltip-service:
+    build: ./services/tooltip-service
+    container_name: tooltip-service
+    ports:
+      - "8086:8086"
+    networks:
+      - msa-network
+    depends_on:
+      - discovery-service
+    environment:
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
+      # DB 연결 설정
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      # JWT
+      - jwt.secret=${JWT_SECRET}
+      - jwt.expiration=${JWT_EXPIRATION}
+
+# 서비스들이 사용할 공용 네트워크 정의
+networks:
+  msa-network:
+    driver: bridge

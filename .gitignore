@@ -1,0 +1,107 @@
+HELP.md
+
+### Gradle ###
+.gradle
+build/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### STS (Spring Tool Suite) ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### Secrets & Config ###
+/config/config-files/*-secret.yml
+/config/config-files/*-secrets.yml
+*-local.yml
+
+### macOS ###
+.DS_Store
+
+### Shell & Terminal History ###
+.history
+.bash_history
+.zsh_history
+
+### Build Targets ###
+news-service/target/
+target/
+
+# env files
+.env
+.env.local
+
+### Python ###
+__pycache__/
+*.py[cod]
+*$py.class
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.manifest
+*.spec
+
+### Virtual Environments ###
+.venv/
+.ENV/
+.env/
+.venv/
+services/flaskapi/.venv
+
+### Jupyter Notebook ###
+.ipynb_checkpoints/
+
+### Logs, temp files ###
+*.log
+*.pot
+*.mo
+*.swp
+*~
+
+# 개인 단독 실행용 설정
+*-solo.yml
+
+# 개인용 폴더 / 개인 실행 설정 및 캐시 등
+.local/
+.run/
+.env

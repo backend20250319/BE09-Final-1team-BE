@@ -1,0 +1,24 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: config-server
+  profiles:
+    active: git
+  cloud:
+    config:
+      server:
+        git:
+          uri: https://github.com/backend20250319/BE09-Final-1team-BE.git
+          default-label: feature/chaehee
+          search-paths: config/config-files
+          clone-on-start: true
+          timeout: 60
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # ⭐️ health와 info 엔드포인트를 외부에 노출시킵니다.
+        include: health,info

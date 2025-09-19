@@ -1,0 +1,8 @@
+# 카카오 프로필 전용 설정
+# 이 파일은 application.yml과 application-local.yml의 설정을 오버라이드합니다.
+
+# 카카오 메시지 활성화 (가장 중요한 차이점)
+kakao:
+  message:
+    enabled: true  # 카카오 프로필에서는 실제 API 호출
+  app-key: ${KAKAO_APP_KEY:your-app-key}

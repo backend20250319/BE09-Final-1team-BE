@@ -1,0 +1,66 @@
+# newsletter
+server:
+  port: 8085
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: newsletter-service
+  config:
+    import: optional:configserver:http://config-server:8888
+  cloud:
+    bootstrap:
+      enabled: false
+  main:
+    allow-bean-definition-overriding: true
+  # 'develop' 브랜치의 security 및 mail 설정을 spring 하위로 병합
+  security:
+    oauth2:
+      client:
+        registration:
+          kakao:
+            redirect-uri: http://localhost:8085/api/auth/login/oauth2/code/kakao
+  mail:
+    host: localhost
+    port: 1025
+    username:
+    password:
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+# Actuator 엔드포인트 노출 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+# 로깅 설정
+logging:
+  level:
+    com.newsletterservice: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
+
+# Swagger 설정
+springdoc:
+  api-docs:
+    path: /newsletter-api-docs
+  swagger-ui:
+    path: /newsletter-swagger-ui.html
+
+# 'HEAD' 브랜치의 oauth2 리디렉션 설정
+oauth2:
+  redirect:
+    frontend-callback-url: http://be09-final-1team-fe-env.eba-92qhhhzz.ap-northeast-2.elasticbeanstalk.com/auth/callback
+    frontend-additional-info-url: http://be09-final-1team-fe-env.eba-92qhhhzz.ap-northeast-2.elasticbeanstalk.com/auth/additional-info

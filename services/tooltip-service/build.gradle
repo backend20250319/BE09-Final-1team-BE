@@ -1,0 +1,76 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.5.5'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.newnormallist'
+version = '0.0.1-SNAPSHOT'
+description = 'tooltip-service'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+// ------------------- 수정된 부분 -------------------
+// repositories(저장소) 관련 설정은 이 블록 안에 있으면 안 됩니다.
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+		// 아래에 있던 maven { url 'https://jitpack.io' } 라인을 삭제했습니다.
+	}
+}
+// ----------------------------------------------------
+
+// 저장소 설정은 여기에만 위치해야 합니다.
+repositories {
+	mavenCentral()
+	// Komoran 라이브러리를 위한 JitPack 저장소 추가
+	maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+	// 웹 API 서버 구성을 위한 기본 의존성
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+
+	// 서비스 디스커버리를 위한 Eureka Client 의존성
+	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+
+	// DB 연동을 위한 JPA 의존성
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+	// Redis 캐싱을 위한 의존성
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	implementation 'org.springframework.boot:spring-boot-starter-cache'
+
+	// Swagger/OpenAPI 의존성
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+	// 형태소 분석기 'Komoran' 의존성
+	implementation 'com.github.shin285:KOMORAN:3.3.9'
+
+	// MySQL 데이터베이스 드라이버 (newsdb가 MySQL인 경우)
+	runtimeOnly 'com.mysql:mysql-connector-j'
+
+	// Lombok (선택 사항이지만 코드 간소화를 위해 강력 추천)
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	// 테스트를 위한 의존성
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+dependencyManagement {
+	imports {
+		mavenBom "org.springframework.cloud:spring-cloud-dependencies:2023.0.4"
+	}
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}

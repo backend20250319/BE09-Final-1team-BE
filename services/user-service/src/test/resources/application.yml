@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: user-service
+  config:
+    import: optional:configserver:http://config-server:8888
+  cloud:
+    bootstrap:
+      enabled: false
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+  h2:
+    console:
+      enabled: true
+  mail:
+    host: localhost
+    port: 3025
+    username: test@test.com
+    password: test
+
+eureka:
+  client:
+    enabled: false
+
+jwt:
+  secret: dGVzdC1zZWNyZXQta2V5LWZvci10ZXN0aW5nLXB1cnBvc2VzLW9ubHk=
+  expiration: 3600000
+  refresh-expiration: 86400000
+
+logging:
+  level:
+    com.newnormallist.userservice: DEBUG
+    org.springframework.security: WARN

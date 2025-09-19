@@ -1,0 +1,6 @@
+server:
+  port: 5000   # Flask는 자체적으로 5000 포트에서 뜨겠지만, 여기선 placeholder 용도
+
+spring:
+  application:
+    name: FLASKAPI   # 중요: 서비스명. 게이트웨이 route 에서 lb://FLASKAPI 로 참조 가능

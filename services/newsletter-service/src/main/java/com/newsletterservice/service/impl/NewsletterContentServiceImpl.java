@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -113,14 +114,14 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
                 // 관심사가 있는 경우 - 첫 번째 관심 카테고리로 뉴스 조회
                 String topCategory = interests.getTopCategories().get(0);
                 ApiResponse<Page<NewsResponse>> newsResponse = newsServiceClient.getLatestByCategory(topCategory, 5);
-                Page<NewsResponse> newsPage = newsResponse.getData();
+                Page<NewsResponse> newsPage = newsResponse != null && newsResponse.isSuccess() ? newsResponse.getData() : null;
                 personalizedNews = newsPage != null ? newsPage.getContent() : new ArrayList<>();
                 
                 log.info("관심사 기반 뉴스 조회: category={}, count={}", topCategory, personalizedNews.size());
             } else {
                 // 관심사가 없는 경우 - 트렌딩 뉴스 조회
                 ApiResponse<Page<NewsResponse>> trendingResponse = newsServiceClient.getTrendingNews(24, 5);
-                Page<NewsResponse> trendingNews = trendingResponse.getData();
+                Page<NewsResponse> trendingNews = trendingResponse != null && trendingResponse.isSuccess() ? trendingResponse.getData() : null;
                 personalizedNews = trendingNews != null ? trendingNews.getContent() : new ArrayList<>();
                 
                 log.info("트렌딩 뉴스 조회: count={}", personalizedNews.size());
@@ -265,7 +266,7 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
             log.info("미리보기용 최신 뉴스 조회 시작");
             ApiResponse<Page<NewsResponse>> response = newsServiceClient.getLatestNews(null, 5);
             
-            if (response.isSuccess() && response.getData() != null) {
+            if (response != null && response.isSuccess() && response.getData() != null) {
                 List<NewsResponse> news = response.getData().getContent();
                 log.info("미리보기용 최신 뉴스 조회 완료: {}개", news.size());
                 return news;
@@ -287,7 +288,7 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
             log.info("미리보기용 트렌딩 뉴스 조회 시작");
             ApiResponse<Page<NewsResponse>> response = newsServiceClient.getTrendingNews(24, 5);
             
-            if (response.isSuccess() && response.getData() != null) {
+            if (response != null && response.isSuccess() && response.getData() != null) {
                 List<NewsResponse> news = response.getData().getContent();
                 log.info("미리보기용 트렌딩 뉴스 조회 완료: {}개", news.size());
                 return news;
@@ -299,39 +300,59 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
             log.error("미리보기용 트렌딩 뉴스 조회 중 오류 발생", e);
             return new ArrayList<>();
         }
+
     }
 
     /**
      * 미리보기용 카테고리별 뉴스 조회
      */
+
+    private static final String[] PREVIEW_CATEGORIES = {"정치", "경제", "사회", "IT/과학", "세계", "생활", "자동차/교통", "여행/음식", "예술"};
+    private static final int FIRST_PAGE = 0;
+    private static final int NEWS_PER_CATEGORY_PREVIEW = 2;
+
     private List<NewsResponse> getCategoryNewsForPreview() {
         try {
             log.info("미리보기용 카테고리별 뉴스 조회 시작");
             List<NewsResponse> allCategoryNews = new ArrayList<>();
-            
+
             // 주요 카테고리들에서 뉴스 조회
-            String[] categories = {"정치", "경제", "사회", "IT/과학"};
-            
-            for (String category : categories) {
-                try {
-                    String englishCategory = convertToEnglishCategory(category);
-                    ApiResponse<Page<NewsResponse>> response = newsServiceClient.getNewsByCategory(englishCategory, 0, 2);
-                    
-                    if (response.isSuccess() && response.getData() != null) {
-                        List<NewsResponse> news = response.getData().getContent();
-                        allCategoryNews.addAll(news);
-                    }
-                } catch (Exception e) {
-                    log.warn("카테고리 {} 뉴스 조회 실패", category, e);
-                }
-            }
-            
+            String[] categories = PREVIEW_CATEGORIES;
+
+            fetchNewsFromCategories(categories, allCategoryNews);
+
             log.info("미리보기용 카테고리별 뉴스 조회 완료: {}개", allCategoryNews.size());
             return allCategoryNews;
         } catch (Exception e) {
             log.error("미리보기용 카테고리별 뉴스 조회 중 오류 발생", e);
             return new ArrayList<>();
         }
+    }
+
+
+    private static boolean isValidResponse(Page<NewsResponse> response) {
+        // Page<NewsResponse>에는 isSuccess()와 getData() 메서드가 없으므로, 단순히 null 체크만 수행합니다.
+        return response != null && response.getContent() != null;
+    }
+
+    private void fetchNewsFromCategories(String[] categories, List<NewsResponse> allCategoryNews) {
+        Arrays.stream(categories)
+                .forEach(category -> fetchNewsFromSingleCategory(category, allCategoryNews));
+    }
+
+    private void  fetchNewsFromSingleCategory(String category, List<NewsResponse> allCategoryNews) {
+            try {
+                String englishCategory = convertToEnglishCategory(category);
+                Page<NewsResponse> response = newsServiceClient.getNewsByCategory(englishCategory, FIRST_PAGE, NEWS_PER_CATEGORY_PREVIEW);
+
+                if (isValidResponse(response)) {
+                    List<NewsResponse> news = response.getContent();
+                    allCategoryNews.addAll(news);
+                }
+            } catch (Exception e) {
+                log.warn("카테고리 {} 뉴스 조회 실패", category, e);
+            }
+
     }
 
     /**
@@ -379,25 +400,91 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
         log.info("카테고리 헤드라인 조회: category={}, limit={}", category, limit);
         
         try {
-            String englishCategory = convertCategoryToEnglish(category);
-            NewsCategory newsCategory = NewsCategory.valueOf(englishCategory);
+            // 1. 카테고리 변환 시도
+            String englishCategory = convertToEnglishCategory(category);
+            log.info("변환된 영어 카테고리: {} -> {}", category, englishCategory);
             
-            ApiResponse<Page<NewsResponse>> newsResponse = newsServiceClient.getNewsByCategory(newsCategory.name(), 0, limit);
-            Page<NewsResponse> newsPage = newsResponse.getData();
-            List<NewsResponse> newsList = newsPage.getContent();
+            // 2. 뉴스 서비스 호출
+            Page<NewsResponse> newsResponse = newsServiceClient.getNewsByCategory(englishCategory, 0, limit);
+            log.info("뉴스 서비스 응답: success={}, hasData={}", 
+                newsResponse != null, 
+                newsResponse != null);
             
-            return newsList.stream()
-                    .map(news -> NewsletterContent.Article.builder()
-                            .title(news.getTitle())
-                            .summary(news.getContent())
-                            .url(news.getLink())
-                            .publishedAt(news.getPublishedAt())
-                            .build())
-                    .collect(Collectors.toList());
+            if (newsResponse != null) {
+                Page<NewsResponse> newsPage = newsResponse;
+                List<NewsResponse> newsList = newsPage.getContent();
+                log.info("조회된 뉴스 수: {}", newsList.size());
+                
+                List<NewsletterContent.Article> articles = newsList.stream()
+                        .map(news -> NewsletterContent.Article.builder()
+                                .id(news.getNewsId())
+                                .title(news.getTitle() != null ? news.getTitle() : "제목 없음")
+                                .summary(news.getSummary() != null ? news.getSummary() : 
+                                        news.getContent() != null ? news.getContent() : "내용 없음")
+                                .url(news.getLink() != null ? news.getLink() : "#")
+                                .category(news.getCategoryName() != null ? news.getCategoryName() : category)
+                                .publishedAt(parsePublishedAt(news.getPublishedAt()))
+                                .imageUrl(news.getImageUrl())
+                                .viewCount(news.getViewCount() != null ? news.getViewCount().longValue() : 0L)
+                                .shareCount(news.getShareCount())
+                                .isPersonalized(false)
+                                .build())
+                        .collect(Collectors.toList());
+                
+                log.info("변환된 아티클 수: {}", articles.size());
+                return articles;
+            } else {
+                log.warn("뉴스 서비스 응답이 비어있음: response={}", newsResponse);
+                return createFallbackArticles(category, limit);
+            }
+        } catch (feign.FeignException.NotFound e) {
+            log.warn("뉴스 서비스에서 404 응답: category={}, error={}", category, e.getMessage());
+            return createFallbackArticles(category, limit);
+        } catch (feign.FeignException e) {
+            log.error("Feign 클라이언트 오류: category={}, status={}, error={}", 
+                category, e.status(), e.getMessage());
+            return createFallbackArticles(category, limit);
         } catch (Exception e) {
             log.error("카테고리 헤드라인 조회 실패: category={}", category, e);
-            return new ArrayList<>();
+            return createFallbackArticles(category, limit);
         }
+    }
+
+    /**
+     * 폴백용 샘플 기사 생성
+     */
+    private List<NewsletterContent.Article> createFallbackArticles(String category, int limit) {
+        log.info("폴백 기사 생성: category={}, limit={}", category, limit);
+        
+        List<NewsletterContent.Article> fallbackArticles = new ArrayList<>();
+        
+        // 카테고리별 샘플 제목
+        Map<String, List<String>> sampleTitles = Map.of(
+            "정치", List.of("정치 관련 주요 이슈", "정부 정책 발표", "국회 동향"),
+            "경제", List.of("경제 동향 분석", "주식시장 현황", "부동산 시장 동향"),
+            "사회", List.of("사회 이슈 분석", "교육 정책 변화", "복지 제도 개선"),
+            "IT/과학", List.of("최신 기술 동향", "AI 발전 현황", "과학 연구 성과"),
+            "세계", List.of("국제 정세 분석", "해외 주요 뉴스", "글로벌 경제 동향")
+        );
+        
+        List<String> titles = sampleTitles.getOrDefault(category, 
+            List.of("주요 뉴스", "이슈 분석", "최신 동향"));
+        
+        for (int i = 0; i < Math.min(limit, titles.size()); i++) {
+            NewsletterContent.Article article = NewsletterContent.Article.builder()
+                    .id((long) (i + 1))
+                    .title(titles.get(i))
+                    .summary(category + " 관련 주요 내용을 다룬 기사입니다.")
+                    .url("https://example.com/news/" + (i + 1))
+                    .category(category)
+                    .publishedAt(LocalDateTime.now().minusHours(i + 1))
+                    .isPersonalized(false)
+                    .build();
+            fallbackArticles.add(article);
+        }
+        
+        log.info("폴백 기사 생성 완료: count={}", fallbackArticles.size());
+        return fallbackArticles;
     }
 
     @Override
@@ -408,8 +495,8 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
             String englishCategory = convertCategoryToEnglish(category);
             NewsCategory newsCategory = NewsCategory.valueOf(englishCategory);
             
-            ApiResponse<Page<NewsResponse>> newsResponse = newsServiceClient.getNewsByCategory(newsCategory.name(), 0, limit);
-            Page<NewsResponse> newsPage = newsResponse.getData();
+            Page<NewsResponse> newsResponse = newsServiceClient.getNewsByCategory(newsCategory.name(), 0, limit);
+            Page<NewsResponse> newsPage = newsResponse;
             List<NewsResponse> newsList = newsPage.getContent();
             
             ApiResponse<List<TrendingKeywordDto>> trendingKeywordsResponse = newsServiceClient.getTrendingKeywordsByCategory(newsCategory.name(), limit, "24h", 24);
@@ -621,8 +708,8 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
         for (String category : categories) {
             try {
                 String englishCategory = convertCategoryToEnglish(category);
-                ApiResponse<Page<NewsResponse>> response = newsServiceClient.getNewsByCategory(englishCategory, 0, articlesPerCategory + 2);
-                Page<NewsResponse> newsPage = response.getData();
+                Page<NewsResponse> response = newsServiceClient.getNewsByCategory(englishCategory, 0, articlesPerCategory + 2);
+                Page<NewsResponse> newsPage = response;
                 List<NewsResponse> categoryNews = newsPage != null && newsPage.getContent() != null ? 
                     newsPage.getContent() : new ArrayList<>();
                 
@@ -733,7 +820,7 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
         try {
             // 최신 뉴스로 대체
             ApiResponse<Page<NewsResponse>> latestResponse = newsServiceClient.getLatestNews(null, 8);
-            Page<NewsResponse> latestNews = latestResponse.getData();
+            Page<NewsResponse> latestNews = latestResponse != null && latestResponse.isSuccess() ? latestResponse.getData() : null;
             if (latestNews != null && latestNews.getContent() != null && !latestNews.getContent().isEmpty()) {
                 log.info("최신 뉴스 조회 성공: {}개", latestNews.getContent().size());
                 return latestNews.getContent();
@@ -788,9 +875,9 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
                 .summary(news.getSummary() != null ? news.getSummary() : news.getContent())
                 .category(news.getCategoryName())
                 .url(news.getLink())
-                .publishedAt(news.getPublishedAt())
+                .publishedAt(parsePublishedAt(news.getPublishedAt()))
                 .imageUrl(news.getImageUrl())
-                .viewCount(news.getViewCount())
+                .viewCount(news.getViewCount() != null ? news.getViewCount().longValue() : 0L)
                 .shareCount(news.getShareCount())
                 .personalizedScore(personalizedScore)
                 .trendScore(calculateTrendScore(news))
@@ -994,8 +1081,9 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
                 
                 html.append("            <div class='article-meta'>\n");
                 html.append("                <span class='article-category'>").append(convertCategoryToKorean(news.getCategoryName())).append("</span>\n");
-                if (news.getPublishedAt() != null) {
-                    html.append("                <span>").append(news.getPublishedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))).append("</span>\n");
+                LocalDateTime publishedAt = parsePublishedAt(news.getPublishedAt());
+                if (publishedAt != null) {
+                    html.append("                <span>").append(publishedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))).append("</span>\n");
                 }
                 html.append("            </div>\n");
                 html.append("        </div>\n");
@@ -1047,32 +1135,61 @@ public class NewsletterContentServiceImpl implements NewsletterContentService {
     }
     
     /**
-     * 한국어 카테고리를 영어 카테고리로 변환
+     * 한국어 카테고리를 영어 카테고리로 변환 (뉴스 서비스 API용)
+     * 데이터베이스에서 동적으로 카테고리 정보를 가져옴
      */
     private String convertToEnglishCategory(String koreanCategory) {
-        switch (koreanCategory) {
-            case "정치":
-                return "politics";
-            case "경제":
-                return "economy";
-            case "사회":
-                return "society";
-            case "IT/과학":
-                return "technology";
-            case "스포츠":
-                return "sports";
-            case "연예":
-                return "entertainment";
-            case "문화":
-                return "culture";
-            case "국제":
-                return "international";
-            case "생활":
-                return "lifestyle";
-            case "건강":
-                return "health";
-            default:
-                return "general";
+        try {
+            ApiResponse<List<CategoryDto>> response = newsServiceClient.getCategories();
+            if (response != null && response.isSuccess() && response.getData() != null) {
+                return response.getData().stream()
+                        .filter(category -> koreanCategory.equals(category.getCategoryName()))
+                        .map(CategoryDto::getCategoryCode)
+                        .findFirst()
+                        .orElse("POLITICS"); // 기본값
+            }
+        } catch (Exception e) {
+            log.warn("카테고리 정보 조회 실패, 기본값 사용: {}", e.getMessage());
         }
+        
+        // 폴백: 기본값 반환
+        return "POLITICS";
     }
+    
+    /**
+     * String을 LocalDateTime으로 변환하는 유틸리티 메서드
+     */
+    private LocalDateTime parsePublishedAt(String publishedAtStr) {
+        if (publishedAtStr == null || publishedAtStr.trim().isEmpty()) {
+            return LocalDateTime.now();
+        }
+        
+        try {
+            // ISO 8601 형식 시도
+            return LocalDateTime.parse(publishedAtStr);
+        } catch (DateTimeParseException e1) {
+            try {
+                // 다른 일반적인 형식들 시도
+                DateTimeFormatter[] formatters = {
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                };
+                
+                for (DateTimeFormatter formatter : formatters) {
+                    try {
+                        return LocalDateTime.parse(publishedAtStr, formatter);
+                    } catch (DateTimeParseException ignored) {
+                        // 다음 포맷 시도
+                    }
+                }
+            } catch (Exception e2) {
+                log.warn("날짜 파싱 실패: {}, 현재 시간 사용", publishedAtStr);
+            }
+        }
+        
+        return LocalDateTime.now();
+    }
+    
 }

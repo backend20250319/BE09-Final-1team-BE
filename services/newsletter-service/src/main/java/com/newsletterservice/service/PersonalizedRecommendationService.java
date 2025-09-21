@@ -11,6 +11,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -93,9 +95,9 @@ public class PersonalizedRecommendationService {
             if (categoryLimit > 0) {
                 try {
                     // 카테고리별 뉴스 조회
-                    ApiResponse<Page<NewsResponse>> categoryNewsResponse = newsServiceClient.getNewsByCategory(
+                    Page<NewsResponse> categoryNewsResponse = newsServiceClient.getNewsByCategory(
                         category, 0, categoryLimit * 2); // 여분 확보
-                    Page<NewsResponse> categoryNewsPage = categoryNewsResponse.getData();
+                    Page<NewsResponse> categoryNewsPage = categoryNewsResponse;
                     
                     List<NewsResponse> categoryNews = categoryNewsPage.getContent().stream()
                         .filter(news -> !readNewsIds.contains(news.getNewsId())) // 중복 제거
@@ -151,9 +153,9 @@ public class PersonalizedRecommendationService {
             int categoryLimit = Math.max(1, (int) Math.ceil(limit * ratio));
             
             try {
-                ApiResponse<Page<NewsResponse>> categoryNewsResponse = newsServiceClient.getNewsByCategory(
+                Page<NewsResponse> categoryNewsResponse = newsServiceClient.getNewsByCategory(
                     category, 0, categoryLimit * 2);
-                Page<NewsResponse> categoryNewsPage = categoryNewsResponse.getData();
+                Page<NewsResponse> categoryNewsPage = categoryNewsResponse;
                 
                 List<NewsResponse> categoryNews = categoryNewsPage.getContent().stream()
                     .filter(news -> !readNewsIds.contains(news.getNewsId()))
@@ -416,7 +418,7 @@ public class PersonalizedRecommendationService {
         }
 
         // 조회수와 공유수를 기반으로 인기도 점수 계산
-        long viewCount = news.getViewCount() != null ? news.getViewCount() : 0;
+        long viewCount = news.getViewCount() != null ? news.getViewCount().longValue() : 0;
         long shareCount = news.getShareCount() != null ? news.getShareCount() : 0;
         
         // 로그 스케일링을 사용하여 점수 정규화
@@ -441,7 +443,7 @@ public class PersonalizedRecommendationService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime publishedAt = news.getPublishedAt();
+        LocalDateTime publishedAt = parsePublishedAt(news.getPublishedAt());
         
         // 발행 시간으로부터 경과된 시간 (시간 단위)
         long hoursElapsed = ChronoUnit.HOURS.between(publishedAt, now);
@@ -451,6 +453,42 @@ public class PersonalizedRecommendationService {
         double recencyScore = Math.exp(-hoursElapsed / 8.0); // 반감기 8시간
         
         return Math.min(recencyScore, 1.0); // 최대 1.0으로 제한
+    }
+    
+    /**
+     * String을 LocalDateTime으로 변환하는 유틸리티 메서드
+     */
+    private LocalDateTime parsePublishedAt(String publishedAtStr) {
+        if (publishedAtStr == null || publishedAtStr.trim().isEmpty()) {
+            return LocalDateTime.now();
+        }
+        
+        try {
+            // ISO 8601 형식 시도
+            return LocalDateTime.parse(publishedAtStr);
+        } catch (DateTimeParseException e1) {
+            try {
+                // 다른 일반적인 형식들 시도
+                DateTimeFormatter[] formatters = {
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                };
+                
+                for (DateTimeFormatter formatter : formatters) {
+                    try {
+                        return LocalDateTime.parse(publishedAtStr, formatter);
+                    } catch (DateTimeParseException ignored) {
+                        // 다음 포맷 시도
+                    }
+                }
+            } catch (Exception e2) {
+                log.warn("날짜 파싱 실패: {}, 현재 시간 사용", publishedAtStr);
+            }
+        }
+        
+        return LocalDateTime.now();
     }
 
 }

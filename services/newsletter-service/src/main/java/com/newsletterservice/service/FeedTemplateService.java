@@ -12,6 +12,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -76,10 +78,9 @@ public class FeedTemplateService {
             List<NewsResponse> categoryNews = new ArrayList<>();
             
             try {
-                ApiResponse<Page<NewsResponse>> newsResponse = 
+                Page<NewsResponse> newsResponse = 
                         newsServiceClient.getNewsByCategory(englishCategory, 0, 10);
-                Page<NewsResponse> newsPage = newsResponse != null ? newsResponse.getData() : null;
-                categoryNews = newsPage != null ? newsPage.getContent() : new ArrayList<>();
+                categoryNews = newsResponse != null ? newsResponse.getContent() : new ArrayList<>();
                 log.info("카테고리별 뉴스 조회 성공: category={}, count={}", category, categoryNews.size());
             } catch (Exception e) {
                 log.warn("카테고리별 뉴스 조회 실패: category={}, 기본 템플릿 사용", category, e);
@@ -145,8 +146,8 @@ public class FeedTemplateService {
             // 1. 최신 뉴스 조회
             ApiResponse<Page<NewsResponse>> latestResponse = 
                     newsServiceClient.getLatestNews(null, 10);
-            Page<NewsResponse> latestNews = latestResponse.getData();
-            List<NewsResponse> latestNewsList = latestNews != null ? latestNews.getContent() : new ArrayList<>();
+            List<NewsResponse> latestNewsList = latestResponse != null && latestResponse.isSuccess() && latestResponse.getData() != null ? 
+                    latestResponse.getData().getContent() : new ArrayList<>();
             
             // 2. 뉴스 데이터를 뉴스레터 아티클로 변환
             List<NewsletterContent.Article> articles = convertToArticles(latestNewsList);
@@ -185,10 +186,9 @@ public class FeedTemplateService {
                 try {
                     // 카테고리별로 3-4개씩 뉴스 수집
                     int newsPerCategory = i == 0 ? 4 : 3; // 첫 번째 관심사는 더 많이
-                    ApiResponse<Page<NewsResponse>> newsResponse = 
+                    Page<NewsResponse> newsResponse = 
                             newsServiceClient.getNewsByCategory(englishCategory, 0, newsPerCategory);
-                    Page<NewsResponse> newsPage = newsResponse != null ? newsResponse.getData() : null;
-                    List<NewsResponse> categoryNews = newsPage != null ? newsPage.getContent() : new ArrayList<>();
+                    List<NewsResponse> categoryNews = newsResponse != null ? newsResponse.getContent() : new ArrayList<>();
                     
                     personalizedNews.addAll(categoryNews);
                     log.info("관심사 기반 뉴스 조회 성공: category={}, count={}", category, categoryNews.size());
@@ -240,9 +240,8 @@ public class FeedTemplateService {
             // 3. 최신 뉴스 (3개)
             ApiResponse<Page<NewsResponse>> latestResponse = 
                     newsServiceClient.getLatestNews(null, 3);
-            Page<NewsResponse> latestNews = latestResponse != null ? latestResponse.getData() : null;
-            if (latestNews != null) {
-                diverseNews.addAll(latestNews.getContent());
+            if (latestResponse != null && latestResponse.isSuccess() && latestResponse.getData() != null) {
+                diverseNews.addAll(latestResponse.getData().getContent());
             }
             
             log.info("다양한 소스에서 뉴스 수집 완료: count={}", diverseNews.size());
@@ -288,9 +287,9 @@ public class FeedTemplateService {
                 .summary(summary)
                 .category(categoryName)
                 .url(news.getLink())
-                .publishedAt(news.getPublishedAt())
+                .publishedAt(parsePublishedAt(news.getPublishedAt()))
                 .imageUrl(imageUrl)
-                .viewCount(news.getViewCount() != null ? news.getViewCount() : 0L)
+                .viewCount(news.getViewCount() != null ? news.getViewCount().longValue() : 0L)
                 .shareCount(news.getShareCount() != null ? news.getShareCount() : 0L)
                 .personalizedScore(calculatePersonalizedScore(news))
                 .trendScore(calculateTrendScore(news))
@@ -315,9 +314,10 @@ public class FeedTemplateService {
         }
         
         // 최근 뉴스일수록 개인화 점수 증가
-        if (news.getPublishedAt() != null) {
+        LocalDateTime publishedAt = parsePublishedAt(news.getPublishedAt());
+        if (publishedAt != null) {
             long hoursSincePublished = java.time.Duration.between(
-                    news.getPublishedAt(), 
+                    publishedAt, 
                     java.time.LocalDateTime.now()
             ).toHours();
             
@@ -414,24 +414,27 @@ public class FeedTemplateService {
         if (koreanCategory == null || koreanCategory.trim().isEmpty()) {
             return "POLITICS";
         }
-        
-        return switch (koreanCategory.trim().toLowerCase()) {
+
+        String normalized = koreanCategory.trim().toLowerCase();
+        // "문화"는 "LIFE"와 "ART" 모두에 해당할 수 있으나, 명확히 분리
+        return switch (normalized) {
             case "정치", "politics" -> "POLITICS";
             case "경제", "economy" -> "ECONOMY";
             case "사회", "society" -> "SOCIETY";
-            case "생활", "life", "문화" -> "LIFE";
+            case "생활", "life" -> "LIFE";
             case "세계", "international", "국제" -> "INTERNATIONAL";
             case "it/과학", "it_science", "it과학", "과학", "기술" -> "IT_SCIENCE";
             case "자동차/교통", "vehicle", "자동차", "교통" -> "VEHICLE";
             case "여행/음식", "travel_food", "여행", "음식", "맛집" -> "TRAVEL_FOOD";
             case "예술", "art", "문화예술" -> "ART";
+            case "문화" -> "LIFE"; // "문화"는 기본적으로 LIFE로 매핑
             default -> {
                 log.warn("알 수 없는 카테고리: {}. 기본값 POLITICS 사용", koreanCategory);
                 yield "POLITICS";
             }
         };
     }
-    
+
     /**
      * 영어 카테고리를 한국어 카테고리로 변환
      */
@@ -439,8 +442,9 @@ public class FeedTemplateService {
         if (englishCategory == null || englishCategory.trim().isEmpty()) {
             return "정치";
         }
-        
-        return switch (englishCategory.trim().toUpperCase()) {
+
+        String normalized = englishCategory.trim().toUpperCase();
+        return switch (normalized) {
             case "POLITICS" -> "정치";
             case "ECONOMY" -> "경제";
             case "SOCIETY" -> "사회";
@@ -455,5 +459,40 @@ public class FeedTemplateService {
                 yield "정치";
             }
         };
+    }
+    /**
+     * String을 LocalDateTime으로 변환하는 유틸리티 메서드
+     */
+    private LocalDateTime parsePublishedAt(String publishedAtStr) {
+        if (publishedAtStr == null || publishedAtStr.trim().isEmpty()) {
+            return LocalDateTime.now();
+        }
+        
+        try {
+            // ISO 8601 형식 시도
+            return LocalDateTime.parse(publishedAtStr);
+        } catch (DateTimeParseException e1) {
+            try {
+                // 다른 일반적인 형식들 시도
+                DateTimeFormatter[] formatters = {
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                };
+                
+                for (DateTimeFormatter formatter : formatters) {
+                    try {
+                        return LocalDateTime.parse(publishedAtStr, formatter);
+                    } catch (DateTimeParseException ignored) {
+                        // 다음 포맷 시도
+                    }
+                }
+            } catch (Exception e2) {
+                log.warn("날짜 파싱 실패: {}, 현재 시간 사용", publishedAtStr);
+            }
+        }
+        
+        return LocalDateTime.now();
     }
 }

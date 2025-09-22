@@ -23,6 +23,12 @@ spring:
               uri: lb://NEWSLETTER-SERVICE
               predicates:
                 - Path=/api/newsletter/**, /api/newsletters/**, /api/kakao/**, /newsletter-api-docs/*
+            - id: flaskapi-route
+              uri: lb://FLASKAPI
+              predicates:
+                - Path=/api/news/**/summary
+              filters:
+                - RewritePath=/api/news/(?<id>.*)/summary, /summary    
           globalcors:
             cors-configurations:
               '[/**]':

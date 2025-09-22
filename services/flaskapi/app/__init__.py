@@ -88,7 +88,7 @@ def create_app() -> Flask:
     engine_opts.setdefault("pool_pre_ping", True)
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 
-    # ✅ DB init & create_all (dev 전용)
+    # DB init & create_all (dev 전용)
     db.init_app(app)
     with app.app_context():
         try:
@@ -141,7 +141,7 @@ def create_app() -> Flask:
 
     @app.errorhandler(404)
     def _not_found(e):
-        if request.path.startswith("/summary"):
+        if request.path.startswith("/summary"):    
             return jsonify({
                 "error": "Not Found",
                 "path": request.path,
@@ -154,4 +154,4 @@ def create_app() -> Flask:
     print("[BOOT] instance_path:", app.instance_path)
     print("[BOOT] SQLALCHEMY_DATABASE_URI:", app.config["SQLALCHEMY_DATABASE_URI"])
 
-    return app
+    return app 

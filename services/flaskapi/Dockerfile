@@ -26,4 +26,4 @@ HEALTHCHECK --interval=10s --timeout=2s --retries=12 \
   CMD curl -fsS http://localhost:5000/health || exit 1
 
 # gunicorn으로 실행 (main.py 안에 app = create_app() 있다고 가정)
-CMD ["gunicorn", "wsgi:app", "--bind", "0.0.0.0:5000", "--workers", "2", "--worker-class", "gthread", "--threads", "4", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
+CMD ["gunicorn", "wsgi:app", "--bind", "0.0.0.0:5000", "--workers", "2", "--threads", "2"]

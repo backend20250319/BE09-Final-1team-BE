@@ -42,40 +42,46 @@ public class SecurityConfig {
                         ).permitAll()
 
                         // 2-2. 뉴스레터 구독 관련 - 인증 불필요
-                        .requestMatchers(HttpMethod.POST, "/newsletter/subscribe").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/subscriptions").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/newsletter/confirm").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/newsletter/subscribe").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/subscriptions").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/confirm").permitAll()
 
                         // 2-3. 뉴스레터 콘텐츠 조회 - 인증 불필요
-                        .requestMatchers(HttpMethod.GET, "/newsletter/{newsletterId}/content").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/newsletter/{newsletterId}/html").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/newsletter/{newsletterId}/preview").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/{newsletterId}/content").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/{newsletterId}/html").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/{newsletterId}/preview").permitAll()
 
                         // 2-4. 구독 관리 - 인증 불필요 (개별 인증 로직으로 처리)
-                        .requestMatchers(HttpMethod.GET, "/newsletter/subscription/\\d+").permitAll() // 숫자 ID만 허용
-                        .requestMatchers(HttpMethod.GET, "/newsletter/subscription/my").permitAll() // 내 구독 조회
-                        .requestMatchers(HttpMethod.DELETE, "/newsletter/subscription/{id}").permitAll()
-                        .requestMatchers(HttpMethod.PUT, "/newsletter/subscription/{subscriptionId}/status").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/newsletter/newsletters/unsubscribe").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/subscription/\\d+").permitAll() // 숫자 ID만 허용
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/subscription/my").permitAll() // 내 구독 조회
+                        .requestMatchers(HttpMethod.DELETE, "/api/newsletter/subscription/{id}").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/newsletter/subscription/{subscriptionId}/status").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/newsletter/newsletters/unsubscribe").permitAll()
 
                         // 2-5. 공개 통계 및 트렌딩 정보 - 인증 불필요
-                        .requestMatchers(HttpMethod.GET, "/newsletter/trending-keywords").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/newsletter/category/*/trending-keywords").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/newsletter/category/*/headlines").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/newsletter/category/*/articles").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/newsletter/category/*/subscribers").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/newsletter/categories/subscribers").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/newsletter/stats/subscribers").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/trending-keywords").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/category/*/trending-keywords").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/category/*/headlines").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/category/*/articles").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/category/*/subscribers").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/categories/subscribers").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/stats/subscribers").permitAll()
+                        
+                        // 2-5-1. 차별화된 뉴스레터 서비스 - 인증 불필요 (하이브리드)
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/enhanced").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/hybrid").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/newsletter/smart-recommendations").permitAll()
 
                         // 2-6. 레거시 경로 지원
                         .requestMatchers(HttpMethod.GET, "/newsletter/trending-keywords").permitAll()
                         .requestMatchers(HttpMethod.GET, "/newsletter/category/*/trending-keywords").permitAll()
 
                         // 2-7. 테스트 API - 인증 불필요
-                        .requestMatchers("/newsletters/test-user-service/**").permitAll()
+                        .requestMatchers("/api/newsletters/test-user-service/**").permitAll()
+                        .requestMatchers("/api/newsletter/debug/**").permitAll()
 
                         // 2-8. 관리자 기능 - 인증 필요
-                        .requestMatchers("/newsletter/delivery/**").authenticated()
+                        .requestMatchers("/api/newsletter/delivery/**").authenticated()
 
                         // 2-9. 나머지 모든 요청은 인증 불필요 (개발용)
                         .anyRequest().permitAll()

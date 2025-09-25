@@ -2,11 +2,24 @@
 spring:
   config:
     # Config Server의 주소를 localhost로 변경
-     import: configserver:http://192.168.0.38:8888
+     import: optional:configserver:http://192.168.0.38:8888
 #    import: optional:configserver:http://localhost:8888
     # import: configserver:http://dev.macacolabs.site:8888  #  다른 와이파이에서도 config와 연결 가능
   retry:
     enabled: true
+  # 로컬 개발 환경용 데이터베이스 연결 풀 설정 (엄격한 제한)
+  datasource:
+    hikari:
+      maximum-pool-size: 2
+      minimum-idle: 1
+      connection-timeout: 20000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  # DDL 자동 실행 비활성화로 연결 수 절약
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
 
 eureka:
   client:
